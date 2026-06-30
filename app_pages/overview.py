@@ -51,7 +51,6 @@ def overview_page():
     st.sidebar.markdown("### 🌾 Dashboard Controls")
 
     # 1. ECOSYSTEM FILTER (Irrigated vs Seasonal/Rainfed)
-    # Adjust "ecosystem" to match your exact column name (e.g., 'farming_type', 'ecosystem')
     eco_options = ["All Types", "Water-Irrigated", "Rainfed / Seasonal"]
     selected_eco = st.sidebar.radio("💧 Farm Ecosystem Type:", eco_options, key="sidebar_eco")
 
@@ -60,7 +59,7 @@ def overview_page():
     selected_years = st.sidebar.multiselect(
         "📅 Select Data Years:",
         options=available_years,
-        default=[available_years[0]],  # Defaults to the latest year
+        default=[available_years[0]],
         key="sidebar_years"
     )
 
@@ -71,8 +70,6 @@ def overview_page():
     # ========================================================
     # DYNAMIC DATA FILTERING LOGIC
     # ========================================================
-    # Filter by Ecosystem if column exists (Safe check fallback added)
-    # *Replace 'ecosystem' with your true column string name if different*
     target_column = "ecosystem"
 
     if target_column in muni.columns and selected_eco != "All Types":
@@ -86,7 +83,6 @@ def overview_page():
         provincial_year = df[df["year"].isin(selected_years)].copy().sort_values("date")
         muni_filtered = muni[muni["year"].isin(selected_years)]
     else:
-        # Fallback if user clears all selections from multiselect
         provincial_year = df[df["year"] == available_years[0]].copy().sort_values("date")
         muni_filtered = muni[muni["year"] == available_years[0]]
 
@@ -146,11 +142,9 @@ def overview_page():
     price_long = price_df.melt(id_vars="Month", value_vars=["Fancy Palay", "Regular Palay"], var_name="Palay Variety",
                                value_name="Price (₱/kg)")
 
-    # Dynamic Top 5 bar chart processing based on chosen year lists
     top5 = muni_filtered.groupby("municipality")["palay_production"].sum().reset_index().sort_values(
         by="palay_production", ascending=True).tail(5)
 
-    # Calculate total production value for display string
     if not muni_filtered.empty:
         prod_val = muni_filtered["palay_production"].sum()
     else:
@@ -289,43 +283,39 @@ def overview_page():
             <div class="component-desc">Live operational recommendations for <b>{selected_muni}</b>.</div>
         """, unsafe_allow_html=True)
 
-        # Dynamic name tags based on filter variations
         display_muni_name = "All Bataan Municipalities" if selected_muni == "All Municipalities" else selected_muni
         display_year_string = ", ".join(map(str, selected_years)) if selected_years else "Selected Years"
 
         if not muni_filtered.empty:
-            st.markdown(f"""
-            <div class="advisory-container">
+            eco_msg = "⚠️ Rainfed setups should maximize water-retention fields and sync planting timelines with historical rainy quarters." if selected_eco == "Rainfed / Seasonal" else "✅ Water-Irrigated setups can securely aim for high-input Fancy Varieties due to reliable water schedules."
 
-                <!-- Card 1: Dynamic Location & Ecosystem Status -->
-                <div class="advisory-card card-status">
-                    <div class="card-icon">📍</div>
-                    <div class="card-body">
-                        <span class="card-label label-status">Ecosystem Scope ({selected_eco}):</span> 
-                        Total output volume records captured for <span class="highlight-text">{display_muni_name}</span> across <span class="highlight-text">{display_year_string}</span> equals <span class="highlight-text">{prod_val:,.1f} MT</span>.
-                    </div>
-                </div>
-
-                <!-- Card 2: Market Prediction Guide -->
-                <div class="advisory-card card-marketing">
-                    <div class="card-icon">💡</div>
-                    <div class="card-body">
-                        <span class="card-label label-marketing">Trading Target Advisory:</span> 
-                        Predictions indicate Premium Fancy varieties are heading toward a high target of <span class="highlight-text">₱{next_fancy_pred:.2f}/kg</span> next month, while regular commercial grades stabilize near <span class="highlight-text">₱{next_regular_pred:.2f}/kg</span>.
-                    </div>
-                </div>
-
-                <!-- Card 3: Water Strategy Callout -->
-                <div class="advisory-card card-optimization">
-                    <div class="card-icon">💧</div>
-                    <div class="card-body">
-                        <span class="card-label label-optimization">Ecosystem Recommendation:</span> 
-                        {"⚠️ Rainfed setups should maximize water-retention fields and sync planting timelines with historical rainy quarters." if selected_eco == "Rainfed / Seasonal" else "✅ Water-Irrigated setups can securely aim for high-input Fancy Varieties due to reliable water schedules."}
-                    </div>
-                </div>
-
-            </div>
-            """, unsafe_allow_html=True)
+            
+            html_cards = f"""
+<div class="advisory-container">
+<div class="advisory-card card-status">
+<div class="card-icon">📍</div>
+<div class="card-body">
+<span class="card-label label-status">Ecosystem Scope ({selected_eco}):</span>
+Total output volume records captured for <span class="highlight-text">{display_muni_name}</span> across <span class="highlight-text">{display_year_string}</span> equals <span class="highlight-text">{prod_val:,.1f} MT</span>.
+</div>
+</div>
+<div class="advisory-card card-marketing">
+<div class="card-icon">💡</div>
+<div class="card-body">
+<span class="card-label label-marketing">Trading Target Advisory:</span>
+Predictions indicate Premium Fancy varieties are heading toward <span class="highlight-text">₱{next_fancy_pred:.2f}/kg</span> next month, while regular commercial grades stabilize near <span class="highlight-text">₱{next_regular_pred:.2f}/kg</span>.
+</div>
+</div>
+<div class="advisory-card card-optimization">
+<div class="card-icon">💧</div>
+<div class="card-body">
+<span class="card-label label-optimization">Ecosystem Recommendation:</span>
+{eco_msg}
+</div>
+</div>
+</div>
+"""
+            st.markdown(html_cards, unsafe_allow_html=True)
         else:
             st.warning(f"No active metrics found matching your current dashboard filter selections.")
 
