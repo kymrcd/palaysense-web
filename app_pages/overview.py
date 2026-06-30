@@ -299,7 +299,7 @@ def overview_page():
         prod_val = 0
 
     # ========================================================
-    # FRONT-END CSS STYLING - ENHANCED VERSION
+    # FRONT-END CSS
     # ========================================================
     st.markdown("""
     <style>
