@@ -52,9 +52,13 @@ def overview_page():
 
     # 1. ECOSYSTEM FILTER (Irrigated vs Seasonal/Rainfed)
     eco_options = ["All Types", "Water-Irrigated", "Rainfed / Seasonal"]
-    selected_eco = st.sidebar.radio("💧 Farm Ecosystem Type:", eco_options, key="sidebar_eco")
+    selected_eco = st.sidebar.radio(
+        "💧 Farm Ecosystem Type:",
+        eco_options,
+        key="sidebar_eco"
+    )
 
-    # 2. MULTI-SELECT YEAR FILTER (Allows choosing 1, 2, or more years at once)
+    # 2. MULTI-SELECT YEAR FILTER
     available_years = sorted(list(df["year"].unique()), reverse=True)
     selected_years = st.sidebar.multiselect(
         "📅 Select Data Years:",
@@ -63,9 +67,20 @@ def overview_page():
         key="sidebar_years"
     )
 
-    # 3. MUNICIPALITY SELECTOR (With an "All Municipalities" option)
-    all_munis_options = ["All Municipalities"] + sorted(list(muni["municipality"].unique()))
-    selected_muni = st.sidebar.selectbox("📍 Select Town / City:", all_munis_options, key="sidebar_muni")
+    # 3. MULTI-SELECT MUNICIPALITY FILTER
+    all_munis_options = sorted(muni["municipality"].unique())
+
+    selected_munis = st.sidebar.multiselect(
+        "📍 Select Town / City:",
+        options=all_munis_options,
+        default=all_munis_options,
+        key="sidebar_munis"
+    )
+
+    # If a specific municipality is selected together with "All Municipalities",
+    # remove "All Municipalities"
+    if "All Municipalities" in selected_munis and len(selected_munis) > 1:
+        selected_munis.remove("All Municipalities")
 
     # ========================================================
     # DYNAMIC DATA FILTERING LOGIC
@@ -73,22 +88,59 @@ def overview_page():
     target_column = "ecosystem"
 
     if target_column in muni.columns and selected_eco != "All Types":
-        mapped_value = "Irrigated" if selected_eco == "Water-Irrigated" else "Rainfed"
-        muni = muni[muni[target_column].str.contains(mapped_value, case=False, na=False)]
+        mapped_value = (
+            "Irrigated"
+            if selected_eco == "Water-Irrigated"
+            else "Rainfed"
+        )
+
+        muni = muni[
+            muni[target_column].str.contains(
+                mapped_value,
+                case=False,
+                na=False
+            )
+        ]
+
         if target_column in df.columns:
-            df = df[df[target_column].str.contains(mapped_value, case=False, na=False)]
+            df = df[
+                df[target_column].str.contains(
+                    mapped_value,
+                    case=False,
+                    na=False
+                )
+            ]
 
-    # Filter Dataframes based on Selected Years
+    # Filter by Year
     if selected_years:
-        provincial_year = df[df["year"].isin(selected_years)].copy().sort_values("date")
-        muni_filtered = muni[muni["year"].isin(selected_years)]
-    else:
-        provincial_year = df[df["year"] == available_years[0]].copy().sort_values("date")
-        muni_filtered = muni[muni["year"] == available_years[0]]
+        provincial_year = (
+            df[df["year"].isin(selected_years)]
+            .copy()
+            .sort_values("date")
+        )
 
-    # Filter based on Municipality Selection ("All" vs Specific)
-    if selected_muni != "All Municipalities":
-        muni_filtered = muni_filtered[muni_filtered["municipality"] == selected_muni]
+        muni_filtered = muni[
+            muni["year"].isin(selected_years)
+        ]
+
+    else:
+        provincial_year = (
+            df[df["year"] == available_years[0]]
+            .copy()
+            .sort_values("date")
+        )
+
+        muni_filtered = muni[
+            muni["year"] == available_years[0]
+            ]
+
+    # Filter by Municipality
+    if selected_munis:
+        muni_filtered = muni_filtered[
+            muni_filtered["municipality"].isin(selected_munis)
+        ]
+    else:
+        muni_filtered = muni_filtered.iloc[0:0]
 
     # ========================================================
     # METRIC GENERATION & VARIANCE CALCULATIONS
@@ -148,8 +200,13 @@ def overview_page():
     price_long = price_df.melt(id_vars="Month", value_vars=["Fancy Palay", "Regular Palay"], var_name="Palay Variety",
                                value_name="Price (₱/kg)")
 
-    top5 = muni_filtered.groupby("municipality")["palay_production"].sum().reset_index().sort_values(
-        by="palay_production", ascending=True).tail(5)
+    municipality_production = (
+        muni_filtered
+        .groupby("municipality")["palay_production"]
+        .sum()
+        .reset_index()
+        .sort_values(by="palay_production", ascending=True)
+    )
 
     if not muni_filtered.empty:
         prod_val = muni_filtered["palay_production"].sum()
@@ -271,14 +328,37 @@ def overview_page():
         st.markdown(
             '<div class="component-card"><div class="component-header">Regional Production Rankings</div><div class="component-desc">Capacities tracked across active selection fields.</div>',
             unsafe_allow_html=True)
-        if not top5.empty:
-            fig_top5 = px.bar(top5, x="palay_production", y="municipality", orientation="h",
-                              color_discrete_sequence=["#2E7D32"])
-            fig_top5.update_layout(height=210, margin=dict(l=10, r=10, t=10, b=10), xaxis_title="Metric Tons",
-                                   yaxis_title=None, showlegend=False, plot_bgcolor="white", paper_bgcolor="white")
-            st.plotly_chart(fig_top5, use_container_width=True, key="top5_overview_fig")
+        if not municipality_production.empty:
+            fig_muni = px.bar(
+                municipality_production,
+                x="palay_production",
+                y="municipality",
+                orientation="h",
+                color_discrete_sequence=["#2E7D32"],
+                text="palay_production"
+            )
+
+            fig_muni.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+
+            fig_muni.update_layout(
+                height=350,
+                margin=dict(l=10, r=10, t=10, b=10),
+                xaxis_title="Metric Tons",
+                yaxis_title=None,
+                showlegend=False,
+                plot_bgcolor="white",
+                paper_bgcolor="white"
+            )
+
+            st.plotly_chart(
+                fig_muni,
+                use_container_width=True,
+                key="municipality_production_fig"
+            )
+
         else:
-            st.info("No matching data entries found to build bar graphs.")
+            st.info("No matching data found.")
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     # SMART FARMER CARDS INTERACTION VIEW
@@ -286,10 +366,10 @@ def overview_page():
         st.markdown(f"""
         <div class="component-card">
             <div class="component-header">Smart Agricultural Advisories</div>
-            <div class="component-desc">Live operational recommendations for <b>{selected_muni}</b>.</div>
+            <div class="component-desc">Live operational recommendations for <b>{selected_munis}</b>.</div>
         """, unsafe_allow_html=True)
 
-        display_muni_name = "All Bataan Municipalities" if selected_muni == "All Municipalities" else selected_muni
+        display_muni_name = "All Bataan Municipalities" if selected_munis == "All Municipalities" else selected_munis
         display_year_string = ", ".join(map(str, selected_years)) if selected_years else "Selected Years"
 
         if not muni_filtered.empty:
