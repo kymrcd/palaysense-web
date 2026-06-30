@@ -126,6 +126,7 @@ def overview_page():
         .mean()
         .reset_index()
     )
+
     historical_yield["Quarter"] = "Q" + historical_yield["quarter"].astype(str)
     historical_yield["Yield"] = historical_yield["quarterly_yield_mt_per_ha"]
     historical_yield["Type"] = "Past Records (Historical)"
