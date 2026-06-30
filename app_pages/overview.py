@@ -843,7 +843,7 @@ def overview_page():
         st.markdown("</div>", unsafe_allow_html=True)
 
     # Data Row 2 (Ranking & Smart Cards)
-    chart_row2_col1, chart_row2_col2 = st.columns(2, gap="medium")
+    chart_row2_col1, chart_row2_col2 = st.columns([2.90,2])
 
     with chart_row2_col1:
         st.markdown(
@@ -861,6 +861,7 @@ def overview_page():
                 color_continuous_scale=["#A5D6A7", "#2E7D32"],
                 text="palay_production"
             )
+
             fig_muni.update_traces(
                 texttemplate="%{text:,.0f} MT",
                 textposition="outside",
@@ -870,8 +871,9 @@ def overview_page():
                 ),
                 hovertemplate="<b>%{y}</b><br>Production: %{x:,.0f} MT<extra></extra>"
             )
+
             fig_muni.update_layout(
-                height=320,
+                height=500,
                 margin=dict(l=10, r=80, t=10, b=10),
                 xaxis_title="Metric Tons",
                 yaxis_title=None,
