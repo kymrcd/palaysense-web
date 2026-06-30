@@ -120,7 +120,7 @@ def overview_page():
     # ========================================================
     # CHART GENERATION SETUP
     # ========================================================
-    historical_yield = provincial_latest.groupby("quarter")["quarterly_yield_mt_per_ha"].mean().reset_index()
+    historical_yield = provincial_year.groupby("quarter")["quarterly_yield_mt_per_ha"].mean().reset_index()
     historical_yield["Quarter"] = "Q" + historical_yield["quarter"].astype(str)
     historical_yield["Yield"] = historical_yield["quarterly_yield_mt_per_ha"]
     historical_yield["Type"] = "Past Records (Historical)"
