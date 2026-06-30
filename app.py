@@ -14,6 +14,7 @@ from landing_page import landing_page
 from app_pages.overview import overview_page
 from app_pages.yield_forecast import YieldForecast1 as yield_forecast
 from app_pages.price_forecast import PriceForecast as price_forecast
+from app_pages.lgu_dashboard import lgu_dashboard
 from app_pages.login import login_page
 from app_pages.about import about_page
 from components.top_navigation import top_navigation
@@ -90,3 +91,6 @@ elif query_page == "login":
 
 elif query_page == "about":
     about_page()
+
+elif query_page == "lgu_dashboard":
+    lgu_dashboard()
