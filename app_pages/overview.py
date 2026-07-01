@@ -319,6 +319,7 @@ def overview_page():
             padding-left: 1rem !important;
             padding-right: 1rem !important;
             padding-top: 2rem !important;
+            padding-bottom: 0rem !important;
         }
 
         /* Hero Banner - Modern Gradient */
@@ -331,6 +332,7 @@ def overview_page():
             box-shadow: 0 12px 35px rgba(27, 94, 32, 0.2);
             position: relative;
             overflow: hidden;
+            margin-top: -2.08rem;
         }
         .hero-banner::before {
             content: '';
@@ -590,8 +592,7 @@ def overview_page():
         <div class="hero-title"> Bataan Rice Monitoring & Prediction</div>
         <div class="hero-subtitle">
             Data-driven insights for smarter farming decisions • 
-            <strong>{eco_display}</strong> ecosystem • 
-            <strong>{year_display}</strong>
+            <strong>{eco_display}</strong> ecosystem 
         </div>
         <span class="hero-badge">📊 Live Dashboard • {len(selected_munis) if selected_munis else 0} municipalities selected</span>
     </div>
@@ -955,9 +956,7 @@ def overview_page():
 
     # Footer
     st.markdown("""
-    <div style="text-align: center; padding: 15px 0 5px 0; font-size: 0.75rem; color: #9CA3AF; border-top: 1px solid #E5E7EB; margin-top: 10px;">
+    <div style="text-align: center; padding: 10px 0 5px 0; font-size: 0.75rem; color: #9CA3AF; border-top: 1px solid #E5E7EB; margin-top: 10px;">
         🌾 Bataan Rice Monitoring System • Data-driven insights for sustainable agriculture • v2.0
     </div>
     """, unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
