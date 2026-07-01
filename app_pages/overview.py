@@ -107,9 +107,10 @@ def overview_page():
             font-weight: 700;
             font-size: 1.1rem;
             color: #2E7D32;
-            padding: 10px 0 5px 0;
+            padding: 1px 0 5px 0;
             border-bottom: 2px solid #E8F5E9;
             margin-bottom: 15px;
+            margin: -45px 0 15px 0;
         }
         .filter-label {
             font-family: 'Poppins', sans-serif;
@@ -129,7 +130,10 @@ def overview_page():
     """, unsafe_allow_html=True)
 
     # 1. ECOSYSTEM FILTER (Irrigated vs Seasonal/Rainfed)
-    st.sidebar.markdown('<div class="filter-label">💧 Farm Ecosystem Type</div>', unsafe_allow_html=True)
+    st.sidebar.markdown(
+        '<div class="filter-label" style="margin-top:-5px;">💧 Farm Ecosystem Type</div>',
+        unsafe_allow_html=True
+    )
     eco_options = ["All Types", "Water-Irrigated", "Rainfed / Seasonal"]
     selected_eco = st.sidebar.radio(
         "",
