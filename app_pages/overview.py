@@ -638,7 +638,7 @@ def overview_page():
 
     with chart_row1_col1:
         st.markdown(
-            '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon">📈</span>Yield Production Curves</span></div><div class="component-desc">Historical harvest performance vs. AI-powered quarterly forecasts</div>',
+            '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon">📈</span>Provincial Yield Forecast</span></div><div class="component-desc">Historical harvest performance vs. AI-powered quarterly forecasts</div>',
             unsafe_allow_html=True)
 
         # ===========================
@@ -807,7 +807,7 @@ def overview_page():
 
     with chart_row1_col2:
         st.markdown(
-            '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon">📊</span>3-Month Price Forecast</span></div><div class="component-desc">Strategic buying & selling windows for optimal returns</div>',
+            '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon">📊</span>Provincial Price Forecast (3 Months)</span></div><div class="component-desc">Strategic buying & selling windows for optimal returns</div>',
             unsafe_allow_html=True)
 
         # Enhanced price chart
