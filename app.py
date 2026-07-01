@@ -21,7 +21,11 @@ from components.styles import load_css
 
 load_css()
 
-top_navigation()
+query_page = st.query_params.get("page", "home")
+
+# Show top navigation ONLY for public/farmer pages
+if query_page != "lgu_dashboard":
+    top_navigation()
 
 # -----------------------------
 # IMAGE HELPERS
