@@ -16,9 +16,9 @@ def landing_page():
     }
 
     .block-container {
-        padding-top: -2rem;
-        padding-left: 0rem;
-        padding-right: 0rem;
+        padding-top: 2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
         max-width: 100%;
     }
 
