@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# updated yield chart, design and all
 try:
     from data.Dashboard_Ready import (
         provincial_df,
