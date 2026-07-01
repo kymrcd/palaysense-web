@@ -82,7 +82,7 @@ def lgu_dashboard():
     .block-container {
     padding-left: 2rem !important;
     padding-right: 2rem !important;
-    padding-top: 1rem !important;
+    padding-top: 3.5rem !important;
     }
     
     </style>
