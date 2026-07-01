@@ -577,7 +577,7 @@ def overview_page():
 
     st.markdown(f"""
     <div class="hero-banner">
-        <div class="hero-title">🌾 Bataan Rice Monitoring & Prediction</div>
+        <div class="hero-title"> Bataan Rice Monitoring & Prediction</div>
         <div class="hero-subtitle">
             Data-driven insights for smarter farming decisions • 
             <strong>{eco_display}</strong> ecosystem • 
