@@ -2,6 +2,9 @@ import streamlit as st
 
 
 def landing_page():
+    if st.session_state.pop("logout_success", False):
+        st.toast("Logged out successfully!", icon="✅")
+
     st.markdown("""
     <style>
     /* 1. IMPORT GOOGLE FONT */

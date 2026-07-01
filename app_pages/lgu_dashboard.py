@@ -9,6 +9,7 @@ import plotly.express as px
 from app_pages.price_forecast import PriceForecast as price_forecast
 from app_pages.palay_production import  PalayProduction as crop_production
 from app_pages.yield_forecast import YieldForecast1 as yield_forecast
+from landing_page import landing_page as landing_page
 
 def lgu_dashboard():
 
@@ -266,6 +267,16 @@ def lgu_dashboard():
                      type="primary" if st.session_state.page == "Yield Forecast" else "secondary",
                      key="yield_btn"):
             st.session_state.page = "Yield Forecast"
+            st.rerun()
+
+        if st.button(
+                "**Logout**",
+                use_container_width=True,
+                type="secondary",
+                key="logout_btn"
+        ):
+            st.session_state.logout_success = True
+            st.query_params["page"] = "home"
             st.rerun()
 
     # -----------------------------
