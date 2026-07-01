@@ -279,7 +279,7 @@ def lgu_dashboard():
             st.query_params["page"] = "home"
             st.rerun()
 
-    # -----------------------------
+    # ----------------------------
     # OVERVIEW PAGE
     # -----------------------------
 
