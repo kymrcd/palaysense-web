@@ -314,7 +314,7 @@ def overview_page():
         .block-container {
             padding-left: 1rem !important;
             padding-right: 1rem !important;
-            padding-top: 2.5rem !important;
+            padding-top: 2rem !important;
         }
 
         /* Hero Banner - Modern Gradient */
