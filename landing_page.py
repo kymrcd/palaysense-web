@@ -28,7 +28,7 @@ def landing_page():
         display: flex;
         align-items: center;
         padding: 0 8vw;
-        margin-top: -2px;
+        margin-top: -35px;
         background:
             linear-gradient(
                 rgba(0,0,0,0.55),
