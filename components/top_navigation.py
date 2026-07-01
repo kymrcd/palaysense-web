@@ -25,20 +25,25 @@ def top_navigation():
         border-bottom: 1px solid #e5e5e5;
     }
 
+    /* Navigation button container */
+    div[data-testid="stButton"] {
+        margin-top: 15px; 
+    }
+    
     /* Navigation buttons */
     div[data-testid="stButton"] > button {
         border: none;
         background: transparent;
-
+    
         color: #1B5E20;
-
+    
         font-family: Poppins, sans-serif;
         font-size: 1.2rem;
         font-weight: 600;
-
+    
         width: 100%;
         height: 45px;
-
+    
         transition: 0.3s;
     }
 

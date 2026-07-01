@@ -54,10 +54,6 @@ def lgu_dashboard():
     data_year = latest_year
 
     # -----------------------------
-    # PAGE SETTINGS
-    # -----------------------------
-
-    # -----------------------------
     # IMAGE HELPERS
     # -----------------------------
     def get_base64(image_path):
@@ -82,6 +78,13 @@ def lgu_dashboard():
     .main {
         background-color: #FAFAFA;
     }
+    
+    .block-container {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    padding-top: 1rem !important;
+    }
+    
     </style>
     """, unsafe_allow_html=True)
 
@@ -159,7 +162,7 @@ def lgu_dashboard():
 
     <div class="header">
         <div class="title-row">
-            <img src="data:image/png;base64,{logo_base64}" width="180" style="border-radius: 8px;"/>
+            <img src="data:image/png;base64,{logo_base64}" width="180" style="border-radius: 8px; "/>
         </div>
         <h3>Forecasting Dashboard for Bataan</h3>
     </div>

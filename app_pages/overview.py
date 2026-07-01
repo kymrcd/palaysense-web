@@ -310,6 +310,12 @@ def overview_page():
             padding: 0 1% 20px 1%; 
             background: #F8FAF9;
         }
+        
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-top: 2.5rem !important;
+        }
 
         /* Hero Banner - Modern Gradient */
         .hero-banner {
