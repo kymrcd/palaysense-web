@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 import plotly.graph_objects as go
 
 try:
@@ -278,15 +279,111 @@ def overview_page():
     })
     yield_chart_df = pd.concat([historical_yield[["Quarter", "Yield", "Type"]], forecast_yield])
 
-    future_months = pd.date_range(start=latest["date"] + pd.DateOffset(months=1), periods=len(forecast_3months_fancy),
-                                  freq="MS")
-    price_df = pd.DataFrame({
-        "Month": future_months.strftime("%b %Y"),
-        "Fancy Palay": forecast_3months_fancy,
-        "Regular Palay": forecast_variety_3months
+    # FORECAST DATAFRAMES (SHARED)
+    forecast_df_fancy = pd.DataFrame({
+        "date": forecast_months,
+        "fancy_palay_price": forecast_3months_fancy,
+        "Type": "Forecast"
     })
-    price_long = price_df.melt(id_vars="Month", value_vars=["Fancy Palay", "Regular Palay"], var_name="Palay Variety",
-                               value_name="Price (₱/kg)")
+
+    forecast_df_regular = pd.DataFrame({
+        "date": forecast_months,
+        "other_variety_price": forecast_variety_3months,
+        "Type": "Forecast"
+    })
+
+    # ========================================================
+    # PRICE DATA (Historical + Forecast)
+    # ========================================================
+
+    if len(selected_years) == 1:
+
+        hist_df = provincial_year.copy()
+
+        # Fancy Historical
+        hist_fancy = hist_df[["date", "fancy_palay_price"]].rename(columns={
+            "fancy_palay_price": "Price"
+        })
+        hist_fancy["Variety"] = "Fancy Palay"
+        hist_fancy["Type"] = "Historical"
+
+        # Fancy Forecast
+        forecast_fancy = forecast_df_fancy.rename(columns={
+            "fancy_palay_price": "Price"
+        }).copy()
+        forecast_fancy["Variety"] = "Fancy Palay"
+
+        # Regular Historical
+        hist_regular = hist_df[["date", "other_variety_price"]].rename(columns={
+            "other_variety_price": "Price"
+        })
+        hist_regular["Variety"] = "Regular Palay"
+        hist_regular["Type"] = "Historical"
+
+        # Regular Forecast
+        forecast_regular = forecast_df_regular.rename(columns={
+            "other_variety_price": "Price"
+        }).copy()
+        forecast_regular["Variety"] = "Regular Palay"
+
+        combined_price = pd.concat([
+            hist_fancy,
+            forecast_fancy,
+            hist_regular,
+            forecast_regular
+        ])
+
+        combined_price["Legend"] = (
+                combined_price["Variety"] + " - " + combined_price["Type"]
+        )
+
+    else:
+
+        yearly = (
+            provincial_year
+            .groupby("year")[["fancy_palay_price", "other_variety_price"]]
+            .mean()
+            .reset_index()
+        )
+
+        hist_fancy = yearly[["year", "fancy_palay_price"]].rename(columns={
+            "year": "date",
+            "fancy_palay_price": "Price"
+        })
+        hist_fancy["Variety"] = "Fancy Palay"
+        hist_fancy["Type"] = "Historical"
+
+        hist_regular = yearly[["year", "other_variety_price"]].rename(columns={
+            "year": "date",
+            "other_variety_price": "Price"
+        })
+        hist_regular["Variety"] = "Regular Palay"
+        hist_regular["Type"] = "Historical"
+
+        forecast_fancy = pd.DataFrame({
+            "date": [forecast_year1],
+            "Price": [np.mean(forecast_3months_fancy)],
+            "Variety": ["Fancy Palay"],
+            "Type": ["Forecast"]
+        })
+
+        forecast_regular = pd.DataFrame({
+            "date": [forecast_year1],
+            "Price": [np.mean(forecast_variety_3months)],
+            "Variety": ["Regular Palay"],
+            "Type": ["Forecast"]
+        })
+
+        combined_price = pd.concat([
+            hist_fancy,
+            hist_regular,
+            forecast_fancy,
+            forecast_regular
+        ])
+
+        combined_price["Legend"] = (
+                combined_price["Variety"] + " - " + combined_price["Type"]
+        )
 
     municipality_production = (
         muni_filtered
@@ -817,28 +914,39 @@ def overview_page():
 
         # Enhanced price chart
         fig_price = px.line(
-            price_long,
-            x="Month",
-            y="Price (₱/kg)",
-            color="Palay Variety",
+            combined_price,
+            x="date",
+            y="Price",
+            color="Legend",
+            line_dash="Type",
             markers=True,
-            color_discrete_sequence=["#F59E0B", "#1B5E20"],
-            line_shape="spline"
+            color_discrete_map={
+                "Fancy Palay - Historical": "#89a143",
+                "Fancy Palay - Forecast": "#10B981",
+                "Regular Palay - Historical": "#d1a019",
+                "Regular Palay - Forecast": "#F5CD63"
+            },
+            line_dash_map={
+                "Historical": "solid",
+                "Forecast": "dash"
+            },
+            line_shape="linear"
         )
+
         fig_price.update_traces(
             marker=dict(size=8, line=dict(width=2, color='white')),
             line=dict(width=3)
         )
 
         fig_price.update_layout(
-            height=350,
+            height=370,
             margin=dict(l=10, r=10, t=10, b=10),
             xaxis_title=None,
             yaxis_title="₱/kg",
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=-0.40,
+                y=-0.55,
                 xanchor="center",
                 x=0.5,
                 font=dict(size=11, family="Poppins")
@@ -848,6 +956,19 @@ def overview_page():
             hovermode="x unified"
         )
         fig_price.update_xaxes(gridcolor="#F3F4F6", showgrid=True)
+
+        if len(selected_years) == 1:
+
+            fig_price.update_xaxes(
+                tickformat="%b\n%Y"
+            )
+
+        else:
+
+            fig_price.update_xaxes(
+                tickmode="linear"
+            )
+
         fig_price.update_yaxes(gridcolor="#F3F4F6", showgrid=True)
         st.plotly_chart(fig_price, use_container_width=True, key="price_overview_fig")
         st.markdown("</div>", unsafe_allow_html=True)
