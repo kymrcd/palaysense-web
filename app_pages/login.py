@@ -33,16 +33,18 @@ def login_page():
                 #7D9817 68%,
                 #F1D85C 100%
             ) !important;
-            overflow: hidden !important; /* Disables outer body scrolling */
+            overflow-y: hidden !important;
+            overflow-x: hidden !important;
             height: 100vh !important;
         }}
 
         /* Stops inner layout containers from creating unwanted scrolling layers */
         .main, .stMain, [data-testid="ScrollToBottomContainer"] {{
-            overflow: hidden !important;
+            overflow-y: hidden !important;
+            overflow-x: hidden !important;
             height: 100vh !important;
         }}
-
+        
         /* Sinisigurado nitong walang white space sa tuktok para sumadsad ang inyong navigation bar */
         .stMainBlockContainer {{
             padding-top: 0rem !important; 
@@ -51,7 +53,6 @@ def login_page():
             padding-left: 0rem !important;
             padding-right: 0rem !important;
             max-width: 100% !important;
-            height: 100vh !important;
             box-sizing: border-box !important;
         }}
 
@@ -62,31 +63,31 @@ def login_page():
         */
         [data-testid="stVerticalBlockBorderWrapper"] {{
             display: flex !important;
-            justify-content: center !important; /* Pumupuwersa sa pahalang na gitna */
-            align-items: center !important;    /* Pumupuwersa sa patayong gitna */
+            justify-content: center !important;
+            align-items: flex-start !important;
             width: 100vw !important;
-            height: calc(100vh - 80px) !important; /* Binabawasan ng sukat ng navbar sa taas */
-            margin: 0 auto !important;
+            min-height: calc(100vh - 80px) !important;
+            box-sizing: border-box !important;
         }}
 
         [data-testid="stVerticalBlock"] {{
             display: flex !important;
             flex-direction: column !important;
-            align-items: center !important;
+            justify-content: flex-start !important;
             justify-content: center !important;
             width: 100% !important;
         }}
 
         /* COMPACT SOLID WHITE CARD: Maliit at ligtas sa input functions niyo */
         .st-key-login_card {{
-            width: 360px !important; 
-            max-width: calc(100vw - 32px) !important; 
-            background: #FDFDFD !important; 
+            width: 650px !important;          
+            max-width: calc(100vw - 48px) !important;
+            background: #FDFDFD !important;
             border-radius: 12px !important;
-            padding: 24px 32px 20px !important; 
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.22) !important; 
+            padding: 24px 40px 22px !important;  
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.22) !important;
             box-sizing: border-box !important;
-            margin: 0 auto !important; /* Sinisiguradong walang kiling sa kaliwa o kanan */
+            margin: -25px auto 50px !important;
         }}
 
         /* Resizes and centers the logo image inside the white card */
@@ -124,7 +125,7 @@ def login_page():
         .stButton > button {{
             width: 100% !important;
             height: 42px !important; 
-            margin-top: 8px !important;
+            margin-top: -2px !important;
             border: none !important;
             border-radius: 8px !important;
             background: linear-gradient(135deg, #6C8C1A 0%, #88A925 100%) !important;
@@ -211,7 +212,10 @@ def login_page():
             label_visibility="visible"
         )
 
-        login_clicked = st.button("LOG IN", key="login_btn")
+        left, center, right = st.columns([2.25, 2, 1])
+
+        with center:
+            login_clicked = st.button("LOG IN", key="login_btn")
 
         # Visual subtext links
         st.markdown(
@@ -226,8 +230,8 @@ def login_page():
     # 4. Processing logic for verification and page redirection
     if login_clicked:
         if username == "admin" and password == "1234":
+            st.session_state["login_success"] = True
             st.query_params["page"] = "lgu_dashboard"
-            st.success("Login successful.")
             st.rerun()
         else:
             st.error("Invalid username or password.")
