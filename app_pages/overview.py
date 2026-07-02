@@ -333,7 +333,7 @@ def overview_page():
             forecast_regular
         ])
 
-        combined_price["Legend"] = (
+        combined_price["Category"] = (
                 combined_price["Variety"] + " - " + combined_price["Type"]
         )
 
@@ -381,7 +381,7 @@ def overview_page():
             forecast_regular
         ])
 
-        combined_price["Legend"] = (
+        combined_price["Category"] = (
                 combined_price["Variety"] + " - " + combined_price["Type"]
         )
 
@@ -917,7 +917,7 @@ def overview_page():
             combined_price,
             x="date",
             y="Price",
-            color="Legend",
+            color="Category",
             line_dash="Type",
             markers=True,
             color_discrete_map={
