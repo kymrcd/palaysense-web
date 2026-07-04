@@ -5,26 +5,36 @@ import re  # Used for cleaning text using patterns
 # -----------------------------
 # File paths
 # -----------------------------
-file_path = r"C:\Users\Juliana\Downloads\Capstone_Datasets.xlsx"  # Input file path
-output_path = r"C:\Users\Juliana\Downloads\Capstone_Dataset_Cleaned_ML.xlsx"  # Output file path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+file_path = os.path.join(BASE_DIR, "data", "Capstone_Datasets.xlsx")
+output_path = os.path.join(BASE_DIR, "data", "Capstone_Dataset_Cleaned_ML.xlsx")
+
+file_path2 = os.path.join(BASE_DIR, "data", "Palayprice_Dataset_PerMunicipality.xlsx")
+output_path2 = os.path.join(BASE_DIR, "data", "Palayprice_Dataset_PerMunicipality_Cleaned.xlsx")
 
 # -----------------------------
 # CLEANING FUNCTION
 # -----------------------------
-def run_cleaning(file_path, output_path):
+def run_cleaning(file_path, output_path, file_path2, output_path2):
 
     # -----------------------------
     # CHECK IF FILE EXISTS
     # -----------------------------
     if not os.path.exists(file_path):
-        # If file does not exist, stop program and show error
         raise FileNotFoundError(f"Input file not found: {file_path}")
+
+    if not os.path.exists(file_path2):
+        raise FileNotFoundError(f"Input file not found: {file_path2}")
 
     # -----------------------------
     # LOAD ALL SHEETS
     # -----------------------------
     sheets = pd.read_excel(file_path, sheet_name=None)  # Read all sheets into dictionary
     print("Sheets in the file:", sheets.keys())  # Print sheet names
+
+    sheets2 = pd.read_excel(file_path2, sheet_name=None)
+    print("Sheets in the file:", sheets2.keys())
 
     # -----------------------------
     # FUNCTION: CLEAN COLUMN NAMES
@@ -41,6 +51,7 @@ def run_cleaning(file_path, output_path):
 
     # Dictionary to store cleaned sheets
     cleaned_sheets = {}
+    cleaned_sheets2 = {}
 
     # -----------------------------
     # NUMERIC COLUMNS
@@ -50,15 +61,24 @@ def run_cleaning(file_path, output_path):
         "production_irrigated", "production_rainfed", "production_total", "production_annual",
         "harvested_irrigated", "harvested_rainfed", "harvested_total", "harvested_annual",
         "fancy_palay_price", "other_variety_price", "quarterly_yield_mt_per_ha",
-        "net_production_clean_rice_m_t_", "actual_consumption", "surplus_deficit",
+        "net_production_clean_rice_m_t_", "actual_consumption", "surplus_deficit"
+    ]
+
+    numeric_cols2 = [
+        "hybridpremium_dry", "hybridpremium_wet", "hybridordinary_dry", "hybridordinary_wet", "inbredpremium_dry",
+        "inbredpremium_wet", "inbredordinary_dry", "inbredordinary_wet"
     ]
 
     # Columns that should NOT have negative values
     non_negative_cols = [
         "production_irrigated", "production_rainfed", "production_total", "production_annual",
         "harvested_irrigated", "harvested_rainfed", "harvested_total", "harvested_annual",
-        "fancy_palay_price", "other_variety_price",
-        "actual_consumption"
+        "fancy_palay_price", "other_variety_price", "actual_consumption"
+    ]
+
+    non_negative_cols2 = [
+        "hybridpremium_dry", "hybridpremium_wet", "hybridordinary_dry", "hybridordinary_wet", "inbredpremium_dry",
+        "inbredpremium_wet", "inbredordinary_dry", "inbredordinary_wet"
     ]
 
     # -----------------------------
@@ -105,7 +125,7 @@ def run_cleaning(file_path, output_path):
         # -----------------------------
         # 3b. FILL ANY REMAINING MISSING VALUES
         # -----------------------------
-        for col in ["fancy_palay_price", "other_variety_price"]:
+        for col in ["fancy_palay_price", "other_variety_price", "quarterly_yield_mt_per_ha"]:
             if col in df_cleaned.columns:
 
                 # Fill remaining missing values using forward and backward fill
@@ -158,6 +178,91 @@ def run_cleaning(file_path, output_path):
         # Save cleaned sheet to dictionary
         cleaned_sheets[sheet_name] = df_cleaned
 
+    for sheet_name2, df2 in sheets2.items():
+        # Copy original data to avoid modifying it directly
+        df_cleaned2 = df2.copy()
+
+        # -----------------------------
+        # 1. CLEAN COLUMN NAMES
+        # -----------------------------
+        df_cleaned2.columns = clean_column_names(df_cleaned2.columns)
+
+        # Fix misspelled column name
+        df_cleaned2.rename(
+            columns={"municpality": "municipality"},
+            inplace=True
+        )
+
+        # -----------------------------
+        # 2. CONVERT NUMERIC COLUMNS
+        # -----------------------------
+        for col in numeric_cols2:
+            if col in df_cleaned2.columns:
+
+                # Convert column to numeric safely
+                df_cleaned2[col] = pd.to_numeric(
+                    df_cleaned2[col]
+                    .astype(str)  # Convert to string first
+                    .str.replace(",", "")  # Remove commas
+                    .replace("nan", None),  # Replace string "nan" with None
+                    errors="coerce"  # Invalid values become NaN
+                )
+
+                # Remove negative values ONLY for selected columns
+                if col in non_negative_cols2:
+                    df_cleaned2[col] = df_cleaned2[col].clip(lower=0)
+
+        # -----------------------------
+        # 3. HANDLE MISSING VALUES
+        # -----------------------------
+        for col in ["hybridpremium_dry", "hybridpremium_wet", "hybridordinary_dry", "hybridordinary_wet",
+                    "inbredpremium_dry", "inbredpremium_wet", "inbredordinary_dry", "inbredordinary_wet"]:
+            if col in df_cleaned2.columns:
+                # Fill missing values using linear interpolation then forward fill
+                df_cleaned2[col] = df_cleaned2[col].interpolate(method="linear").ffill()
+
+        # -----------------------------
+        # 3b. FILL ANY REMAINING MISSING VALUES
+        # -----------------------------
+        for col in ["hybridpremium_dry", "hybridpremium_wet", "hybridordinary_dry", "hybridordinary_wet",
+                    "inbredpremium_dry", "inbredpremium_wet", "inbredordinary_dry", "inbredordinary_wet"]:
+            if col in df_cleaned2.columns:
+                # Fill remaining missing values using forward and backward fill
+                df_cleaned2[col] = df_cleaned2[col].ffill().bfill()
+
+        # -----------------------------
+        # 4. STANDARDIZE STRINGS
+        # -----------------------------
+        for col in ["municipality", "month"]:
+            if col in df_cleaned2.columns:
+                # Convert to string, remove spaces, make lowercase
+                df_cleaned2[col] = df_cleaned2[col].astype(str).str.strip().str.lower()  # Balanga -> balanga
+
+        # -----------------------------
+        # 5. CREATE DATE COLUMN
+        # -----------------------------
+        # If year and month exist, create full date
+        if 'year' in df_cleaned2.columns and 'month_num' in df_cleaned2.columns:
+            df_cleaned2["date"] = pd.to_datetime(
+                df_cleaned2["year"].astype(str) + "-" +
+                df_cleaned2["month_num"].astype(str) + "-01"
+            )
+
+        # -----------------------------
+        # SORT DATA BY DATE
+        # -----------------------------
+        if "date" in df_cleaned2.columns:
+            # Sort rows by date and reset index
+            df_cleaned2 = df_cleaned2.sort_values("date").reset_index(drop=True)
+
+        # -----------------------------
+        # 6. REMOVE DUPLICATES
+        # -----------------------------
+        df_cleaned2 = df_cleaned2.drop_duplicates()
+
+        # Save cleaned sheet to dictionary
+        cleaned_sheets2[sheet_name2] = df_cleaned2
+
     # -----------------------------
     # SAVE CLEANED DATA
     # -----------------------------
@@ -169,6 +274,12 @@ def run_cleaning(file_path, output_path):
 
     print(f"All cleaned sheets saved to: {output_path}")
 
+    with pd.ExcelWriter(output_path2, engine="xlsxwriter") as writer:
+        for sheet_name2, df2 in cleaned_sheets2.items():
+            df2.to_excel(writer, sheet_name=sheet_name2, index=False)
+
+    print(f"All cleaned municipal sheets saved to: {output_path2}")
+
     # -----------------------------
     # FINAL CHECK
     # -----------------------------
@@ -176,4 +287,10 @@ def run_cleaning(file_path, output_path):
     if not os.path.exists(output_path):
         raise FileNotFoundError(f"Failed to save cleaned file: {output_path}")
 
-    return output_path  # Return output file path
+    if not os.path.exists(output_path2):
+        raise FileNotFoundError(f"Failed to save cleaned file: {output_path2}")
+
+    return output_path, output_path2 # Return output file path
+
+if __name__ == "__main__":
+    run_cleaning(file_path, output_path, file_path2, output_path2)

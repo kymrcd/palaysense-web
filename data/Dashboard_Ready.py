@@ -36,7 +36,8 @@ from ml_Yield_Forecast.forecast_yield import forecast_4quarters_yield
 base_dir = os.path.dirname(__file__)
 
 # Default pre-cleaned dataset (used if no upload)
-default_cleaned = os.path.join(base_dir, "", "Capstone_Dataset_Cleaned_ML.xlsx")
+default_cleaned = os.path.join(base_dir, "Capstone_Dataset_Cleaned_ML.xlsx")
+default_cleaned2 = os.path.join(base_dir, "Palayprice_Dataset_PerMunicipality_Cleaned.xlsx")
 
 # Temporary files for uploaded dataset
 temp_input = os.path.join(base_dir, "", "temp_upload.xlsx")
