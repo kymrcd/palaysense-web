@@ -7,6 +7,7 @@ from Data_Cleaning.Data_Cleaning_Capstone import run_cleaning
 # EDA
 # =========================
 from Exploratory_Data_Analysis.EDA_Capstone import run_eda
+from Exploratory_Data_Analysis.EDA_Municipality import run_eda_municipality
 
 # =========================
 # FEATURE ENGINEERING
@@ -63,6 +64,7 @@ temp_output = os.path.join(base_dir, "", "temp_cleaned.xlsx")
 # else:
 #     # Use default pre-cleaned dataset
 data_path = default_cleaned
+data_path2 = default_cleaned2
 #     st.info("Using default cleaned dataset")
 #
 
@@ -71,6 +73,7 @@ data_path = default_cleaned
 # =========================
 # Run exploratory data analysis using selected dataset
 provincial_df, supply_df, municipality_df = run_eda(data_path)
+perMunicipality_df = run_eda_municipality(data_path2)
 
 # =========================
 # FEATURE ENGINEERING
