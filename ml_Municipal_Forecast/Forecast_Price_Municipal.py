@@ -1,8 +1,8 @@
 import calendar
 import numpy as np
 
-def forecast_3_months_M(results, df, municipality, target_column):
 
+def forecast_3_months_M(results, df, municipality, target_column):
     model = results[municipality][target_column]["model"]
     features = results[municipality][target_column]["features"]
 
@@ -24,6 +24,7 @@ def forecast_3_months_M(results, df, municipality, target_column):
         # =========================
         # PREDICT
         # =========================
+        # Added [0] here to extract the actual number from the numpy array
         pred = model.predict(current_row)[0]
         forecasts.append(pred)
 
@@ -61,11 +62,19 @@ def forecast_3_months_M(results, df, municipality, target_column):
             new_row["price_lag2"] = current_row["price_lag1"].values[0]
 
         if "price_lag1" in features:
-            new_row["price_lag1"] = pred   # 🔥 KEY PART (recursive feed)
+            new_row["price_lag1"] = pred  # 🔥 KEY PART (recursive feed)
 
         # =========================
         # MOVE TO NEXT STEP
         # =========================
         current_row = new_row.copy()
 
-        #DISPLAY
+    # =========================
+    # DISPLAY (Terminal Output)
+    # =========================
+    print(f"\nNext 3 Months Forecast for {municipality} ({target_column}):")
+    for m, price in zip(months, forecasts):
+        print(f"{m}: ₱{price:.2f}")
+
+    return months, forecasts
+
