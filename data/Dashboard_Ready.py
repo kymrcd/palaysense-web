@@ -31,6 +31,7 @@ from ml_Municipal_Forecast.train_test_split_Municipal import train_price_Municip
 from ml_Price_Forecast.Forecast_Price_Fancy import forecast_next_3_months
 from ml_Price_Forecast.Forecast_Price_OtherVariety import forecast_next_3_months_variety
 from ml_Yield_Forecast.forecast_yield import forecast_4quarters_yield
+from ml_Municipal_Forecast.Forecast_Price_Municipal import forecast_3_months_M
 
 # =========================
 # FILE PATH SETUP
@@ -128,3 +129,8 @@ forecast_quarterly_yield = forecast_4quarters_yield(
 # MUNICIPALITY
 # =========================================================
 municipal_results = train_price_Municipal(df_features_municipal)
+
+# =========================================================
+# MUNICIPALITY FORECAST (ALL)
+# =========================================================
+
