@@ -54,38 +54,42 @@ def overview_page():
     st.subheader("🌾 3-Month Municipal Price Forecast Summary")
     st.write(
         "Analyze the projected palay prices across different municipalities "
-        "and seasonal categories for the upcoming 3 months:"
+        "for the upcoming 3 months:"
     )
 
     try:
-        # Lazy import to prevent circular dependency issues during orchestration
-        from data.Dashboard_Ready import df_municipal_forecasts
+        # Load directly from the generated Excel report to prevent circular imports
+        excel_path = "data/Municipal_Price_Forecast_Results.xlsx"
+        df_municipal_forecasts = pd.read_excel(excel_path)
 
-        # Interactive UI Filtering Columns
+        # Interactive UI Multiselect Slicers (Allows multiple selections at once)
         col1, col2 = st.columns(2)
         with col1:
-            muni_options = ["All Municipalities"] + list(df_municipal_forecasts["Municipality"].unique())
-            selected_muni = st.selectbox("Select Municipality:", muni_options)
+            muni_list = list(df_municipal_forecasts["Municipality"].unique())
+            selected_muni = st.multiselect("Filter Municipalities:", options=muni_list, default=[])
 
         with col2:
-            variety_options = ["All Varieties/Seasons"] + list(df_municipal_forecasts["Rice Type & Season"].unique())
-            selected_variety = st.selectbox("Select Variety & Season:", variety_options)
+            variety_list = list(df_municipal_forecasts["Rice Type & Season"].unique())
+            selected_variety = st.multiselect("Filter Varieties & Seasons:", options=variety_list, default=[])
 
-        # Apply filtering logic reactively
+        # Apply multiselect filtering logic reactively
         df_filtered = df_municipal_forecasts.copy()
-        if selected_muni != "All Municipalities":
-            df_filtered = df_filtered[df_filtered["Municipality"] == selected_muni]
-        if selected_variety != "All Varieties/Seasons":
-            df_filtered = df_filtered[df_filtered["Rice Type & Season"] == selected_variety]
+        if selected_muni:  # If the user selected at least one municipality
+            df_filtered = df_filtered[df_filtered["Municipality"].isin(selected_muni)]
+        if selected_variety:  # If the user selected at least one variety/season
+            df_filtered = df_filtered[df_filtered["Rice Type & Season"].isin(selected_variety)]
 
         # Render the interactive dataframe table inside the dashboard interface
         st.dataframe(
             df_filtered,
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            height=320  # Keeps layout tight and enables scrollbars automatically
         )
         st.caption(f"Displaying {len(df_filtered)} forecast records based on your active filters.")
 
+    except FileNotFoundError:
+        st.warning("⚠️ Forecast dataset report not found. Please verify the background pipeline ran completely.")
     except Exception as e:
         st.error(f"⚠️ Unable to render the municipal forecast data table: {str(e)}")
 
