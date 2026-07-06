@@ -47,51 +47,6 @@ def overview_page():
     muni = municipality_df.copy()
     muni["year"] = muni["date"].dt.year
 
-    # ========================================================
-    # MUNICIPAL 3-MONTH PRICE FORECAST
-    # ========================================================
-    st.markdown("---")
-    st.subheader("🌾 3-Month Municipal Price Forecast Summary")
-    st.write(
-        "Analyze the projected palay prices across different municipalities "
-        "for the upcoming 3 months:"
-    )
-
-    try:
-        # Load directly from the generated Excel report to prevent circular imports
-        excel_path = "data/Municipal_Price_Forecast_Results.xlsx"
-        df_municipal_forecasts = pd.read_excel(excel_path)
-
-        # Interactive UI Multiselect Slicers (Allows multiple selections at once)
-        col1, col2 = st.columns(2)
-        with col1:
-            muni_list = list(df_municipal_forecasts["Municipality"].unique())
-            selected_muni = st.multiselect("Filter Municipalities:", options=muni_list, default=[])
-
-        with col2:
-            variety_list = list(df_municipal_forecasts["Rice Type & Season"].unique())
-            selected_variety = st.multiselect("Filter Varieties & Seasons:", options=variety_list, default=[])
-
-        # Apply multiselect filtering logic reactively
-        df_filtered = df_municipal_forecasts.copy()
-        if selected_muni:  # If the user selected at least one municipality
-            df_filtered = df_filtered[df_filtered["Municipality"].isin(selected_muni)]
-        if selected_variety:  # If the user selected at least one variety/season
-            df_filtered = df_filtered[df_filtered["Rice Type & Season"].isin(selected_variety)]
-
-        # Render the interactive dataframe table inside the dashboard interface
-        st.dataframe(
-            df_filtered,
-            use_container_width=True,
-            hide_index=True,
-            height=320  # Keeps layout tight and enables scrollbars automatically
-        )
-        st.caption(f"Displaying {len(df_filtered)} forecast records based on your active filters.")
-
-    except FileNotFoundError:
-        st.warning("⚠️ Forecast dataset report not found. Please verify the background pipeline ran completely.")
-    except Exception as e:
-        st.error(f"⚠️ Unable to render the municipal forecast data table: {str(e)}")
 
     # =========================
     # HISTORICAL QUARTERLY DATA
@@ -303,6 +258,88 @@ def overview_page():
 
     next_fancy_pred = forecast_3months_fancy[0]
     next_regular_pred = forecast_variety_3months[0]
+
+    # ========================================================
+    # MUNICIPAL 3-MONTH PRICE FORECAST WITH SEASONAL TABS
+    # ========================================================
+    st.markdown("---")
+    st.subheader("🌾 3-Month Municipal Price Forecast Summary")
+    st.write(
+        "Analyze the projected palay prices across different municipalities. "
+        "Select a tab below to switch seasonal contexts:"
+    )
+
+    try:
+        # Load data directly from the generated Excel report
+        excel_path = "data/Municipal_Price_Forecast_Results.xlsx"
+        df_municipal_forecasts = pd.read_excel(excel_path)
+
+        # 1. Interactive UI Filter for Municipalities
+        muni_list = list(df_municipal_forecasts["Municipality"].unique())
+        selected_muni = st.multiselect("Filter Municipalities:", options=muni_list, default=[])
+
+        # Apply global municipality filter first
+        df_filtered_muni = df_municipal_forecasts.copy()
+        if selected_muni:
+            df_filtered_muni = df_filtered_muni[df_filtered_muni["Municipality"].isin(selected_muni)]
+
+        # 2. CREATE VISUALLY APPEALING SEASONAL TABS
+        tab_dry, tab_wet = st.tabs(["☀️ Dry Season Forecasts", "🌧️ Wet Season Forecasts"])
+
+        # ========================================================
+        # TAB 1: DRY SEASON VIEW
+        # ========================================================
+        with tab_dry:
+            # Filter rows where target column contains "_dry"
+            df_dry = df_filtered_muni[
+                df_filtered_muni["Rice Type & Season"].str.contains("_dry", case=False, na=False)].copy()
+
+            # Clean up the name for presentation (e.g., "hybridpremium_dry" -> "Hybrid Premium")
+            df_dry["Rice Classification"] = df_dry["Rice Type & Season"].str.replace("_dry", "",
+                                                                                     case=False).str.replace("_",
+                                                                                                             " ").str.title()
+
+            # Reorder columns for a neat presentation layout
+            df_dry_display = df_dry[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]]
+
+            st.write("### ☀️ Peak & Off-Peak Dry Season Metrics")
+            st.dataframe(
+                df_dry_display,
+                use_container_width=True,
+                hide_index=True,
+                height=280
+            )
+            st.caption(f"Displaying {len(df_dry_display)} dry season configurations.")
+
+        # ========================================================
+        # TAB 2: WET SEASON VIEW
+        # ========================================================
+        with tab_wet:
+            # Filter rows where target column contains "_wet"
+            df_wet = df_filtered_muni[
+                df_filtered_muni["Rice Type & Season"].str.contains("_wet", case=False, na=False)].copy()
+
+            # Clean up the name for presentation (e.g., "hybridpremium_wet" -> "Hybrid Premium")
+            df_wet["Rice Classification"] = df_wet["Rice Type & Season"].str.replace("_wet", "",
+                                                                                     case=False).str.replace("_",
+                                                                                                             " ").str.title()
+
+            # Reorder columns for a neat presentation layout
+            df_wet_display = df_wet[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]]
+
+            st.write("### 🌧️ Rain-fed & High-Moisture Wet Season Metrics")
+            st.dataframe(
+                df_wet_display,
+                use_container_width=True,
+                hide_index=True,
+                height=280
+            )
+            st.caption(f"Displaying {len(df_wet_display)} wet season configurations.")
+
+    except FileNotFoundError:
+        st.warning("⚠️ Forecast dataset report not found. Please verify the background pipeline ran completely.")
+    except Exception as e:
+        st.error(f"⚠️ Unable to render the municipal forecast data table: {str(e)}")
 
     # ========================================================
     # CHART GENERATION SETUP
