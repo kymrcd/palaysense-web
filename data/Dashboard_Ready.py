@@ -23,6 +23,7 @@ from Feature_Engineering.Feature_Engineering_Municipality import feature_enginee
 from ml_Price_Forecast.train_test_split_fancy import train_price_fancy
 from ml_Price_Forecast.train_test_split_variety import train_variety_price
 from ml_Yield_Forecast.train_test_split_yield import train_yield
+from ml_Municipal_Forecast.train_test_split_Municipal import train_price_Municipal
 
 # =========================
 # FORECASTING
@@ -122,3 +123,8 @@ forecast_quarterly_yield = forecast_4quarters_yield(
     df_features_yield,
     bias_yield,
 )
+
+# =========================================================
+# MUNICIPALITY
+# =========================================================
+municipal_results = train_price_Municipal(df_features_municipal)
