@@ -47,6 +47,48 @@ def overview_page():
     muni = municipality_df.copy()
     muni["year"] = muni["date"].dt.year
 
+    # ========================================================
+    # MUNICIPAL 3-MONTH PRICE FORECAST
+    # ========================================================
+    st.markdown("---")
+    st.subheader("🌾 3-Month Municipal Price Forecast Summary")
+    st.write(
+        "Analyze the projected palay prices across different municipalities "
+        "and seasonal categories for the upcoming 3 months:"
+    )
+
+    try:
+        # Lazy import to prevent circular dependency issues during orchestration
+        from data.Dashboard_Ready import df_municipal_forecasts
+
+        # Interactive UI Filtering Columns
+        col1, col2 = st.columns(2)
+        with col1:
+            muni_options = ["All Municipalities"] + list(df_municipal_forecasts["Municipality"].unique())
+            selected_muni = st.selectbox("Select Municipality:", muni_options)
+
+        with col2:
+            variety_options = ["All Varieties/Seasons"] + list(df_municipal_forecasts["Rice Type & Season"].unique())
+            selected_variety = st.selectbox("Select Variety & Season:", variety_options)
+
+        # Apply filtering logic reactively
+        df_filtered = df_municipal_forecasts.copy()
+        if selected_muni != "All Municipalities":
+            df_filtered = df_filtered[df_filtered["Municipality"] == selected_muni]
+        if selected_variety != "All Varieties/Seasons":
+            df_filtered = df_filtered[df_filtered["Rice Type & Season"] == selected_variety]
+
+        # Render the interactive dataframe table inside the dashboard interface
+        st.dataframe(
+            df_filtered,
+            use_container_width=True,
+            hide_index=True
+        )
+        st.caption(f"Displaying {len(df_filtered)} forecast records based on your active filters.")
+
+    except Exception as e:
+        st.error(f"⚠️ Unable to render the municipal forecast data table: {str(e)}")
+
     # =========================
     # HISTORICAL QUARTERLY DATA
     # =========================
@@ -411,7 +453,7 @@ def overview_page():
             padding: 0 1% 20px 1%; 
             background: #F8FAF9;
         }
-        
+
         .block-container {
             padding-left: 1rem !important;
             padding-right: 1rem !important;
@@ -880,7 +922,7 @@ def overview_page():
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
-                    y= -0.40,
+                    y=-0.40,
                     xanchor="center",
                     x=0.5,
                     font=dict(size=11, family="Poppins")
@@ -974,7 +1016,7 @@ def overview_page():
         st.markdown("</div>", unsafe_allow_html=True)
 
     # Data Row 2 (Ranking & Smart Cards)
-    chart_row2_col1, chart_row2_col2 = st.columns([2.90,2])
+    chart_row2_col1, chart_row2_col2 = st.columns([2.90, 2])
 
     with chart_row2_col1:
         st.markdown(
@@ -1027,7 +1069,7 @@ def overview_page():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # SMART FARMER CARDS INTERACTION VIEW
+        # SMART FARMER CARDS INTERACTION VIEW
         # SMART FARMER CARDS INTERACTION VIEW
         with chart_row2_col2:
             st.markdown(f"""
