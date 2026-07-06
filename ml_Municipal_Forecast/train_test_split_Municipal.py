@@ -3,11 +3,12 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import numpy as np
 import warnings
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
-def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempts=3):
 
+def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempts=3):
     print("\nStart of Train and Testing (Municipality)")
 
     target_columns = [
@@ -22,6 +23,7 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
     ]
 
     results = {}
+    all_forecasts_list = []
 
     # =============================
     # LOOP PER MUNICIPALITY
@@ -37,7 +39,7 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
         # FILTER DATA PER MUNICIPALITY
         df_muni = df_features_municipal[
             df_features_municipal["municipality"] == muni
-        ].copy()
+            ].copy()
 
         results[muni] = {}
 
@@ -52,8 +54,8 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
             features = [
                 col for col in df_muni.columns
                 if col not in target_columns
-                and col != "municipality"
-                and np.issubdtype(df_muni[col].dtype, np.number)
+                   and col != "municipality"
+                   and pd.api.types.is_numeric_dtype(df_muni[col])
             ]
 
             X = df_muni[features]
@@ -86,7 +88,6 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
                 scores = []
 
                 for train_idx, val_idx in tscv.split(X_train):
-
                     X_tr = X_train.iloc[train_idx]
                     X_val = X_train.iloc[val_idx]
 
@@ -125,7 +126,6 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
             # FINAL TRAINING
             # -----------------------------
             best_model.fit(X_train, y_train)
-
             y_pred = best_model.predict(X_test)
 
             mae = mean_absolute_error(y_test, y_pred)
@@ -152,6 +152,35 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
                 "Bias": bias
             }
 
+            # =========================================================
+            # EXTRACT THE LAST 3 MONTHS OF FORECASTS PER COMBINATION
+            # =========================================================
+            m1 = y_pred[-3] if len(y_pred) >= 3 else (y_pred[-1] if len(y_pred) > 0 else 0)
+            m2 = y_pred[-2] if len(y_pred) >= 2 else (y_pred[-1] if len(y_pred) > 0 else 0)
+            m3 = y_pred[-1] if len(y_pred) >= 1 else 0
+
+            all_forecasts_list.append({
+                "Municipality": muni.upper(),
+                "Rice Type & Season": target,
+                "Month 1": f"₱{m1:.2f}",
+                "Month 2": f"₱{m2:.2f}",
+                "Month 3": f"₱{m3:.2f}"
+            })
+
     print("\n=== TRAINING COMPLETED ===")
+
+    # =========================================================
+    # DISPLAY UNIFIED SUMMARY TABLE FOR THE 3-MONTH FORECAST
+    # =========================================================
+    print("\n" + "=" * 95)
+    print("                FINAL SUMMARY: 3-MONTH PRICE FORECAST PER MUNICIPALITY & SEASON")
+    print("=" * 95)
+
+    # Convert the accumulated list into a single clean DataFrame
+    df_summary = pd.DataFrame(all_forecasts_list)
+
+    # Print the entire table to the terminal
+    print(df_summary.to_string(index=False))
+    print("=" * 95 + "\n")
 
     return results
