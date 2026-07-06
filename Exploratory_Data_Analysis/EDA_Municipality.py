@@ -52,44 +52,21 @@ def handle_outliers_per_year(df, target_cols):
     return df
 
 # -----------------------------
-# STATIONARITY TRANSFORMATION
-# -----------------------------
-def make_stationary(df, target_cols):
-    print("\n=== APPLYING STATIONARITY TRANSFORMATIONS ===")
-
-    for target in target_cols:
-        if target in df.columns:
-
-            # log transformation to stabilize variance and reduce skewness
-            df[f"{target}_log"] = np.log1p(df[target])
-
-            # first differencing to remove trend and make series stationary
-            df[f"{target}_log_diff"] = df[f"{target}_log"].diff()
-
-            print(f"{target}: log + differencing applied")
-
-    return df
-
-# -----------------------------
 # STATIONARITY TEST (ADF)
 # -----------------------------
-def stationarity_test(df, target_cols, transformed=False):
+def stationarity_test(df, target_cols):
 
-    if transformed:
-        print("\n=== STATIONARITY TEST (AFTER TRANSFORMATION) ===")
-    else:
-        print("\n=== STATIONARITY TEST (BEFORE TRANSFORMATION) ===")
+    print("\n=== STATIONARITY TEST (ADF) ===")
 
     for target in target_cols:
 
-        col = f"{target}_log_diff" if transformed else target
-
-        if col not in df.columns:
+        if target not in df.columns:
             continue
 
-        s = df[col].dropna()
+        s = df[target].dropna()
 
         if len(s) > 10:
+
             result = adfuller(s)
 
             print(f"\n{target}")
@@ -171,20 +148,17 @@ def run_eda_municipality(file_path2):
     # apply outlier handling per year for selected targets
     perMunicipality_df = handle_outliers_per_year(perMunicipality_df, target_cols)
 
-    # STATIONARITY TEST (BEFORE)
+    # -----------------------------
+    # STATIONARITY TEST
+    # -----------------------------
     stationarity_test(perMunicipality_df, target_cols)
 
-    # apply stationarity transformation (log + differencing)
-    perMunicipality_df = make_stationary(perMunicipality_df, target_cols)
-
-    # -----------------------------
-    # STATIONARITY TEST (AFTER)
-    # -----------------------------
-    stationarity_test(
-        perMunicipality_df,
-        target_cols,
-        transformed=True
-    )
+    print("\n=== STATIONARITY ASSESSMENT ===")
+    print("- Stationarity was evaluated using the Augmented Dickey-Fuller (ADF) test.")
+    print("- Results were used to understand the characteristics of the time series.")
+    print("- No stationarity transformation was applied because Random Forest")
+    print("  is a tree-based machine learning model that does not require")
+    print("  stationary input data.")
 
     # -----------------------------
     # TARGET STATISTICS
@@ -204,9 +178,9 @@ def run_eda_municipality(file_path2):
     # FINAL CONCLUSION
     # -----------------------------
     print("\n=== FINAL CONCLUSION ===")
-    print("- Outliers handled per year")  # summary of preprocessing step
-    print("- Log transformation applied (variance stabilized)")
-    print("- Differencing applied (trend removed)")
-    print("- Data is now ready for SARIMA / ML models")
+    print("- Outliers handled per year")
+    print("- Stationarity assessed using the Augmented Dickey-Fuller (ADF) test")
+    print("- No stationarity transformation applied since Random Forest does not require stationary data")
+    print("- Data is ready for feature engineering and Random Forest forecasting")
 
     return perMunicipality_df

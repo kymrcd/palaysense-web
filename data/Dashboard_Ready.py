@@ -15,6 +15,7 @@ from Exploratory_Data_Analysis.EDA_Municipality import run_eda_municipality
 from Feature_Engineering.Feature_Engineering_Fancy import feature_engineering_fancy
 from Feature_Engineering.Feature_Engineering_Yield import feature_engineering_yield
 from Feature_Engineering.Feature_Engineering_Variety import feature_engineering_variety
+from Feature_Engineering.Feature_Engineering_Municipality import feature_engineering_municipal
 
 # =========================
 # TRAINING
@@ -81,6 +82,7 @@ perMunicipality_df = run_eda_municipality(data_path2)
 df_fancy, df_features_fancy = feature_engineering_fancy(provincial_df)
 df_regular, df_features_regular = feature_engineering_variety(provincial_df)
 df_yield, df_features_yield = feature_engineering_yield(provincial_df)
+df_municipal, df_features_municipal = feature_engineering_municipal(perMunicipality_df)
 
 # =========================================================
 # FANCY MODEL
