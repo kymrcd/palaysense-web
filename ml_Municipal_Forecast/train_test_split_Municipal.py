@@ -4,6 +4,8 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import numpy as np
 import warnings
 import pandas as pd
+import os
+import joblib
 
 warnings.filterwarnings("ignore")
 
@@ -183,4 +185,12 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
     print(df_summary.to_string(index=False))
     print("=" * 95 + "\n")
 
-    return results
+    # =========================================================
+    # SAVES TRAINING RESULTS INTO municipality_models.pkl
+    # =========================================================
+    os.makedirs("models", exist_ok=True)
+    joblib.dump(results, "models/municipality_models.pkl")
+
+    print("\nMunicipality models saved successfully!")
+
+    return results, df_summary
