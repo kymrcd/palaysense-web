@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import streamlit as st
+import joblib
 
 from Data_Cleaning.Data_Cleaning_Capstone import run_cleaning
 # =========================
@@ -128,9 +129,38 @@ forecast_quarterly_yield = forecast_4quarters_yield(
 # =========================================================
 # MUNICIPALITY
 # =========================================================
-municipal_results = train_price_Municipal(df_features_municipal)
 
+model_path = os.path.join(base_dir, "models", "municipality_models.pkl")
+
+if os.path.exists(model_path):
+
+    print("\nLoading saved municipality models...")
+
+    municipal_results, df_municipal_forecasts = joblib.load(model_path)
+
+else:
+
+    print("\nTraining municipality models...")
+
+    municipal_results, df_municipal_forecasts = train_price_Municipal(
+        df_features_municipal
+    )
+
+    os.makedirs(os.path.join(base_dir, "models"), exist_ok=True)
+
+    joblib.dump(
+        (municipal_results, df_municipal_forecasts),
+        model_path
+    )
+
+    print("Municipality models saved!")
 # =========================================================
 # MUNICIPALITY FORECAST (ALL)
 # =========================================================
+# Now that df_municipal_forecasts is successfully defined above, this will run smoothly
+print(f"\n[Dashboard Ready] Successfully loaded {len(df_municipal_forecasts)} municipal forecast combinations.")
+
+# Keep this assignment to make the dataframe accessible globally
+df_municipal_forecasts = df_municipal_forecasts
+
 
