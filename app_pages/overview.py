@@ -300,7 +300,7 @@ def overview_page():
                                                                                                              " ").str.title()
 
             # Reorder columns for a neat presentation layout
-            df_dry_display = df_dry[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]]
+            df_dry_display = df_dry[["Municipality", "Rice Classification", "January 2026", "February 2026", "March 2026"]]
 
             st.write("### ☀️ Peak & Off-Peak Dry Season Metrics")
             st.dataframe(
@@ -325,7 +325,7 @@ def overview_page():
                                                                                                              " ").str.title()
 
             # Reorder columns for a neat presentation layout
-            df_wet_display = df_wet[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]]
+            df_wet_display = df_wet[["Municipality", "Rice Classification", "January 2026", "February 2026", "March 2026"]]
 
             st.write("### 🌧️ Rain-fed & High-Moisture Wet Season Metrics")
             st.dataframe(
