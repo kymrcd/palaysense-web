@@ -7,11 +7,11 @@ import re  # Used for cleaning text using patterns
 # -----------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-file_path = os.path.join(BASE_DIR, "data", "Capstone_Datasets.xlsx")
-output_path = os.path.join(BASE_DIR, "data", "Capstone_Dataset_Cleaned_ML.xlsx")
+file_path = os.path.join(BASE_DIR, "data", "master", "provincial_raw.xlsx")
+output_path = os.path.join(BASE_DIR, "data", "master",  "provincial_cleaned.xlsx")
 
-file_path2 = os.path.join(BASE_DIR, "data", "Palayprice_Dataset_PerMunicipality.xlsx")
-output_path2 = os.path.join(BASE_DIR, "data", "Palayprice_Dataset_PerMunicipality_Cleaned.xlsx")
+file_path2 = os.path.join(BASE_DIR, "data", "master",  "municipality_raw.xlsx")
+output_path2 = os.path.join(BASE_DIR, "data",  "master", "municipality_cleaned.xlsx")
 
 # -----------------------------
 # CLEANING FUNCTION
