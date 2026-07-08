@@ -9,6 +9,8 @@ import plotly.express as px
 from app_pages.price_forecast import PriceForecast as price_forecast
 from app_pages.palay_production import  PalayProduction as crop_production
 from app_pages.yield_forecast import YieldForecast1 as yield_forecast
+from app_pages.upload_dataset import upload_dataset
+
 
 def lgu_dashboard():
 
@@ -249,6 +251,13 @@ def lgu_dashboard():
                      key="overview_btn"):
             st.session_state.page = "Overview"
             st.rerun()
+        # Dedicated Data Upload Workspace Button
+        if st.button(" 📂 **Data Upload**",
+                     use_container_width=True,
+                     type="primary" if st.session_state.page == "Data Upload" else "secondary",
+                     key="data_upload_btn"):
+            st.session_state.page = "Data Upload"
+            st.rerun()
 
         # Crop Production Button
         if st.button(" **Crop Production**",
@@ -288,7 +297,24 @@ def lgu_dashboard():
     # OVERVIEW PAGE
     # -----------------------------
 
-    if st.session_state.page == "Overview":
+    # ----------------------------------------------------
+    # ROUTING LOGIC EXECUTION FOR ROUTED WORKSPACES
+    # ----------------------------------------------------
+
+    # 1. CHANGE THIS FROM 'if' TO 'elif' so it chains together, and add the Upload route above it:
+    if st.session_state.page == "Data Upload":
+        upload_dataset()
+
+    elif st.session_state.page == "Crop Production":
+        crop_production()
+
+    elif st.session_state.page == "Price Forecast":
+        price_forecast()
+
+    elif st.session_state.page == "Yield Forecast":
+        yield_forecast()
+
+    elif st.session_state.page == "Overview":
 
         # -----------------------------
         # YEAR FILTER
@@ -1057,18 +1083,3 @@ def lgu_dashboard():
                 <p style='margin: 0; font-size: 1rem; font-weight: 500;'> Forecast updated: {next_month_name}</p>
             </div>
         """, unsafe_allow_html=True)
-
-    # -----------------------------
-    # PRICE FORECAST PAGE
-    # -----------------------------
-
-    # If the user selects the Price Forecast page
-    # call the render() function from the Price_Forecast_Page module
-    if st.session_state.page == "Price Forecast":
-        price_forecast()
-
-    elif st.session_state.page == "Crop Production":
-        crop_production()
-
-    elif st.session_state.page == "Yield Forecast":
-        yield_forecast()
