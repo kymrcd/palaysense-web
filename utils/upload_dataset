@@ -1,0 +1,165 @@
+import os
+import shutil
+from pathlib import Path
+from datetime import datetime
+import pandas as pd
+
+
+# ==========================================================
+# BASE PATHS
+# ==========================================================
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+TEMP_FOLDER = os.path.join(BASE_DIR, "data", "temp")
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "data", "uploads")
+MASTER_FOLDER = os.path.join(BASE_DIR, "data", "master")
+CLEAN_FOLDER = os.path.join(BASE_DIR, "data", "cleaned")
+
+os.makedirs(TEMP_FOLDER, exist_ok=True)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(MASTER_FOLDER, exist_ok=True)
+os.makedirs(CLEAN_FOLDER, exist_ok=True)
+# ==========================================================
+# CLEANED DATASET OUTPUTS
+# ==========================================================
+
+MUNICIPALITY_CLEANED = os.path.join(
+    CLEAN_FOLDER,
+    "municipality_cleaned.xlsx"
+)
+
+PROVINCIAL_CLEANED = os.path.join(
+    CLEAN_FOLDER,
+    "provincial_cleaned.xlsx"
+)
+# ==========================================================
+# SAVE TEMP FILE
+# ==========================================================
+def save_temp_file(uploaded_file):
+    """
+    Saves the uploaded file temporarily.
+    Returns the temporary file path.
+    """
+
+    temp_path = os.path.join(TEMP_FOLDER, uploaded_file.name)
+
+    with open(temp_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    return temp_path
+
+
+# ==========================================================
+# VALIDATE TEMPLATE
+# ==========================================================
+def validate_template(df, dataset_type):
+    """
+    Checks if the uploaded dataset has the required columns.
+    """
+
+    if dataset_type == "Provincial":
+
+        required_columns = [
+            "Province",
+            "Year",
+            "Month"
+        ]
+
+    elif dataset_type == "Municipality":
+
+        required_columns = [
+            "Municipality",
+            "Year",
+            "Month"
+        ]
+
+    else:
+        raise ValueError("Invalid dataset type.")
+
+    missing = [
+        col for col in required_columns
+        if col not in df.columns
+    ]
+
+    if missing:
+        raise ValueError(
+            f"Missing required columns: {missing}"
+        )
+
+    return True
+
+
+# ==========================================================
+# ARCHIVE ORIGINAL UPLOAD
+# ==========================================================
+def archive_upload(temp_path, dataset_type):
+    """
+    Saves a permanent copy of the uploaded file.
+    """
+
+    folder = os.path.join(UPLOAD_FOLDER, dataset_type)
+
+    os.makedirs(folder, exist_ok=True)
+
+    filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".xlsx"
+
+    archive_path = os.path.join(folder, filename)
+
+    shutil.copy(temp_path, archive_path)
+
+    return archive_path
+
+
+# ==========================================================
+# APPEND TO RAW MASTER
+# ==========================================================
+def append_to_raw_master(temp_path, dataset_type):
+    """
+    Appends uploaded rows to the raw master dataset.
+    """
+
+    uploaded_df = pd.read_excel(temp_path)
+
+    if dataset_type == "Provincial":
+
+        master_path = os.path.join(
+            MASTER_FOLDER,
+            "provincial_raw.xlsx"
+        )
+
+    else:
+
+        master_path = os.path.join(
+            MASTER_FOLDER,
+            "municipality_raw.xlsx"
+        )
+
+    master_df = read_uploaded_file(master_path)
+
+    updated_df = pd.concat(
+        [master_df, uploaded_df],
+        ignore_index=True
+    )
+
+    updated_df.to_excel(master_path, index=False)
+
+    return master_path
+
+# ==========================================================
+# READ UPLOADED FILE
+# ==========================================================
+def read_uploaded_file(file_path):
+    """
+    Reads either Excel or CSV.
+    """
+
+    extension = Path(file_path).suffix.lower()
+
+    if extension == ".xlsx":
+        return pd.read_excel(file_path)
+
+    elif extension == ".csv":
+        return pd.read_csv(file_path)
+
+    else:
+        raise ValueError("Unsupported file type.")
