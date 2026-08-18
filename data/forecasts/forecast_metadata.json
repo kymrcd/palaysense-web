@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-08-18T16:34:29.371594Z",
+  "provincial_last_date": "2025-12-01T00:00:00",
+  "municipal_last_date": "2025-12-01T00:00:00",
+  "forecast_horizon_months": 6,
+  "forecast_horizon_quarters": 4,
+  "municipal_forecast_months": 3,
+  "provincial_rows": 132,
+  "municipal_rows": 1572,
+  "municipalities": [
+    "abucay",
+    "bagac",
+    "balanga city",
+    "dinalupihan",
+    "hermosa",
+    "limay",
+    "mariveles",
+    "morong",
+    "orani",
+    "orion",
+    "pilar",
+    "samal"
+  ]
+}

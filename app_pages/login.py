@@ -3,19 +3,22 @@ import streamlit as st
 
 # Function to convert your local image file to a base64 text string
 def get_base64(image_path):
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
+    try:
+        with open(image_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return ""
 
 
 def login_page():
-    # 1. Fetch the logo image and turn it into text format
+    # 1. Fetch logo
     logo_base64 = get_base64("assets/logo.png")
 
-    # 2. Inject custom CSS styling to override Streamlit's default layout
+    # 2. Inject CSS targeted strictly at the Streamlit container (st-key-login_box)
     st.markdown(
         f"""
         <style>
-        /* Hides all default Streamlit structural bars (Toolbar, footer, running symbol) */
+        /* Tago ang default Streamlit headers / sidebars */
         [data-testid="stSidebar"],
         [data-testid="stHeader"],
         [data-testid="stToolbar"],
@@ -24,7 +27,7 @@ def login_page():
             visibility: hidden !important;
         }}
 
-        /* Sets the modern green-to-yellow gradient background on the whole screen */
+        /* Full screen background gradient */
         [data-testid="stAppViewContainer"] {{
             background: linear-gradient(
                 120deg,
@@ -33,116 +36,83 @@ def login_page():
                 #7D9817 68%,
                 #F1D85C 100%
             ) !important;
-            overflow-y: hidden !important;
-            overflow-x: hidden !important;
-            height: 100vh !important;
+            min-height: 100vh !important;
         }}
 
-        /* Stops inner layout containers from creating unwanted scrolling layers */
-        .main, .stMain, [data-testid="ScrollToBottomContainer"] {{
-            overflow-y: hidden !important;
-            overflow-x: hidden !important;
-            height: 100vh !important;
-        }}
-        
-        /* Sinisigurado nitong walang white space sa tuktok para sumadsad ang inyong navigation bar */
-        .stMainBlockContainer {{
-            padding-top: 0rem !important; 
-            margin-top: 0px !important;
-            padding-bottom: 0rem !important;
-            padding-left: 0rem !important;
-            padding-right: 0rem !important;
+        /* Gitna sa buong screen */
+        .main .block-container {{
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            min-height: 100vh !important;
+            padding: 1rem !important;
             max-width: 100% !important;
+        }}
+
+        /* EKSATTONG SQUARE WHITE CARD (Kinukulong lahat sa loob) */
+        [data-testid="stElementContainer"]:has(.st-key-login_box),
+        div[class*="st-key-login_box"] {{
+            background-color: #FFFFFF !important;
+            border-radius: 16px !important;
+            padding: 30px 32px 24px !important;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.25) !important;
+            width: 380px !important;            /* Sakto ang lapad, hindi masyadong malapad */
+            max-width: 90vw !important;
+            margin: 0 auto !important;
             box-sizing: border-box !important;
         }}
 
-        /* 
-           THE REAL PARENT CENTER FIX:
-           Tinatalo nito ang built-in grids ni Streamlit sa likod ng layout niyo.
-           Hinihila nito ang lahat ng laman sa ilalim ng navbar para pumuwesto sa saktong gitna ng screen display.
-        */
-        [data-testid="stVerticalBlockBorderWrapper"] {{
-            display: flex !important;
-            justify-content: center !important;
-            align-items: flex-start !important;
-            width: 100vw !important;
-            min-height: calc(100vh - 80px) !important;
-            box-sizing: border-box !important;
-        }}
-
-        [data-testid="stVerticalBlock"] {{
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
-            justify-content: center !important;
-            width: 100% !important;
-        }}
-
-        /* COMPACT SOLID WHITE CARD: Maliit at ligtas sa input functions niyo */
-        .st-key-login_card {{
-            width: 650px !important;          
-            max-width: calc(100vw - 48px) !important;
-            background: #FDFDFD !important;
-            border-radius: 12px !important;
-            padding: 24px 40px 22px !important;  
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.22) !important;
-            box-sizing: border-box !important;
-            margin: -25px auto 50px !important;
-        }}
-
-        /* Resizes and centers the logo image inside the white card */
+        /* Logo styling sa loob ng card */
         .login-logo {{
             display: block;
-            width: 160px; 
+            width: 130px; 
             max-width: 80%;
-            margin: 0 auto 16px;
+            margin: 0 auto 15px auto;
         }}
 
-        /* Styles the "Username" and "Password" text labels */
+        /* Inputs sa loob ng card */
         div[data-testid="stTextInput"] label {{
-            color: #222 !important;
+            color: #222222 !important;
             font-size: 12px !important; 
             font-weight: 600 !important;
         }}
 
-        /* COMPACT INPUT BOXES */
         div[data-testid="stTextInput"] input {{
-            height: 40px !important; 
+            height: 38px !important; 
             background-color: #ECECEC !important;
             border: 1px solid transparent !important;
             border-radius: 6px !important;
             color: #111827 !important;
             font-size: 13px !important;
-            padding-left: 12px !important;
+            padding-left: 10px !important;
         }}
 
         div[data-testid="stTextInput"] input:focus {{
             border: 2px solid #79961C !important;
+            background-color: #FFFFFF !important;
             box-shadow: none !important;
         }}
 
-        /* COMPACT LOG IN BUTTON */
+        /* Log in button sa loob ng card */
         .stButton > button {{
             width: 100% !important;
-            height: 42px !important; 
-            margin-top: -2px !important;
+            height: 40px !important; 
+            margin-top: 8px !important;
             border: none !important;
             border-radius: 8px !important;
             background: linear-gradient(135deg, #6C8C1A 0%, #88A925 100%) !important;
             color: white !important;
-            font-size: 15px !important;
+            font-size: 14px !important;
             font-weight: 700 !important;
             letter-spacing: 0.5px !important;
-            transition: 0.25s ease !important;
-            box-shadow: 0 8px 16px rgba(108, 140, 26, 0.18);
+            box-shadow: 0 6px 14px rgba(108, 140, 26, 0.2);
         }}
 
         .stButton > button:hover {{
-            transform: translateY(-1px);
             background: linear-gradient(135deg, #5F7C17 0%, #7F9F22 100%) !important;
         }}
 
-        /* Styles for the helper text links under the login form */
+        /* Footer text sa loob ng card */
         .forgot-password {{
             text-align: center;
             margin-top: 12px;
@@ -150,7 +120,6 @@ def login_page():
             font-size: 11px;
         }}
 
-        /* COMPACT DIVIDER LINE */
         .divider {{
             display: flex;
             align-items: center;
@@ -165,40 +134,35 @@ def login_page():
         }}
 
         .divider span {{
-            margin: 0 10px;
+            margin: 0 8px;
             color: #6B7280;
             font-size: 11px;
         }}
 
         .back-link {{
             text-align: center;
-            font-size: 12px;
-            color: #55751B;
-            font-weight: 600;
+            font-size: 11px;
         }}
 
-        /* Adjusts internal padding for narrow screens like smartphones o maliit na monitor */
-        @media (max-width: 768px) {{
-            .st-key-login_card {{
-                padding: 20px 24px 16px !important;
-            }}
+        .back-link a {{
+            color: #55751B !important;
+            font-weight: 600 !important;
+            text-decoration: none !important;
         }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # 3. Render native elements directly inside the container block
-    with st.container(key="login_card"):
-        # Injects the base64 logo string into an HTML image element
-        st.markdown(
-            f'<img class="login-logo" src="data:image/png;base64,{logo_base64}">',
-            unsafe_allow_html=True,
-        )
+    # 3. Gamit ang Streamlit Container na may key para siguradong NAKALOOB LAHAT
+    with st.container(key="login_box"):
+        # Logo Image
+        logo_html = f'<img class="login-logo" src="data:image/png;base64,{logo_base64}">' if logo_base64 else '<div class="login-logo" style="text-align:center; font-size: 2rem;">🌾</div>'
+        st.markdown(logo_html, unsafe_allow_html=True)
 
-        # Standard Streamlit text boxes with keys tied to session management
+        # Text Inputs (Lahat 'to ay nasa LOOB na ng white box)
         username = st.text_input(
-            "username",
+            "Username",
             placeholder="Enter your username",
             key="username",
             label_visibility="visible"
@@ -212,26 +176,43 @@ def login_page():
             label_visibility="visible"
         )
 
-        left, center, right = st.columns([2.25, 2, 1])
+        # Login Button (Full width sa loob ng box)
+        login_clicked = st.button("LOG IN", key="login_btn", use_container_width=True)
 
-        with center:
-            login_clicked = st.button("LOG IN", key="login_btn")
-
-        # Visual subtext links
+        # Links sa ilalim
         st.markdown(
             """
             <div class="forgot-password">Forgot Password?</div>
             <div class="divider"><span>or</span></div>
-            <div class="back-link">Back to Public Dashboard</div>
+            <div class="back-link"><a href="?page=home" target="_self">Back to Public Dashboard</a></div>
             """,
             unsafe_allow_html=True,
         )
 
-    # 4. Processing logic for verification and page redirection
+    # 4. Authentication Logic
     if login_clicked:
-        if username == "admin" and password == "1234":
-            st.session_state["login_success"] = True
-            st.query_params["page"] = "lgu_dashboard"
-            st.rerun()
+        if not username or not password:
+            st.error("Please enter both email and password.")
         else:
-            st.error("Invalid username or password.")
+            try:
+                from utils.firebase_config import pyrebase_sign_in, set_session_user
+
+                with st.spinner("Authenticating..."):
+                    result = pyrebase_sign_in(username, password)
+
+                if isinstance(result, dict) and "error" not in result:
+                    set_session_user(result)
+                    st.session_state["login_success"] = True
+                    st.query_params["page"] = "lgu_dashboard"
+                    st.success("Login successful! Redirecting...")
+                    st.rerun()
+                elif isinstance(result, dict) and "error" in result:
+                    st.error(result["error"])
+                else:
+                    st.error("Invalid response received from authentication service.")
+            except Exception as e:
+                st.error(f"Authentication error: {str(e)}")
+
+
+if __name__ == "__main__":
+    login_page()

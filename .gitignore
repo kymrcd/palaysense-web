@@ -1,0 +1,50 @@
+# =====================================================================
+# PalaySense — .gitignore
+# =====================================================================
+
+# ---------- Python / venvs ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv_run/
+Lib/
+share/
+etc/
+pyvenv.cfg
+*.log
+
+# The venv Scripts dir bundles project pipeline scripts — commit only those.
+Scripts/*
+!Scripts/run_pipeline.py
+!Scripts/align_forecast_horizon.py
+
+# ---------- Secrets — NEVER commit ----------
+.env
+serviceAccountKey.json
+.streamlit/secrets.toml
+
+# ---------- IDE / tooling ----------
+.idea/
+.vscode/
+.junie/
+.blackboxrules
+.history/
+
+# ---------- Large / generated ML artifacts ----------
+# Regenerated on demand by:  python Scripts/run_pipeline.py
+# municipality_models.pkl alone is ~108 MB (over GitHub's 100 MB limit).
+data/models/*.pkl
+data/uploads/
+data/temp/
+data/backup_originals/
+data/forecasts_ext/
+
+# ---------- Office lock / temp files ----------
+~$*.xlsx
+*.tmp
+
+# ---------- OS ----------
+Thumbs.db
+.DS_Store

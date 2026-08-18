@@ -1,7 +1,6 @@
 import calendar
 import numpy as np
 
-
 def forecast_3_months_M(results, df, municipality, target_column):
     model = results[municipality][target_column]["model"]
     features = results[municipality][target_column]["features"]

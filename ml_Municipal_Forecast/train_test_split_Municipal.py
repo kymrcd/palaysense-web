@@ -1,11 +1,19 @@
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.base import clone
 import numpy as np
 import warnings
 import pandas as pd
 import os
 import joblib
+
+from ml_shared.evaluation import (
+    compute_metrics,
+    baseline_metrics,
+    estimate_bias_cv,
+    walk_forward_eval,
+)
 
 warnings.filterwarnings("ignore")
 
@@ -77,7 +85,7 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
             # -----------------------------
             # TIME SERIES CROSS VALIDATION
             # -----------------------------
-            tscv = TimeSeriesSplit(n_splits=5)
+            tscv = TimeSeriesSplit(n_splits=3)
 
             attempt = 1
             best_rmse = float("inf")
@@ -100,7 +108,8 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
                         n_estimators=200 + attempt * 50,
                         max_depth=10 + attempt,
                         min_samples_split=4,
-                        random_state=42
+                        random_state=42,
+                        n_jobs=-1
                     )
 
                     model.fit(X_tr, y_tr)
@@ -133,13 +142,32 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
             mae = mean_absolute_error(y_test, y_pred)
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
             r2 = r2_score(y_test, y_pred)
-            bias = y_test.mean() - y_pred.mean()
+            # Bias estimated from TRAINING-ONLY TimeSeriesSplit folds (no test leakage).
+            bias = estimate_bias_cv(
+                lambda: clone(best_model), X_train, y_train, n_splits=3
+            )
+            mape = compute_metrics(y_test, y_pred)["mape"]
 
             print("\nEvaluation")
             print(f"MAE  : {mae:.3f}")
             print(f"RMSE : {rmse:.3f}")
             print(f"R²   : {r2:.3f}")
-            print(f"Bias : {bias:.3f}")
+            print(f"Bias (train-only CV): {bias:.3f}")
+            print(f"MAPE : {mape:.2f}%")
+
+            # Baselines evaluated on the SAME held-out window as the model.
+            baselines_muni = baseline_metrics(df_muni[target], split_index, season=12)
+
+            # Walk-forward (rolling-origin) evaluation of the selected model,
+            # benchmarked against Naive and Seasonal Naive on identical windows.
+            walk_forward_muni = walk_forward_eval(
+                lambda: clone(best_model),
+                df_muni[features],
+                df_muni[target],
+                n_origins=3,
+                horizon=3,
+                season=12,
+            )
 
             # STORE RESULT
             results[muni][target] = {
@@ -151,7 +179,10 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
                 "MAE": mae,
                 "RMSE": rmse,
                 "R2": r2,
-                "Bias": bias
+                "MAPE": mape,
+                "Bias": bias,
+                "baselines": baselines_muni,
+                "walk_forward": walk_forward_muni,
             }
 
             # =========================================================
@@ -164,9 +195,9 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
             all_forecasts_list.append({
                 "Municipality": muni.upper(),
                 "Rice Type & Season": target,
-                "Month 1": f"₱{m1:.2f}",
-                "Month 2": f"₱{m2:.2f}",
-                "Month 3": f"₱{m3:.2f}"
+                "Month 1": round(m1, 2),
+                "Month 2": round(m2, 2),
+                "Month 3": round(m3, 2)
             })
 
     print("\n=== TRAINING COMPLETED ===")
@@ -186,11 +217,9 @@ def train_price_Municipal(df_features_municipal, rmse_threshold=2.0, max_attempt
     print("=" * 95 + "\n")
 
     # =========================================================
-    # SAVES TRAINING RESULTS INTO municipality_models.pkl
+    # Training results persisted by caller
     # =========================================================
-    os.makedirs("models", exist_ok=True)
-    joblib.dump(results, "models/municipality_models.pkl")
 
-    print("\nMunicipality models saved successfully!")
+    print("\nMunicipality models trained successfully!")
 
     return results, df_summary

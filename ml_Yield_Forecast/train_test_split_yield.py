@@ -1,9 +1,19 @@
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.base import clone
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import numpy as np
 import warnings
+
+from ml_shared.evaluation import (
+    compute_metrics,
+    baseline_metrics,
+    estimate_bias_cv,
+    estimate_bias_cv_univariate,
+    walk_forward_eval,
+    walk_forward_eval_univariate,
+)
 
 warnings.filterwarnings("ignore") # Hide warnings for cleaner output
 
@@ -100,7 +110,10 @@ def train_yield(df, rmse_threshold=2.0, max_attempts=3):
     rf_mae_yield = mean_absolute_error(y_test, rf_pred)
     rf_rmse_yield = np.sqrt(mean_squared_error(y_test, rf_pred))
     rf_r2_yield = r2_score(y_test, rf_pred)
-    rf_bias_yield = y_test.mean() - rf_pred.mean()
+    # Bias estimated from TRAINING-ONLY TimeSeriesSplit folds (no test leakage).
+    rf_bias_yield = estimate_bias_cv(
+        lambda: clone(best_model_rf), X_train, y_train, n_splits=5
+    )
 
     print("\nRandom Forest Evaluation:")
     print(f"MAE: {rf_mae_yield:.3f}")
@@ -147,7 +160,16 @@ def train_yield(df, rmse_threshold=2.0, max_attempts=3):
         sarima_mae_yield = mean_absolute_error(y_test, sarima_pred)
         sarima_rmse_yield = np.sqrt(mean_squared_error(y_test, sarima_pred))
         sarima_r2_yield = r2_score(y_test, sarima_pred)
-        sarima_bias_yield = y_test.mean() - sarima_pred.mean()
+        # Bias estimated from TRAINING-ONLY folds (no test leakage).
+        sarima_bias_yield = estimate_bias_cv_univariate(
+            lambda y_tr: SARIMAX(
+                y_tr,
+                order=(1, 1, 1),
+                seasonal_order=(1, 1, 1, 12)
+            ).fit(disp=False),
+            y_train,
+            n_splits=3,
+        )
 
         print("\nSARIMA Model Evaluation:")
         print(f"MAE: {sarima_mae_yield:.3f}")
@@ -191,7 +213,52 @@ def train_yield(df, rmse_threshold=2.0, max_attempts=3):
     print(f"MAE: {mae_yield:.3f}")
     print(f"RMSE: {rmse_yield:.3f}")
     print(f"R²: {r2_yield:.3f}")
-    print(f"Bias: {bias_yield:.3f}")
+    print(f"Bias (train-only CV): {bias_yield:.3f}")
+
+    # =========================================================
+    # HONEST EVALUATION PACKAGE (for the defense)
+    # =========================================================
+    mape_yield = compute_metrics(y_test, y_pred_yield)["mape"]
+
+    # Baselines evaluated on the SAME held-out window as the model.
+    baselines_yield = baseline_metrics(df["quarterly_yield_mt_per_ha"], split_index, season=4)
+
+    # Walk-forward (rolling-origin) evaluation of the SELECTED model family,
+    # benchmarked against Naive and Seasonal Naive on identical windows.
+    if model_name_yield == "SARIMA":
+        walk_forward_yield = walk_forward_eval_univariate(
+            lambda y_tr: SARIMAX(
+                y_tr,
+                order=(1, 1, 1),
+                seasonal_order=(1, 1, 1, 12)
+            ).fit(disp=False),
+            df["quarterly_yield_mt_per_ha"],
+            n_origins=3,
+            horizon=4,
+            season=4,
+        )
+    else:
+        walk_forward_yield = walk_forward_eval(
+            lambda: clone(best_model_rf),
+            df[features],
+            df["quarterly_yield_mt_per_ha"],
+            n_origins=3,
+            horizon=4,
+            season=4,
+        )
 
     # Return final model and metrics
-    return best_model_yield, model_name_yield, X_test, y_test, y_pred_yield, bias_yield, mae_yield, rmse_yield, r2_yield
+    return {
+        "model": best_model_yield,
+        "model_name": model_name_yield,
+        "X_test": X_test,
+        "y_test": y_test,
+        "y_pred": y_pred_yield,
+        "bias": bias_yield,
+        "mae": mae_yield,
+        "rmse": rmse_yield,
+        "r2": r2_yield,
+        "mape": mape_yield,
+        "baselines": baselines_yield,
+        "walk_forward": walk_forward_yield,
+    }

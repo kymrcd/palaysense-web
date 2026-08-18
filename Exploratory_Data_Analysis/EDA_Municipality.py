@@ -85,7 +85,7 @@ def run_eda_municipality(file_path2):
     print("\n=== START OF ML-READY EDA (MUNICIPALITY) ===")
 
     # load Excel file with multiple sheets into dictionary of DataFrames
-    sheets = pd.read_excel(file_path2, sheet_name=None)
+    sheets = pd.read_excel(file_path2, sheet_name=None, engine='openpyxl')
 
     # assign sheet to a specific dataframe
     perMunicipality_df = sheets[list(sheets.keys())[0]]

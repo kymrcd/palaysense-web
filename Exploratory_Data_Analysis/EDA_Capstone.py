@@ -80,12 +80,47 @@ def run_eda(file_path):
     print("\n=== START OF ML-READY EDA ===")
 
     # load Excel file with multiple sheets into dictionary of DataFrames
-    sheets = pd.read_excel(file_path, sheet_name=None)
+    sheets = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
 
-    # assign each sheet to a specific dataframe
-    provincial_df = sheets[list(sheets.keys())[0]]
-    supply_df = sheets[list(sheets.keys())[1]]
-    municipality_df = sheets[list(sheets.keys())[2]]
+    # assign each sheet to a specific dataframe (robust against missing sheets)
+    sheet_names = list(sheets.keys())
+
+    # Fallback behavior:
+    # - 1 sheet  -> treat as provincial only
+    # - 2 sheets -> treat as provincial + supply
+    # - 3+ sheets-> provincial + supply + municipality by order
+    available = ", ".join(map(str, sheet_names)) if sheet_names else "(no sheets found)"
+    if len(sheet_names) == 0:
+        raise ValueError(
+            f"EDA_Capstone found no sheets in '{file_path}'."
+        )
+
+    if len(sheet_names) >= 1:
+        provincial_df = sheets[sheet_names[0]]
+    else:
+        provincial_df = pd.DataFrame()
+
+    if len(sheet_names) >= 2:
+        supply_df = sheets[sheet_names[1]]
+    else:
+        supply_df = pd.DataFrame()
+
+    if len(sheet_names) >= 3:
+        municipality_df = sheets[sheet_names[2]]
+        # Ensure municipality_df has a date column (fallback from year)
+        if "date" not in municipality_df.columns and "year" in municipality_df.columns:
+            municipality_df["date"] = pd.to_datetime(
+                municipality_df["year"].astype(str) + "-12-01"
+            )
+            print(f"[EDA_Capstone] Created 'date' column from 'year' for municipality sheet '{sheet_names[2]}'")
+    else:
+        municipality_df = pd.DataFrame()
+
+    if len(sheet_names) < 3:
+        print(
+            f"[EDA_Capstone] Warning: expected 3 sheets (provincial/supply/municipality) but found {len(sheet_names)}. "
+            f"Available sheet names: {available}. Proceeding with fallbacks."
+        )
 
     # convert year column to numeric for consistency
     for df in [provincial_df, supply_df, municipality_df]:

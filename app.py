@@ -10,12 +10,6 @@ st.set_page_config(
 # -----------------------------
 # IMPORT PAGE MODULES
 # -----------------------------
-from landing_page import landing_page
-from app_pages.overview import overview_page
-from app_pages.yield_forecast import YieldForecast1 as yield_forecast
-from app_pages.price_forecast import PriceForecast as price_forecast
-from app_pages.lgu_dashboard import lgu_dashboard
-from app_pages.login import login_page
 from components.top_navigation import top_navigation
 from components.styles import load_css
 
@@ -49,17 +43,10 @@ logo_bytes = get_bytes(logo_path)
 # -----------------------------
 # PAGE ROUTING & TOP NAVIGATION ANCHOR LINK INTERCEPTOR
 # -----------------------------
-
-query_page = st.query_params.get("page", "home")
-
-# If the user is on the homepage, inject a tiny JavaScript utility.
-# This maps the top navigation element to smoothly jump down to the About section.
 if query_page == "home":
     st.markdown(
         """
         <script>
-            // This code runs in the browser background to link your top navigation element 
-            // directly to the #about-us-section element at the bottom of the landing page.
             window.addEventListener('DOMContentLoaded', (event) => {
                 const links = window.parent.document.querySelectorAll('a');
                 links.forEach(link => {
@@ -75,22 +62,28 @@ if query_page == "home":
     )
 
 # -----------------------------
-# ROUTER DISPATCHER PIPELINES
+# ROUTER DISPATCHER PIPELINES (DITO NA TAYO MAG-IMPORT!)
 # -----------------------------
 if query_page == "home":
+    from landing_page import landing_page
     landing_page()
 
 elif query_page == "overview":
+    from app_pages.overview import overview_page
     overview_page()
 
 elif query_page == "price_forecast":
+    from app_pages.price_forecast import PriceForecast as price_forecast
     price_forecast()
 
 elif query_page == "yield_forecast":
+    from app_pages.yield_forecast import YieldForecast1 as yield_forecast
     yield_forecast()
 
 elif query_page == "login":
+    from app_pages.login import login_page
     login_page()
 
 elif query_page == "lgu_dashboard":
+    from app_pages.lgu_dashboard import lgu_dashboard
     lgu_dashboard()

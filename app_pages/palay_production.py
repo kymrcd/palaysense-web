@@ -3,7 +3,11 @@ import pandas as pd     # Import pandas for data manipulation
 import plotly.express as px  # Import Plotly Express for plotting
 
 def PalayProduction():
-    from data.Dashboard_Ready import provincial_df, municipality_df, supply_df
+    import data.Dashboard_Ready as dashboard_ready
+    dr = dashboard_ready.reload_dashboard_data()
+    provincial_df = dr.provincial_df
+    municipality_df = dr.municipality_df
+    supply_df = dr.supply_df
 
     # =========================
     # GET LATEST YEAR DYNAMICALLY
@@ -31,16 +35,56 @@ def PalayProduction():
     df["month_name"] = df["date"].dt.strftime("%b")
 
     # =========================
-    # MUNICIPAL PREP
+    # MUNICIPAL PREP (robust to provincial-only uploads)
     # =========================
     mf = municipality_df.copy()
-    mf["year"] = mf["date"].dt.year
+
+    if "date" not in getattr(mf, "columns", []):
+        # Attempt fallback: create date from year if year column exists
+        if mf is not None and "year" in getattr(mf, "columns", []):
+            mf = mf.copy()
+            mf["date"] = pd.to_datetime(
+                mf["year"].astype(str) + "-12-01"
+            )
+            print("[palay_production] Created 'date' column from 'year' for municipality data (fallback)")
+        else:
+            st.warning(
+                "⚠️ Municipality dataset is not ready (missing 'date'). "
+                "Municipal Production charts will be skipped."
+            )
+            # Create empty municipality frame with expected columns to prevent KeyErrors
+            mf = pd.DataFrame(columns=[
+                "date", "municipality", "year",
+                "ecosystem",
+                "production_total", "harvested_total",
+                "production_irrigated", "harvested_irrigated",
+                "production_rainfed", "harvested_rainfed",
+                "dry_season", "wet_season",
+                "ave_production", "palay_production",
+            ])
+    else:
+        mf["year"] = pd.to_datetime(mf["date"]).dt.year
 
     # =========================
-    # SUPPLY PREP
+    # SUPPLY PREP (robust to provincial-only uploads)
     # =========================
     sr = supply_df.copy()
-    sr["year"] = sr["date"].dt.year
+
+    supply_has_date = "date" in getattr(sr, "columns", [])
+    if not supply_has_date:
+        st.warning(
+            "⚠️ Supply dataset is not ready (missing 'date'). "
+            "Sufficiency status charts will be skipped."
+        )
+        # Create empty frame with expected columns so later code doesn't crash
+        sr = pd.DataFrame(columns=[
+            "date", "year",
+            "net_production_clean_rice",
+            "actual_consumption",
+            "surplusdeficit"
+        ])
+    else:
+        sr["year"] = pd.to_datetime(sr["date"]).dt.year
 
     # Define colors for charts
     colors = ["#388e3c", "#FFEE58"]
@@ -57,11 +101,6 @@ def PalayProduction():
     next_month_name = forecast_months[0].strftime("%B %Y")
 
     # PAGE TITLE
-    st.markdown(
-        "<h2 style='text-align: center; color: #2E7D32; margin-top: -1rem;'>Palay Production</h2>",
-        unsafe_allow_html=True
-    )
-
     st.markdown(
         "<h2 style='text-align: left; color: black; font-size: 25px;'>Provincial Palay Production</h2>",
         unsafe_allow_html=True
@@ -319,17 +358,21 @@ def PalayProduction():
         unsafe_allow_html=True
     ) # Title for municipal data
 
-    # MUNICIPALITY SELECTION
-    selected_municipality = st.multiselect(
-        "Municipality Selection",
-        options=sorted(mf["municipality"].unique()), # List all municipalities
-        default=[mf["municipality"].iloc[0]],
-        help="Select one or more municipalities"
-    )
+    selected_municipality = []
 
-    #fallback
-    if not selected_municipality:
-        selected_municipality = [mf["municipality"].iloc[0]]
+    if not mf.empty:
+        municipalities = sorted(mf["municipality"].dropna().unique())
+
+        selected_municipality = st.multiselect(
+            "Municipality Selection",
+            options=municipalities,
+            default=municipalities[:1],
+        )
+
+        if not selected_municipality:
+            selected_municipality = municipalities[:1]
+    else:
+        st.info("📭 Municipality dataset not available yet. Showing provincial-only production charts.")
 
     # TITLE HANDLING
     all_muni = sorted(mf["municipality"].unique())
@@ -501,6 +544,15 @@ def PalayProduction():
     # -----------------------------
     # AUTO USE ALL YEARS
     # -----------------------------
+    # Sufficiency charts require supply_df-derived columns.
+    if sr.empty or "year" not in getattr(sr, "columns", []):
+        st.info("📭 Supply dataset is not ready (missing 'date'/'year'). Sufficiency charts will be skipped.")
+        return
+    required_cols = ["net_production_clean_rice", "actual_consumption", "surplusdeficit"]
+    if any(c not in sr.columns for c in required_cols):
+        st.info("📭 Supply dataset is incomplete. Sufficiency charts will be skipped.")
+        return
+
     years = sorted(sr["year"].unique())
 
     # Filter DataFrame

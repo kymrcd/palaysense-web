@@ -4,22 +4,24 @@ import pandas as pd
 import plotly.express as px
 import numpy as np
 
-def YieldForecast1():
+from data.Dashboard_Ready import reload_dashboard_data
 
-    # Import data and model outputs
-    from data.Dashboard_Ready import (
-        provincial_df,
-        forecast_quarterly_yield,
-        mae_yield,
-        rmse_yield,
-        r2_yield,
-        model_name_yield,
-    )
+
+def YieldForecast1():
+    dashboard_ready = reload_dashboard_data()
+
+    provincial_df = dashboard_ready.provincial_df
+    forecast_quarterly_yield = dashboard_ready.forecast_quarterly_yield
+    mae_yield = dashboard_ready.mae_yield
+    rmse_yield = dashboard_ready.rmse_yield
+    r2_yield = dashboard_ready.r2_yield
+    model_name_yield = dashboard_ready.model_name_yield
     # =========================
     # DATE PREPARATION
     # =========================
     provincial_df["date"] = pd.to_datetime(provincial_df["date"])
     provincial_df = provincial_df.sort_values("date")
+    province_name = provincial_df["province"].iloc[0]
 
     # Get latest row dynamically
     latest = provincial_df.iloc[-1]
@@ -94,38 +96,31 @@ def YieldForecast1():
 
     next_month_name = forecast_months[0].strftime("%B %Y")
 
-    # Back Button to go back to Public Dashboard
-    if st.button("← Back to Public Dashboard"):
-        st.session_state.page = "Overview"
-        st.rerun()
-
-    # Show main title
-    st.markdown(
-        "<h2 style='text-align: center; color: #2E7D32;'>Quarterly Provincial Yield Forecast</h2>",
-        unsafe_allow_html=True
-    )
-
+    # =========================
+    # PROJECTION SECTION
+    # =========================
     # Show projection section title
     st.markdown(
-        "<h3 style='color: #2E7D32;'>Yield Projection</h3>",
+        "<h3 style='color: #2E7D32; font-weight: 600; margin-bottom: 0.8rem;'>Yield Projection Table</h3>",
         unsafe_allow_html=True
     )
 
     # Create projection table
-    projection_table = pd.DataFrame({
-        "Quarter": forecast_quarters.strftime("%B %Y"),
+    yield_projection_table = pd.DataFrame({
+        "Province": [province_name] * len(forecast_quarters),
+        "Month/Period": forecast_quarters.strftime("%B %Y"),
         "Yield (MT/ha)": forecast_quarterly_yield,
     })
 
     # Display table
-    st.dataframe(projection_table, width="stretch", hide_index=True)
+    st.dataframe(yield_projection_table, use_container_width=True, hide_index=True)
 
     # Add divider line
-    st.markdown("---")
+    st.markdown("<hr style='margin: 2rem 0; border: none; border-top: 1px solid #E0E0E0;'>", unsafe_allow_html=True)
 
     # Let user choose year
     selected_years = st.multiselect(
-        "Year Selection",
+        "Filter Timeline (Years)",
         options=sorted(df["year"].unique()),
         default=[df["year"].max()],
     )
@@ -136,7 +131,7 @@ def YieldForecast1():
 
     # Show chart title
     st.markdown(
-        "<h3 style='color: #2E7D32;'>Provincial Yield Forecast</h3>",
+        "<h3 style='color: #2E7D32; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem;'>Provincial Yield Forecast</h3>",
         unsafe_allow_html=True
     )
 
@@ -144,101 +139,194 @@ def YieldForecast1():
     chart_title = (
         f"Yield Trend ({selected_years[0]})"
         if len(selected_years) == 1
-        else f"Yield Trends ({min(selected_years)} - {max(selected_years)})"
+        else f"Yield Trends and Forecast ({min(selected_years)} - {max(selected_years)})"
     )
 
     # Combine historical and forecast data
     combined_data = pd.concat([quarterly_df, forecast_df])
 
-    # Sort combined data
-    combined_data = combined_data.sort_values("date_q")
-
-    # Create layout with two columns
-    col1, col2 = st.columns([3, 1])
-
+    col1, col2 = st.columns([3, 1.2], gap="medium")
     with col1:
-        # If one year is selected
-        if len(selected_years) == 1:
-            year = selected_years[0]
 
-            # Filter historical data for selected year
-            hist_df = quarterly_df[quarterly_df["year"] == year]
-            plot_df = pd.concat([hist_df, forecast_df])
 
-            # Create line chart
-            fig = px.line(
-                plot_df,
-                x="quarter_label",
-                y="quarterly_yield_mt_per_ha",
-                color="Type",
-                markers=True,
-                title=chart_title,
-                color_discrete_map={
-                    "Historical": "#388e3c",
-                    "Forecast": "#F57C00"
-                }
+        tab1, tab2 = st.tabs([
+            "📈 Yield Trends",
+            "🔮 Forecast Trends"
+        ])
+
+        # ==========================
+        # HISTORICAL
+        # ==========================
+        with tab1:
+
+            if len(selected_years) == 1:
+
+                hist_df = quarterly_df[
+                    quarterly_df["year"] == selected_years[0]
+                    ]
+
+                fig_hist = px.line(
+                    hist_df,
+                    x="quarter_label",
+                    y="quarterly_yield_mt_per_ha",
+                    markers=True,
+                    title=f"Historical Yield Trends ({selected_years[0]})",
+                    color_discrete_sequence=["#388e3c"]
+                )
+
+                fig_hist.update_layout(
+                    yaxis_title="Yield (MT/ha)",
+                    xaxis_title="Quarter"
+                )
+
+            else:
+
+                historical_avg = (
+                    quarterly_df[
+                        quarterly_df["year"].isin(selected_years)
+                    ]
+                    .groupby("year")["quarterly_yield_mt_per_ha"]
+                    .mean()
+                    .reset_index()
+                )
+
+                fig_hist = px.line(
+                    historical_avg,
+                    x="year",
+                    y="quarterly_yield_mt_per_ha",
+                    markers=True,
+                    title=f"Historical Yield Trends ({min(selected_years)}–{max(selected_years)})",
+                    color_discrete_sequence=["#388e3c"]
+                )
+
+                fig_hist.update_layout(
+                    yaxis_title="Avg Yield (MT/ha)",
+                    xaxis_title="Year"
+                )
+
+            fig_hist.update_layout(
+                font_size=11,
+                title_font_size=18,
+                title_font_color="#1B5E20",
+                height=350,
+                margin=dict(t=40, b=20, l=10, r=10),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                yaxis=dict(gridcolor="rgba(0,0,0,0.05)"),
+                xaxis=dict(gridcolor="rgba(0,0,0,0.05)")
             )
 
-            # Make forecast line dashed
-            fig.update_traces(line=dict(width=3, dash="dash"), selector=dict(name="Forecast"))
+            st.plotly_chart(fig_hist, use_container_width=True)
 
-            # Set axis labels
+        # ==========================
+        # FORECAST
+        # ==========================
+        with tab2:
+
+            # If one year is selected
+            if len(selected_years) == 1:
+                year = selected_years[0]
+
+                # Filter historical data for selected year
+                hist_df = quarterly_df[quarterly_df["year"] == year]
+
+                plot_df = pd.concat([hist_df, forecast_df])
+
+                # Create line chart
+                fig = px.line(
+                    plot_df,
+                    x="quarter_label",
+                    y="quarterly_yield_mt_per_ha",
+                    color="Type",
+                    markers=True,
+                    title=chart_title,
+                    color_discrete_map={
+                        "Historical": "#388e3c",
+                        "Forecast": "#F57C00",
+                    },
+                )
+
+                # Make forecast line dashed
+                fig.update_traces(
+                    selector=dict(name="Forecast"),
+                )
+
+                # Set axis labels
+                fig.update_layout(
+                    yaxis_title="Yield (MT/ha)",
+                    xaxis_title="Quarter",
+                )
+
+            else:
+                # Compute yearly average for historical
+                historical_avg = (
+                    quarterly_df[quarterly_df["year"].isin(selected_years)]
+                    .groupby("year")["quarterly_yield_mt_per_ha"]
+                    .mean()
+                    .reset_index()
+                )
+
+                historical_avg["Type"] = "Historical"
+
+                # Compute yearly average for forecast (next year)
+                forecast_avg = (
+                    forecast_df.groupby("year")["quarterly_yield_mt_per_ha"]
+                    .mean()
+                    .reset_index()
+                )
+
+                forecast_avg["Type"] = "Forecast"
+
+                # Combine both
+                yearly_avg = pd.concat([historical_avg, forecast_avg])
+
+                # Create line chart
+                fig = px.line(
+                    yearly_avg,
+                    x="year",
+                    y="quarterly_yield_mt_per_ha",
+                    color="Type",
+                    markers=True,
+                    title=chart_title,
+                    color_discrete_map={
+                        "Historical": "#388e3c",
+                        "Forecast": "#F57C00",
+                    },
+                )
+
+                # Make forecast dashed
+                fig.update_traces(
+                    selector=dict(name="Forecast"),
+                )
+
+                # Labels
+                fig.update_layout(
+                    yaxis_title="Avg Yield (MT/ha)",
+                    xaxis_title="Year",
+                )
+
+            # Modern plot layout configurations (Clean & Transparent)
             fig.update_layout(
-                yaxis_title="Quarterly Yield (MT/ha)",
-                xaxis_title="Quarter",
+                font_size=11,
+                title_font_size=21,
+                height=400,
+                margin=dict(t=40, b=20, l=10, r=10),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                yaxis=dict(
+                    separatethousands=True,
+                    gridcolor="rgba(0,0,0,0.05)",
+                ),
+                xaxis=dict(
+                    gridcolor="rgba(0,0,0,0.05)",
+                ),
             )
 
-        else:
-            # Compute yearly average for historical
-            historical_avg = (
-                quarterly_df[quarterly_df["year"].isin(selected_years)]
-                .groupby("year")["quarterly_yield_mt_per_ha"]
-                .mean()
-                .reset_index()
-            )
+            st.plotly_chart(fig, use_container_width=True)
 
-            historical_avg["Type"] = "Historical"
-
-            # Compute yearly average for forecast (next year)
-            forecast_avg = (
-                forecast_df
-                .groupby("year")["quarterly_yield_mt_per_ha"]
-                .mean()
-                .reset_index()
-            )
-
-            forecast_avg["Type"] = "Forecast"
-
-            # Combine both
-            yearly_avg = pd.concat([historical_avg, forecast_avg])
-
-            # Create line chart
-            fig = px.line(
-                yearly_avg,
-                x="year",
-                y="quarterly_yield_mt_per_ha",
-                color="Type",
-                markers=True,
-                title=chart_title,
-                color_discrete_map={
-                    "Historical": "#388e3c",
-                    "Forecast": "#F57C00"
-                }
-            )
-
-            # Make forecast dashed
-            fig.update_traces(line=dict(width=3, dash="dash"), selector=dict(name="Forecast"))
-
-            # Labels
-            fig.update_layout(
-                yaxis_title="Average Yield (MT/ha)",
-                xaxis_title="Year",
-            )
-
-        # Show chart
-        st.plotly_chart(fig, width="stretch")
 
     with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
 
         # Get latest actual yield
         selected_hist = quarterly_df[quarterly_df["year"].isin(selected_years)]
@@ -275,90 +363,76 @@ def YieldForecast1():
         arrow = "↑" if percent_change > 0 else "↓" if percent_change < 0 else "→"
 
         if len(selected_years) == 1:
-            context_label = f"based on {selected_years[0]} avg"
+            context_label = f"{selected_years[0]} Avg"
         else:
-            context_label = f"based on {len(selected_years)}-year avg"
+            context_label = f"{len(selected_years)}-Yr Avg"
 
+        # COMPACT MODERN METRIC CARD (No heavy gradients, tight footprint)
         st.markdown(f"""
-
             <div style='
-                background: linear-gradient(135deg, {risk_color}22 0%, {risk_color}44 100%); 
-                padding: 1.8rem 1.2rem; 
-                border-radius: 20px; 
-                text-align: center; 
-                border: 2px solid {risk_color};
-                min-height: 320px;
-                display: flex; 
-                flex-direction: column; 
-                justify-content: center;
-                margin-top: 3.0rem;
-                box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+                background-color: var(--background-color, #ffffff);
+                padding: 1rem 1.2rem;
+                border-radius: 12px;
+                border-left: 5px solid {risk_color};
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                margin-top: 40px;
             '>
-                <div style='font-size: 1.8rem; font-weight: bold; color: {risk_color}; margin-bottom: 0.8rem;'>
-                    {risk}
+                <div style='display: flex; justify-content: space-between; align-items: center;'>
+                    <span style='font-size: 0.85rem; color: #666666; font-weight: 500; text-transform: uppercase;'>{risk}</span>
+                    <span style='font-size: 1.3rem; font-weight: 800; color: {risk_color};'>{arrow} {percent_change:+.1f}%</span>
                 </div>
-                <div style='font-size: 1.6rem; color: #2E7D32; font-weight: 700;'>
-                    {arrow} {percent_change:+.1f}%
+                <div style='display: flex; justify-content: space-between; font-size: 0.85rem; border-top: 1px solid #f5f5f5; padding-top: 0.4rem;'>
+                    <span style='color: #888888;'>{context_label}:</span>
+                    <span style='font-weight: 600; color: #333333;'>{latest_yield:.2f} MT/ha</span>
                 </div>
-                <div style='font-size: 1rem; color: black; margin-top: 0.5rem;'>
-                    {context_label}:<br>{latest_yield:.2f} MT/ha
-                </div>
-                <div style='font-size: 1rem; color: black; margin-top: 0.5rem;'>
-                    Forecast {forecast_year1} Avg:<br>{forecast_avg:.2f} MT/ha
+                <div style='display: flex; justify-content: space-between; font-size: 0.85rem;'>
+                    <span style='color: #888888;'>Forecast ({forecast_year1}):</span>
+                    <span style='font-weight: 600; color: #333333;'>{forecast_avg:.2f} MT/ha</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
     # Add divider line
-    st.markdown("---")
+    st.markdown("<hr style='margin: 2rem 0; border: none; border-top: 1px solid #E0E0E0;'>", unsafe_allow_html=True)
 
-    # MODEL PERFORMANCE - yield
+    # =========================
+    # MODEL PERFORMANCE (MODERN)
+    # =========================
     st.markdown(f"""
-        <h2 style='color: black;'>Model Accuracy</h2>
-        <p style='color: black; font-size: 1rem; margin-top: -10px;'>
-            Model used: {model_name_yield}
-        </p>
+        <h3 style='color: #1B5E20; font-weight: 600; margin-bottom: 0.2rem;'>Model Performance</h3>
+        <p style='color: #666666; font-size: 0.85rem; margin-bottom: 1rem;'>Engine Pipeline: <b>{model_name_yield}</b></p>
     """, unsafe_allow_html=True)
 
     st.markdown(f"""
     <div style="
-        background: linear-gradient(135deg, #43A047 0%, #66BB6A 100%);
-        padding: 0.7rem 1.2rem; 
-        border-radius: 20px; 
-        text-align: center;
-        box-shadow: 0 8px 20px rgba(76, 175, 80, 0.4);
-        margin-bottom: 1rem;
-        transition: transform 0.3s, box-shadow 0.3s;
-        font-family: 'Poppins', sans-serif;
+        background-color: var(--background-color, #ffffff);
+        padding: 1.2rem; 
+        border-radius: 12px; 
+        border-top: 4px solid #388e3c;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
     ">
-        <h4 style="
-            color: white; 
-            margin: 0 0 0.5rem 0; 
-            font-size: 1.2rem;
-            text-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        ">Fancy Palay</h4>
         <div style="
             display: flex; 
             justify-content: space-around; 
-            gap: 1rem; 
-            padding-top: 0.3rem;
+            align-items: center;
+            gap: 1rem;
         ">
-            <div style="
-                font-size: 0.95rem; 
-                color: white; 
-                padding-right: 0.5rem; 
-                border-right: 1px solid #ffffff88;
-            ">MAE<br><b>{mae_yield:.2f}</b></div>
-            <div style="
-                font-size: 0.95rem; 
-                color: white; 
-                padding-right: 0.5rem; 
-                border-right: 1px solid #ffffff88;
-            ">RMSE<br><b>{rmse_yield:.2f}</b></div>
-            <div style="
-                font-size: 0.95rem; 
-                color: white;
-            ">R²<br><b>{r2_yield:.3f}</b></div>
+            <div style="text-align: center; flex: 1; border-right: 1px solid #f0f0f0;">
+                <span style="font-size: 0.8rem; color: #666666; text-transform: uppercase;">MAE</span>
+                <h3 style="margin: 0.2rem 0 0 0; font-size: 1.6rem; font-weight: 700; color: #333333;">{mae_yield:.2f}</h3>
+            </div>
+            <div style="text-align: center; flex: 1; border-right: 1px solid #f0f0f0;">
+                <span style="font-size: 0.8rem; color: #666666; text-transform: uppercase;">RMSE</span>
+                <h3 style="margin: 0.2rem 0 0 0; font-size: 1.6rem; font-weight: 700; color: #333333;">{rmse_yield:.2f}</h3>
+            </div>
+            <div style="text-align: center; flex: 1;">
+                <span style="font-size: 0.8rem; color: #666666; text-transform: uppercase;">R² Score</span>
+                <h3 style="margin: 0.2rem 0 0 0; font-size: 1.6rem; font-weight: 700; color: #388e3c;">{r2_yield:.3f}</h3>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -366,50 +440,40 @@ def YieldForecast1():
     # -----------------------------
     # METRICS EXPLANATION (COLLAPSIBLE)
     # -----------------------------
-    with st.expander("ℹ️ What do these metrics mean?"):
+    with st.expander("ℹ️ Understanding Accuracy Metrics"):
         components.html("""
-            <div style="background:#f9fbf9;
-                        padding:1.2rem 1.5rem;
-                        border-radius:15px;
-                        box-shadow:0 4px 12px rgba(0,0,0,0.05);">
-
-                <div style="display:flex; flex-direction:column; gap:0.8rem; font-size:0.95rem; color:#333;">
-
+            <div style="background:#ffffff;
+                        padding:0.5rem 0.8rem;
+                        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <div style="display:flex; flex-direction:column; gap:0.8rem; font-size:0.9rem; color:#444;">
                     <div>
-                        <b>MAE (Mean Absolute Error)</b><br>
-                        This measures the average difference between predicted and actual values.<br>
-                        <span style="color:#2e7d32;">Lower value = more accurate predictions overall.</span>
+                        <b style="color:#2e7d32;">MAE (Mean Absolute Error)</b> — Average sizing of errors between predictions and reality. Lower scores indicate tight overall forecasts.
                     </div>
-
                     <div>
-                        <b>RMSE (Root Mean Squared Error)</b><br>
-                        This measures prediction error while giving more weight to large mistakes.<br>
-                        <span style="color:#2e7d32;">Lower value = fewer large prediction errors.</span>
+                        <b style="color:#2e7d32;">RMSE (Root Mean Squared Error)</b> — Gauges predictive variation, penalizing outliers heavily. Lower values mean less high-variance mistakes.
                     </div>
-
                     <div>
-                        <b>R² (R-squared / Coefficient of Determination)</b><br>
-                        This shows how well the model explains the variation in the actual data.<br>
-                        <span style="color:#2e7d32;">Closer to 1 = better model fit and prediction accuracy.</span>
+                        <b style="color:#2e7d32;">R² Score (Coefficient of Determination)</b> — Measures explained variation. Values near 1.0 signify a highly reliable model fit.
                     </div>
                 </div>
             </div>
-        """, height=220)
+        """, height=160)
 
-    # FOOTER
-    st.markdown("---")
-    # Footer
+    # =========================
+    # FOOTER SECTION (CLEAN BANNER)
+    # =========================
+    st.markdown("<hr style='margin: 2rem 0; border: none; border-top: 1px solid #E0E0E0;'>", unsafe_allow_html=True)
+
     st.markdown(f"""
         <div style='
             text-align: center; 
-            padding: 2rem; 
-            background: linear-gradient(90deg, #E8F5E8 0%, #F1F8E9 100%);
-            border-radius: 20px; 
+            padding: 1.5rem; 
+            background: #F4F9F4;
+            border-radius: 12px; 
+            border: 1px solid #E2EFE2;
             color: #2E7D32;
-            margin-top: 0rem;
         '>
-            <p style='margin: 0; font-size: 1.1rem; font-weight: 600;'>Forecast updated: {next_month_name}</p>
-            <p style='margin: 0.3rem 0 0 0; font-size: 0.95rem; color: #558B2F;'>Overall Yield Projection: <strong>{risk}</strong></p>
+            <p style='margin: 0; font-size: 1rem; font-weight: 600;'>Forecast Cycle Updated: <span style='color: #1B5E20;'>{next_month_name}</span></p>
+            <p style='margin: 0.2rem 0 0 0; font-size: 0.9rem; color: #558B2F;'>Overall Dynamic Trend Assessment: <strong>{risk}</strong></p>
         </div>
         """, unsafe_allow_html=True)
-
