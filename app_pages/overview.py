@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 import plotly.express as px
 import numpy as np
 import os
@@ -88,6 +89,155 @@ def _pick_column(df, candidates):
     return next((c for c in candidates if c in df.columns), None)
 
 
+# ------------------------------------------------------------------
+# KPI SUBTEXT HELPERS — dynamic per Year Range / Period / Municipality
+# ------------------------------------------------------------------
+def _period_suffix(period: str) -> str:
+    """Map PERIOD dropdown value to KPI subtext suffix.
+
+    ANNUAL -> ""
+    SEMESTER 1/2 -> " • Sem 1" / " • Sem 2"
+    QUARTER 1-4  -> " • Q1" .. " • Q4"
+    Legacy QUARTERLY/MONTHLY are also handled for backward compat.
+    """
+    if not period:
+        return ""
+    p = str(period).strip().upper()
+    if p == "ANNUAL":
+        return ""
+    if p in ("SEMESTER 1", "SEM 1"):
+        return " \u2022 Sem 1"
+    if p in ("SEMESTER 2", "SEM 2"):
+        return " \u2022 Sem 2"
+    if p == "QUARTER 1":
+        return " \u2022 Q1"
+    if p == "QUARTER 2":
+        return " \u2022 Q2"
+    if p == "QUARTER 3":
+        return " \u2022 Q3"
+    if p == "QUARTER 4":
+        return " \u2022 Q4"
+    # legacy
+    if p == "QUARTERLY":
+        return " \u2022 Quarterly"
+    if p == "MONTHLY":
+        return " \u2022 Monthly"
+    return ""
+
+
+def _format_signed(num, suffix="", decimals=0):
+    """Format number with explicit + sign for non-negative values."""
+    try:
+        n = float(num)
+    except Exception:
+        return f"0{suffix}"
+    sign = "+" if n >= 0 else ""
+    return f"{sign}{n:,.{decimals}f}{suffix}"
+
+
+def _kpi_subtext_total_production(start_year: int, end_year: int, period: str, muni_name: str, has_data: bool = True) -> str:
+    """Dynamic subtext for Total Production.
+
+    Single year:  "Total for 2025" / "Sum for Hermosa (2025)" (+ period suffix)
+    Multi-year:   "Sum across 2015 \u2013 2025" (+ muni + period suffix)
+    No-data fallback: original static string kept by caller.
+    """
+    suffix = _period_suffix(period)
+    muni_is_all = (not muni_name or muni_name == "All Municipalities")
+    if start_year == end_year:
+        y = end_year
+        if muni_is_all:
+            base = f"Total for {y}"
+        else:
+            base = f"Sum for {muni_name} ({y})"
+        return f"{base}{suffix}" if suffix else base
+    else:
+        base = f"Sum across {start_year} \u2013 {end_year}"
+        if not muni_is_all:
+            base += f" \u2022 {muni_name}"
+        return f"{base}{suffix}" if suffix else base
+
+
+def _kpi_subtext_yield_or_area(
+    *,
+    start_year: int,
+    end_year: int,
+    period: str,
+    muni_name: str,
+    delta: float | None,
+    prev_year: int | None,
+    has_prev: bool,
+    unit: str,
+    decimals: int = 2,
+) -> str:
+    """Dynamic subtext for Average Yield / Harvested Area.
+
+    Single-year + has_prev:  "+0.12 MT/ha vs 2024" (+ period suffix)
+    Single-year fallback:    "Data as of 2025" (+ period suffix + muni)
+    Multi-year:              "Average across 2015 \u2013 2025" (+ muni + period suffix)
+    """
+    suffix = _period_suffix(period)
+    muni_is_all = (not muni_name or muni_name == "All Municipalities")
+    muni_suffix = "" if muni_is_all else f" \u2022 {muni_name}"
+
+    if start_year == end_year:
+        if has_prev and delta is not None and prev_year is not None:
+            try:
+                d = float(delta)
+                if pd.isna(d):
+                    raise ValueError
+            except Exception:
+                has_prev = False
+            else:
+                sign = "+" if d >= 0 else ""
+                # keep decimals/unit as requested, e.g. " MT/ha" or " ha"
+                delta_str = f"{sign}{d:,.{decimals}f}{unit} vs {prev_year}"
+                return f"{delta_str}{suffix}" if suffix else delta_str
+        # fallback: no prev data
+        base = f"Data as of {end_year}"
+        # For single-year fallback, include muni scope if specific
+        if not muni_is_all:
+            base += f" \u2022 {muni_name}"
+        return f"{base}{suffix}" if suffix else base
+    else:
+        base = f"Average across {start_year} \u2013 {end_year}"
+        if not muni_is_all:
+            base += f" \u2022 {muni_name}"
+        return f"{base}{suffix}" if suffix else base
+
+
+def _filter_df_by_period(df: pd.DataFrame, period: str) -> pd.DataFrame:
+    """Filter DataFrame rows to the selected PERIOD slice.
+
+    ANNUAL -> no filtering
+    SEMESTER 1 -> months 1-6, SEMESTER 2 -> months 7-12
+    QUARTER 1-4 -> quarter == N
+    Legacy / unknown -> no filtering (ANNUAL behaviour).
+    """
+    if df is None or df.empty or "date" not in df.columns:
+        return df
+    p = str(period).strip().upper() if period else "ANNUAL"
+    try:
+        d = pd.to_datetime(df["date"], errors="coerce")
+        months = d.dt.month
+        quarters = d.dt.quarter
+    except Exception:
+        return df
+    if p in ("SEMESTER 1", "SEM 1"):
+        return df[months.between(1, 6)]
+    if p in ("SEMESTER 2", "SEM 2"):
+        return df[months.between(7, 12)]
+    if p == "QUARTER 1":
+        return df[quarters == 1]
+    if p == "QUARTER 2":
+        return df[quarters == 2]
+    if p == "QUARTER 3":
+        return df[quarters == 3]
+    if p == "QUARTER 4":
+        return df[quarters == 4]
+    return df
+
+
 def _align_forecast_arrays(fancy_arr, regular_arr):
     """Align two differently-sized forecast arrays onto a shared index.
 
@@ -118,9 +268,14 @@ def _align_forecast_arrays(fancy_arr, regular_arr):
 def _group_by_period(df, period="ANNUAL", value_cols=None):
     """Group DataFrame by the specified period and return aggregated data with period labels.
 
+    Supports the updated PERIOD options: ANNUAL, SEMESTER 1/2, QUARTER 1-4
+    plus legacy QUARTERLY/MONTHLY for backward compat.
+    Semester/Quarter filters slice the DataFrame to that slice before grouping
+    by year so charts stay meaningful when a narrow period is selected.
+
     Args:
         df: DataFrame with 'date' column
-        period: 'ANNUAL', 'QUARTERLY', or 'MONTHLY'
+        period: one of the PERIOD dropdown values
         value_cols: list of column names to aggregate (mean)
 
     Returns:
@@ -137,16 +292,64 @@ def _group_by_period(df, period="ANNUAL", value_cols=None):
     temp["quarter"] = temp["date"].dt.quarter
     temp["month"] = temp["date"].dt.month
     temp["month_name"] = temp["date"].dt.strftime("%b")
+    # semester derived from month (1-6 = Sem 1, 7-12 = Sem 2)
+    temp["semester"] = np.where(temp["month"] <= 6, 1, 2)
 
-    if period == "ANNUAL":
+    p = str(period).strip().upper() if period else "ANNUAL"
+
+    # Narrow SEMESTER / QUARTER slices -> filter then group by year
+    if p in ("SEMESTER 1", "SEM 1"):
+        temp = temp[temp["semester"] == 1]
+        if temp.empty:
+            return pd.DataFrame(columns=["period_label"] + value_cols)
+        grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
+        grouped["period_label"] = grouped["year"].astype(str) + " Sem 1"
+        return grouped
+    if p in ("SEMESTER 2", "SEM 2"):
+        temp = temp[temp["semester"] == 2]
+        if temp.empty:
+            return pd.DataFrame(columns=["period_label"] + value_cols)
+        grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
+        grouped["period_label"] = grouped["year"].astype(str) + " Sem 2"
+        return grouped
+    if p == "QUARTER 1":
+        temp = temp[temp["quarter"] == 1]
+        if temp.empty:
+            return pd.DataFrame(columns=["period_label"] + value_cols)
+        grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
+        grouped["period_label"] = grouped["year"].astype(str) + "-Q1"
+        return grouped
+    if p == "QUARTER 2":
+        temp = temp[temp["quarter"] == 2]
+        if temp.empty:
+            return pd.DataFrame(columns=["period_label"] + value_cols)
+        grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
+        grouped["period_label"] = grouped["year"].astype(str) + "-Q2"
+        return grouped
+    if p == "QUARTER 3":
+        temp = temp[temp["quarter"] == 3]
+        if temp.empty:
+            return pd.DataFrame(columns=["period_label"] + value_cols)
+        grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
+        grouped["period_label"] = grouped["year"].astype(str) + "-Q3"
+        return grouped
+    if p == "QUARTER 4":
+        temp = temp[temp["quarter"] == 4]
+        if temp.empty:
+            return pd.DataFrame(columns=["period_label"] + value_cols)
+        grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
+        grouped["period_label"] = grouped["year"].astype(str) + "-Q4"
+        return grouped
+
+    if p == "ANNUAL":
         grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
         grouped["period_label"] = grouped["year"].astype(str)
         return grouped
-    elif period == "QUARTERLY":
+    elif p == "QUARTERLY":
         grouped = temp.groupby(["year", "quarter"]).mean(numeric_only=True).reset_index()
         grouped["period_label"] = grouped["year"].astype(str) + "-Q" + grouped["quarter"].astype(str)
         return grouped
-    elif period == "MONTHLY":
+    elif p == "MONTHLY":
         grouped = temp.groupby(["year", "month"]).mean(numeric_only=True).reset_index()
         grouped["period_label"] = grouped.apply(lambda r: f"{r['month_name']} {r['year']}", axis=1)
         return grouped
@@ -157,7 +360,11 @@ def _group_by_period(df, period="ANNUAL", value_cols=None):
 
 
 def _price_historical_chart(df, period="ANNUAL"):
-    """Historical price chart grouped by the selected period with peak annotations."""
+    """Historical price chart grouped by the selected period with peak annotations.
+
+    The period value now comes from the updated dropdown:
+    ANNUAL / SEMESTER 1/2 / QUARTER 1-4 (legacy QUARTERLY/MONTHLY still supported).
+    """
     value_cols = []
     if "fancy_palay_price" in df.columns:
         value_cols.append("fancy_palay_price")
@@ -170,7 +377,19 @@ def _price_historical_chart(df, period="ANNUAL"):
     if grouped.empty:
         return go.Figure()
 
-    xaxis_title = "Year" if period == "ANNUAL" else ("Quarter" if period == "QUARTERLY" else "Month")
+    _p = str(period).strip().upper() if period else "ANNUAL"
+    if _p == "ANNUAL":
+        xaxis_title = "Year"
+    elif _p in ("SEMESTER 1", "SEM 1", "SEMESTER 2", "SEM 2"):
+        xaxis_title = "Year (Semester)"
+    elif _p in ("QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"):
+        xaxis_title = "Year"
+    elif _p == "QUARTERLY":
+        xaxis_title = "Quarter"
+    elif _p == "MONTHLY":
+        xaxis_title = "Month"
+    else:
+        xaxis_title = "Year"
     fig = go.Figure()
 
     if "fancy_palay_price" in grouped.columns:
@@ -283,7 +502,19 @@ def _yield_historical_chart(df, period="ANNUAL"):
     if grouped.empty or "quarterly_yield_mt_per_ha" not in grouped.columns:
         return go.Figure()
 
-    xaxis_title = "Year" if period == "ANNUAL" else ("Quarter" if period == "QUARTERLY" else "Month")
+    _p = str(period).strip().upper() if period else "ANNUAL"
+    if _p == "ANNUAL":
+        xaxis_title = "Year"
+    elif _p in ("SEMESTER 1", "SEM 1", "SEMESTER 2", "SEM 2"):
+        xaxis_title = "Year (Semester)"
+    elif _p in ("QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"):
+        xaxis_title = "Year"
+    elif _p == "QUARTERLY":
+        xaxis_title = "Quarter"
+    elif _p == "MONTHLY":
+        xaxis_title = "Month"
+    else:
+        xaxis_title = "Year"
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=grouped["period_label"], y=grouped["quarterly_yield_mt_per_ha"],
@@ -393,60 +624,135 @@ def _yield_summary_card(yield_forecast):
     """, unsafe_allow_html=True)
 
 
-def _render_municipal_season_tables(df_filtered_muni, month_labels):
-    """Render the Dry/Wet municipal 3-month forecast tables inside tabs."""
-    labels = month_labels if len(month_labels) >= 3 else ["Month 1", "Month 2", "Month 3"]
+def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
+                                       classification: str,
+                                       selected_municipalities: list):
+    """
+    Renders the actual 3-month municipal price forecast (Altair).
 
-    tab_dry, tab_wet = st.tabs(["☀️ Dry Season Forecasts", "🌧️ Wet Season Forecasts"])
+    Plots the real forecast values (Month 1-3 from ``df_municipal_forecasts``)
+    for the user's Rice Type / Classification / Crop Cycle selection as a
+    clustered bar chart: bars are grouped by forecast month on the X-axis,
+    with each municipality offset side-by-side via the ``xOffset`` channel.
+    The Y-axis uses ``alt.Scale(zero=False)`` with a tight domain (clamped
+    around the min/max prices in the current selection) so small price
+    changes in cents are visibly distinct. The X-axis is ordered by the
+    actual forecast month labels contained in the uploaded dataset.
+    """
+    if df is None or df.empty:
+        st.error("⚠️ Municipal forecast dataset is empty or unreadable.")
+        return
 
-    def _render(df_season, keyword, heading, caption_label):
-        sub = df_season[
-            df_season["Rice Type & Season"].str.contains(keyword, case=False, na=False)
-        ].copy()
-        sub["Rice Classification"] = (
-            sub["Rice Type & Season"]
-            .str.replace(keyword, "", case=False)
-            .str.replace("_", " ")
-            .str.title()
-        )
-        display = (
-            sub[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]]
-            .rename(columns={
-                "Month 1": labels[0],
-                "Month 2": labels[1],
-                "Month 3": labels[2],
-            })
-        )
-        st.write(f"### {heading}")
-        if display.empty:
-            st.info("📭 No data matches your filters.")
+    df = df.copy()
+    # Standardize column headers to lowercase for safety
+    df.columns = [str(col).lower() for col in df.columns]
+
+    # 1. Municipality multi-select filter (empty selection = all municipalities)
+    if selected_municipalities:
+        selected_munis_lc = [str(m).lower() for m in selected_municipalities]
+        df = df[df["municipality"].str.lower().isin(selected_munis_lc)]
+
+    # 2. Interactive Crop Cycle Selector Dropdown
+    selected_cycle = st.selectbox(
+        "Piliin ang Agrikultural na Siklo (Crop Cycle) na Nais Tingnan:",
+        ["☀️ Dry Season Crop Cycle", "🌧️ Wet Season Crop Cycle"],
+        key=f"crop_cycle_picker_{rice_type}_{classification}",
+    )
+
+    st.write("---")
+
+    # 3. Match the user's filters to the forecast row (e.g. hybridpremium_dry)
+    base_key = f"{rice_type.lower()}{classification.lower()}".replace(" ", "")
+    suffix = "_dry" if "Dry" in selected_cycle else "_wet"
+    target_key = f"{base_key}{suffix}"
+
+    type_col = "rice type & season"
+    sub = df[df[type_col].str.lower() == target_key] if type_col in df.columns else pd.DataFrame()
+    if sub.empty:
+        st.warning(f"No forecast rows for '{target_key}' in the uploaded file.")
+        return
+
+    # 4. Dynamic forecast month labels + forecast year (from the uploaded file)
+    label_map = {}
+    for key, n in (("forecast_month_1_label", 1),
+                   ("forecast_month_2_label", 2),
+                   ("forecast_month_3_label", 3)):
+        if key in sub.columns and sub[key].notna().any():
+            label_map[f"month {n}"] = str(sub[key].iloc[0])
         else:
-            fig_table = go.Figure(data=[go.Table(
-                header=dict(
-                    values=list(display.columns),
-                    fill_color="#1B5E20",
-                    font=dict(color="white", size=12, family="Poppins"),
-                    align="left",
-                ),
-                cells=dict(
-                    values=[display[col] for col in display.columns],
-                    fill_color=[["#F9FAFB", "white"] * (len(display) // 2 + 1)][:len(display)],
-                    font=dict(size=11, family="Poppins"),
-                    align="left",
-                    height=28,
-                ),
-            )])
-            fig_table.update_layout(
-                height=min(280, 60 + len(display) * 28),
-                margin=dict(l=0, r=0, t=0, b=0),
-            )
-            st.plotly_chart(fig_table, use_container_width=True, config={"displayModeBar": False})
-        st.caption(f"Displaying {len(display)} {caption_label} configurations.")
+            label_map[f"month {n}"] = f"Month {n}"
 
-    with tab_dry:
-        _render(df_filtered_muni, "_dry", "☀️ Peak & Off-Peak Dry Season Metrics", "dry season")
-    with tab_wet:
-        _render(df_filtered_muni, "_wet", "🌧️ Rain-fed & High-Moisture Wet Season Metrics", "wet season")
+    forecast_month_labels = [label_map[f"month {n}"] for n in range(1, 4)]
+    forecast_year = next((int(str(label).split()[-1])
+                          for label in forecast_month_labels
+                          if str(label).split()[-1].isdigit()), 2026)
+
+    # 5. Narrative per crop cycle
+    if "Dry" in selected_cycle:
+        st.subheader(
+            f"🌾 Dry Season Forecast: Mid to Late Harvesting Phase ({forecast_year})"
+        )
+        st.caption(
+            f"ℹ️ This tracks the price trend for palay planted late {forecast_year - 1}. "
+            f"Peak harvesting happens from January to March {forecast_year}, "
+            f"winding down completely by May {forecast_year}."
+        )
+    else:
+        st.subheader(
+            f"🌾 Wet Season Forecast: Overlapping Planting & Early Monsoon Harvest ({forecast_year})"
+        )
+        st.caption(
+            f"ℹ️ This tracks fields undergoing land preparation or planting from January to May {forecast_year}, "
+            f"transitioning into wet season crop growth and heavy monsoon harvests "
+            f"from June to December {forecast_year}."
+        )
+
+    # 6. Long-form data: one point per (forecast month, municipality)
+    plot_df = (
+        sub.melt(
+            id_vars=["municipality"],
+            value_vars=["month 1", "month 2", "month 3"],
+            var_name="month_key",
+            value_name="price",
+        )
+        .assign(forecast_month=lambda d: d["month_key"].map(label_map))
+        .groupby(["forecast_month", "municipality"], as_index=False)["price"]
+        .mean()
+        .dropna(subset=["price"])
+    )
+    if plot_df.empty:
+        st.info("No data available for the selected filters.")
+        return
+
+    # 7. Altair clustered bar chart — zoomed Y-axis (zero=False) + tight
+    #    domain around the min/max prices in the active selection so that
+    #    changes in cents are visibly distinct.
+    price_min = plot_df["price"].min()
+    price_max = plot_df["price"].max()
+    price_pad = max((price_max - price_min) * 0.08, 0.05)
+    y_domain = [price_min - price_pad, price_max + price_pad]
+
+    chart = (
+        alt.Chart(plot_df)
+        .mark_bar()
+        .encode(
+            x=alt.X("forecast_month:N", title="Forecast Month",
+                    sort=forecast_month_labels),
+            xOffset="municipality:N",
+            y=alt.Y("price:Q", title="Price (₱/kg)",
+                    scale=alt.Scale(zero=False, domain=y_domain)),
+            color=alt.Color("municipality:N",
+                            legend=alt.Legend(title="Municipality")),
+            tooltip=[
+                "forecast_month:N",
+                "municipality:N",
+                alt.Tooltip("price:Q", title="Price (₱/kg)", format=".2f"),
+            ],
+        )
+        .properties(height=400,
+                    title=f"{rice_type} {classification} — {selected_cycle}")
+    )
+    st.altair_chart(chart, use_container_width=True)
 
 
 def _insights_narrative(prov_year_df, quarterly_data, selected_muni_name,
@@ -567,7 +873,6 @@ def overview_page():
     latest_year = df["year"].max()
     provincial_latest = df[df["year"] == latest_year].copy().sort_values("date")
     latest = provincial_latest.iloc[-1] if not provincial_latest.empty else None
-    latest_date = provincial_sorted["date"].max() if not provincial_sorted.empty else None
 
     # Quick backup conversion for municipality data
     muni = municipality_df.copy()
@@ -676,6 +981,11 @@ def overview_page():
     st.session_state.setdefault("overview_start_year", available_years[0])
     st.session_state.setdefault("overview_end_year", available_years[-1])
     st.session_state.setdefault("overview_period", "ANNUAL")
+    # Migrate legacy PERIOD values (QUARTERLY/MONTHLY) to ANNUAL so the
+    # selectbox options remain valid after the dropdown redesign.
+    _valid_periods = ["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"]
+    if st.session_state.get("overview_period") not in _valid_periods:
+        st.session_state["overview_period"] = "ANNUAL"
     st.session_state.setdefault("overview_selected_muni", "All Municipalities")
 
     filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4, gap="small")
@@ -699,7 +1009,7 @@ def overview_page():
         st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">PERIOD</div>', unsafe_allow_html=True)
         selected_period = st.selectbox(
             "Period",
-            options=["ANNUAL", "QUARTERLY", "MONTHLY"],
+            options=["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"],
             key="overview_period",
             label_visibility="collapsed",
         )
@@ -1001,6 +1311,177 @@ def overview_page():
         total_production = dl.get_total_production(muni_filtered, selected_years)
     prod_val = total_production if total_production is not None else 0
 
+    # ----------------------------------------------------------------
+    # DYNAMIC KPI SUBTEXT — Total Production / Avg Yield / Harvested Area
+    # ----------------------------------------------------------------
+    # Production subtext: single vs multi-year + muni + period
+    # (reactive to Year Range, Period, Municipality)
+    prod_has_data = total_production is not None
+    if prod_has_data:
+        prod_subtext = _kpi_subtext_total_production(
+            selected_start_year, selected_end_year, selected_period, selected_muni
+        )
+    else:
+        prod_subtext = "Historical/current production"
+
+    # Harvested Area source per clarification:
+    #   specific municipality -> muni_filtered (dynamic per bayan)
+    #   All Municipalities    -> provincial_year (fallback)
+    _is_specific_muni = (selected_muni != "All Municipalities")
+    harv_source_for_display = muni_filtered if _is_specific_muni else provincial_year
+    # For previous-year lookup we need the unfiltered-full frames:
+    # provincial full + muni full (pre-year-filter) so prev year can be found
+    # even when selected range is single-year.
+    _harv_candidates = [
+        "harvested_total", "harvested_annual", "harvested_area",
+        "area_harvested", "Harvested_Area", "harvested", "area", "Area",
+        "harvested_ha",
+    ]
+    _yield_candidates = ["quarterly_yield_mt_per_ha", "yield", "yield_mt_per_ha", "Yield"]
+
+    # --- Average Yield (historical, not forecast) + delta ---
+    _yield_col = _pick_column(provincial_year, _yield_candidates)
+    if _yield_col is None:
+        _yield_col = _pick_column(df, _yield_candidates)
+    _y_has_prev = False
+    _y_delta: float | None = None
+    _y_prev_year: int | None = None
+    _yield_display_val: float | None = None
+    try:
+        # current average filtered to selected years + period slice
+        _y_cur_df = _filter_df_by_period(provincial_year, selected_period)
+        if _yield_col and not _y_cur_df.empty and _yield_col in _y_cur_df.columns:
+            _y_cur_series = pd.to_numeric(_y_cur_df[_yield_col], errors="coerce").dropna()
+            _yield_display_val = float(_y_cur_series.mean()) if not _y_cur_series.empty else None
+        else:
+            _yield_display_val = None
+
+        # previous year lookup (from full provincial history)
+        if selected_start_year == selected_end_year:
+            _y_prev_year = selected_end_year - 1
+            _prev_df_raw = df[df["year"] == _y_prev_year].copy() if "year" in df.columns else pd.DataFrame()
+            _prev_df = _filter_df_by_period(_prev_df_raw, selected_period)
+            if _yield_col and not _prev_df.empty and _yield_col in _prev_df.columns:
+                _prev_series = pd.to_numeric(_prev_df[_yield_col], errors="coerce").dropna()
+                _y_prev = float(_prev_series.mean()) if not _prev_series.empty else None
+            else:
+                _y_prev = None
+            if _yield_display_val is not None and _y_prev is not None and not pd.isna(_y_prev) and _y_prev != 0:
+                _y_delta = float(_yield_display_val - _y_prev)
+                _y_has_prev = True
+    except Exception:
+        _y_has_prev = False
+        _y_delta = None
+
+    if selected_start_year == selected_end_year and _yield_display_val is None:
+        _yield_subtext = f"Data as of {selected_end_year}{_period_suffix(selected_period)}"
+        if _is_specific_muni:
+            _yield_subtext += f" \u2022 {selected_muni}"
+    else:
+        _yield_subtext = _kpi_subtext_yield_or_area(
+            start_year=selected_start_year,
+            end_year=selected_end_year,
+            period=selected_period,
+            muni_name=selected_muni,
+            delta=_y_delta,
+            prev_year=_y_prev_year,
+            has_prev=_y_has_prev,
+            unit=" MT/ha",
+            decimals=2,
+        )
+
+    # --- Harvested Area (ha) + delta ---
+    _harv_col = _pick_column(harv_source_for_display, _harv_candidates)
+    # fallback: try the other frame if not found in display source
+    if _harv_col is None:
+        _alt = provincial_year if _is_specific_muni else muni_filtered
+        _harv_col = _pick_column(_alt, _harv_candidates)
+        if _harv_col is not None:
+            harv_source_for_display = _alt
+    _h_has_prev = False
+    _h_delta: float | None = None
+    _h_prev_year: int | None = None
+    _harv_display_val: float | None = None
+    try:
+        # helper to compute harvested total for a frame: per-year mean then sum
+        def _harv_total_for_frame(frame: pd.DataFrame, col: str, period: str):
+            if frame is None or frame.empty or col not in frame.columns:
+                return None
+            f = _filter_df_by_period(frame, period)
+            if f.empty:
+                return None
+            if "year" in f.columns:
+                per_year = pd.to_numeric(f[col], errors="coerce").groupby(f["year"]).mean().dropna()
+                # keep only positive
+                per_year = per_year[per_year > 0]
+                if per_year.empty:
+                    return None
+                return float(per_year.sum())
+            vals = pd.to_numeric(f[col], errors="coerce").dropna()
+            return float(vals.sum()) if not vals.empty else None
+
+        # For display value: sum/mean across selected range
+        _harv_display_val = _harv_total_for_frame(harv_source_for_display, _harv_col, selected_period) if _harv_col else None
+        # For single-year delta we compare to previous year total
+        if selected_start_year == selected_end_year and _harv_col:
+            _h_prev_year = selected_end_year - 1
+            # prev frame depends on source choice (municipality vs province)
+            if _is_specific_muni:
+                # prev municipality slice for that muni + prev year
+                _prev_raw = muni[muni["year"] == _h_prev_year].copy() if "year" in muni.columns else pd.DataFrame()
+                if _muni_label_col is not None and not _prev_raw.empty:
+                    _prev_raw = _prev_raw[_prev_raw[_muni_label_col].isin(selected_munis)]
+                _h_prev = _harv_total_for_frame(_prev_raw, _harv_col, selected_period)
+                # fallback to provincial if municipal prev empty
+                if _h_prev is None:
+                    _prev_prov = df[df["year"] == _h_prev_year].copy() if "year" in df.columns else pd.DataFrame()
+                    _alt_col = _pick_column(_prev_prov, _harv_candidates) or _harv_col
+                    _h_prev = _harv_total_for_frame(_prev_prov, _alt_col, selected_period) if _alt_col else None
+                    _harv_col = _alt_col or _harv_col
+            else:
+                _prev_prov = df[df["year"] == _h_prev_year].copy() if "year" in df.columns else pd.DataFrame()
+                _prev_col = _pick_column(_prev_prov, _harv_candidates) or _harv_col
+                _h_prev = _harv_total_for_frame(_prev_prov, _prev_col, selected_period) if _prev_col else None
+                _harv_col = _prev_col or _harv_col
+
+            if _harv_display_val is not None and _h_prev is not None and not pd.isna(_h_prev):
+                _h_delta = float(_harv_display_val - _h_prev)
+                # prev exists even if zero delta; require non-null for has_prev
+                _h_has_prev = True
+                # if both are 0/None treat as no prev
+                if _harv_display_val == 0 and _h_prev == 0:
+                    _h_has_prev = False
+    except Exception:
+        _h_has_prev = False
+        _h_delta = None
+
+    if selected_start_year == selected_end_year and _harv_display_val is None:
+        _harv_subtext = f"Data as of {selected_end_year}{_period_suffix(selected_period)}"
+        if _is_specific_muni:
+            _harv_subtext += f" \u2022 {selected_muni}"
+        _h_has_prev = False
+    else:
+        _harv_subtext = _kpi_subtext_yield_or_area(
+            start_year=selected_start_year,
+            end_year=selected_end_year,
+            period=selected_period,
+            muni_name=selected_muni,
+            delta=_h_delta,
+            prev_year=_h_prev_year,
+            has_prev=_h_has_prev,
+            unit=" ha",
+            decimals=0,
+        )
+
+    # Fallback display values when computation yields None
+    _harv_display_str = f"{_harv_display_val:,.0f} ha" if _harv_display_val is not None and not pd.isna(_harv_display_val) else "No Data Available"
+    _yield_display_str = f"{_yield_display_val:.2f} MT/ha" if _yield_display_val is not None and not pd.isna(_yield_display_val) else ("No Data Available" if yield_has_data else "No Data Available")
+    # If no yield column at all, fall back to forecast average for value but keep dynamic subtext
+    if _yield_display_val is None and yield_has_data:
+        _yield_display_str = f"{avg_yield_forecast:.2f} MT/ha"
+        # subtext remains the dynamic one computed above (delta/fallback)
+    _harv_has_data = _harv_display_val is not None and not pd.isna(_harv_display_val)
+
     # ========================================================
     # FRONT-END CSS
     # ========================================================
@@ -1300,14 +1781,16 @@ def overview_page():
 
     # KPI Row — each card checks `has_data` so empty selections show a clear
     # "No Data Available" fallback instead of ₱0.00 / -100.0% placeholders.
+    # Dynamic subtexts (prod_subtext / _yield_subtext / _harv_subtext) are
+    # computed above and react to Year Range / Period / Municipality changes.
     if total_production is not None:
         prod_display = f"{total_production:,.0f} MT"
-        prod_footer = "Historical total across selected period"
+        prod_footer = prod_subtext
     else:
         prod_display = "No Data Available"
         prod_footer = "Historical/current production"
 
-    yield_has_data = bool(forecast_quarterly_yield) and not pd.isna(avg_yield_forecast)
+    yield_has_data = (_yield_display_val is not None and not pd.isna(_yield_display_val)) or (bool(forecast_quarterly_yield) and not pd.isna(avg_yield_forecast))
     fancy_has_data = (
         bool(forecast_3months_fancy)
         and not provincial_year.empty
@@ -1326,11 +1809,17 @@ def overview_page():
     fancy_arrow = "↑" if percent_change_fancy >= 0 else "↓"
     regular_arrow = "↑" if percent_change_regular >= 0 else "↓"
 
-    yield_display = f"{avg_yield_forecast:.2f} MT/ha" if yield_has_data else "No Data Available"
+    # Average Yield value prefers historical mean (_yield_display_str) with
+    # dynamic subtext; fallback to forecast if historical missing.
+    yield_display = _yield_display_str
+    yield_footer = _yield_subtext
     fancy_display = f"{fancy_arrow} {abs(percent_change_fancy):.1f}%" if fancy_has_data else "No Data Available"
     regular_display = f"{regular_arrow} {abs(percent_change_regular):.1f}%" if regular_has_data else "No Data Available"
     fancy_class = fancy_color if fancy_has_data else "metric-footer"
     regular_class = regular_color if regular_has_data else "metric-footer"
+
+    harv_display = _harv_display_str
+    harv_footer = _harv_subtext
 
     if show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Price Forecast",
                                       "Yield Insights", "Price Insights"):
@@ -1338,10 +1827,24 @@ def overview_page():
         <div class="kpi-row">
             <div class="metric-card">
                 <div class="metric-card-header">
-                    <div class="metric-title">🎯 Expected Yield</div>
+                    <div class="metric-title">🏭 Total Production</div>
+                </div>
+                <div class="metric-data">{prod_display}</div>
+                <div class="metric-footer">{prod_footer}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <div class="metric-title">🌾 Average Yield</div>
                 </div>
                 <div class="metric-data">{yield_display}</div>
-                <div class="metric-footer">Target weight per hectare this cycle</div>
+                <div class="metric-footer">{yield_footer}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <div class="metric-title">🚜 Harvested Area</div>
+                </div>
+                <div class="metric-data">{harv_display}</div>
+                <div class="metric-footer">{harv_footer}</div>
             </div>
             <div class="metric-card">
                 <div class="metric-card-header">
@@ -1356,13 +1859,6 @@ def overview_page():
                 </div>
                 <div class="metric-data {regular_class}">{regular_display}</div>
                 <div class="metric-footer">Forecast for: {next_month_name}</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-card-header">
-                    <div class="metric-title">🏭 Total Production</div>
-                </div>
-                <div class="metric-data">{prod_display}</div>
-                <div class="metric-footer">{prod_footer}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1426,55 +1922,48 @@ def overview_page():
         st.markdown("""<hr style="border:1px solid #ddd; margin-top: 1rem; margin-bottom: 1rem;">""",
                     unsafe_allow_html=True)
 
-        st.subheader("🌾 3-Month Municipal Price Forecast Summary")
+        st.subheader("🌾 Municipal Price Forecast")
         st.write(
-            "Analyze the projected palay prices across different municipalities. "
-            "Select a tab below to switch seasonal contexts:"
+            "Projected palay price trends by crop cycle across Bataan municipalities. "
+            "Use the filters below to explore rice types, classifications, and municipalities."
         )
 
         try:
-            # Municipal forecasts loaded via dr.df_municipal_forecasts
             df_municipal_forecast = df_municipal_forecasts.copy()
             if df_municipal_forecast.empty:
                 st.info("📭 Municipal forecast dataset not available yet. "
                         "Run the background pipeline to generate 3-month municipal forecasts.")
             else:
-                # ----------------------------------------
-                # Dynamic forecast month labels (anchored to data, not the clock)
-                # ----------------------------------------
-                if latest_date is not None and pd.notna(latest_date):
-                    municipal_forecast_months = pd.date_range(
-                        start=latest_date + pd.DateOffset(months=1),
-                        periods=3,
-                        freq="MS"
-                    )
-                    municipal_month_labels = municipal_forecast_months.strftime("%B %Y").tolist()
-                else:
-                    municipal_month_labels = ["Month 1", "Month 2", "Month 3"]
-
+                # Municipalities from the forecast file feed the chart's multi-select.
                 muni_label_col = _pick_column(df_municipal_forecast, ["Municipality"])
-                has_type_col = "Rice Type & Season" in df_municipal_forecast.columns
-                has_month_cols = all(c in df_municipal_forecast.columns for c in ["Month 1", "Month 2", "Month 3"])
-                if muni_label_col is None or not has_type_col or not has_month_cols:
-                    st.info("📭 Municipal forecast file has an unexpected format "
-                            "(expected Municipality / Rice Type & Season / Month 1-3).")
-                else:
-                    # 1. Interactive UI Filter for Municipalities
-                    muni_list = list(df_municipal_forecast[muni_label_col].dropna().unique())
-                    selected_muni = st.multiselect("Filter Municipalities:", options=muni_list, default=[])
+                muni_list = (
+                    list(df_municipal_forecast[muni_label_col].dropna().unique())
+                    if muni_label_col is not None
+                    else []
+                )
+                selected_muni = st.multiselect("Filter Municipalities:", options=muni_list, default=[])
 
-                    # Apply global municipality filter first
-                    df_filtered_muni = df_municipal_forecast.copy()
-                    if selected_muni:
-                        df_filtered_muni = df_filtered_muni[df_filtered_muni[muni_label_col].isin(selected_muni)]
+                col_rt, col_cls = st.columns(2)
+                with col_rt:
+                    ov_rice_type = st.selectbox("Rice Type",
+                                                options=["Hybrid", "Inbred"],
+                                                key="ov_muni_rt")
+                with col_cls:
+                    ov_classification = st.selectbox("Rice Classification",
+                                                     options=["Premium", "Ordinary"],
+                                                     key="ov_muni_cls")
 
-                    # 2. CREATE VISUALLY APPEALING SEASONAL TABS
-                    _render_municipal_season_tables(df_filtered_muni, municipal_month_labels)
-
+                # Actual 3-month forecast line chart (Altair, zoomed Y-axis).
+                _render_municipal_crop_cycle_chart(
+                    df_municipal_forecast,
+                    rice_type=ov_rice_type,
+                    classification=ov_classification,
+                    selected_municipalities=selected_muni,
+                )
         except FileNotFoundError:
             st.warning("⚠️ Forecast dataset report not found. Please verify the background pipeline ran completely.")
         except Exception as e:
-            st.error(f"⚠️ Unable to render the municipal forecast data table: {str(e)}")
+            st.error(f"⚠️ Unable to render the municipal price forecast chart: {str(e)}")
 
         st.markdown("""<hr style="border:1px solid #ddd; margin-top: 1rem; margin-bottom: 2rem;">""",
                     unsafe_allow_html=True)
