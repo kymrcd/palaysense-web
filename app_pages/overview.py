@@ -458,7 +458,8 @@ def _price_forecast_chart(provincial_df, fancy_forecast, regular_forecast):
             return fig
         n = len(fancy_fc)
 
-        # --- Anchor on the data, not the clock ---------------------------
+        # --- Baseline Alignment: strictly 1 month after last historical date ---
+        # e.g. last Jan 2026 -> Feb, Mar, Apr, May, Jun, Jul — do NOT shift to Aug
         hist_dates = pd.to_datetime(provincial_df["date"], errors="coerce").dropna()
         if hist_dates.empty:
             raise ValueError("No valid historical dates in provincial data.")
@@ -548,8 +549,7 @@ def _yield_historical_chart(df, period="ANNUAL"):
 def _yield_forecast_chart(provincial_df, yield_forecast):
     """Yield forecast line chart (next forecast quarters) with peak annotation.
 
-    The quarter axis is anchored to the LAST HISTORICAL DATE in the provincial
-    data (dynamic), never to pd.Timestamp.today().
+    Quarter axis is strictly 1 quarter after last historical date (baseline).
     """
     fig = go.Figure()
     try:
@@ -1114,9 +1114,15 @@ def overview_page():
         forecast_3months_fancy, forecast_variety_3months
     )
 
+    # --- Unified metric generation with baseline-aligned forecast index ---
+    # Baseline Alignment: forecast DatetimeIndex MUST start 1 month after the
+    # latest historical date (e.g. Jan 2026 -> Feb 2026: Feb, Mar, Apr, May, Jun, Jul).
+    # Do NOT force start to _today_month — that shifts Feb's value to August.
+    _hist_last = pd.to_datetime(provincial_df["date"], errors="coerce").max()
+    _today_month = pd.Timestamp.today().to_period("M").to_timestamp()
+
     if not provincial_year.empty:
         latest_selected = provincial_year.iloc[-1]
-
         avg_fancy_price = _safe_column(provincial_year, "fancy_palay_price").mean()
         avg_regular_price = _safe_column(provincial_year, "other_variety_price").mean()
         _prov_prod_col = _pick_column(
@@ -1128,35 +1134,103 @@ def overview_page():
             if _prov_prod_col is not None
             else 0
         )
-
-        # Build the forecast axis from the ALIGNED (max) length so the
-        # date range always matches the length of both price arrays.
-        forecast_months = pd.date_range(
-            start=latest_selected["date"] + pd.DateOffset(months=1),
-            periods=len(fc_fancy_s),
-            freq="MS"
-        )
-        next_month_name = forecast_months[0].strftime("%B %Y") if len(forecast_months) > 0 else "N/A"
-
-        _fancy_0 = _safe_index(forecast_3months_fancy, 0)
-        percent_change_fancy = _pct_change(_fancy_0, avg_fancy_price) or 0.0
-        _regular_0 = _safe_index(forecast_variety_3months, 0)
-        percent_change_regular = _pct_change(_regular_0, avg_regular_price) or 0.0
-        avg_yield_forecast = _safe_mean(forecast_quarterly_yield)
+        # Strictly 1 month after latest historical record — baseline
+        _data_start = (pd.to_datetime(latest_selected["date"]) + pd.DateOffset(months=1)).to_period("M").to_timestamp()
+        if pd.isna(_data_start):
+            _data_start = (_hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp() if not pd.isna(_hist_last) else _today_month
     else:
-        latest_production, percent_change_fancy, percent_change_regular = 0, 0, 0
-        avg_yield_forecast = _safe_mean(forecast_quarterly_yield)
-        avg_fancy_price = _safe_column(df, "fancy_palay_price").mean()
-        avg_regular_price = _safe_column(df, "other_variety_price").mean()
-        next_month_name = "N/A"
-        forecast_months = pd.date_range(
-            start=pd.Timestamp.today().to_period("M").to_timestamp() + pd.DateOffset(months=1),
-            periods=len(fc_fancy_s),
-            freq="MS"
-        )
+        # Fallback when filtered frame empty — use full history anchor, not today
+        avg_fancy_price = _safe_column(df, "fancy_palay_price").mean() if not df.empty else np.nan
+        avg_regular_price = _safe_column(df, "other_variety_price").mean() if not df.empty else np.nan
+        _prov_prod_col = _pick_column(df, ["production_total", "palay_production", "production", "volume", "production_mt"])
+        if _prov_prod_col is not None and not df.empty and "year" in df.columns:
+            try:
+                latest_production = df.groupby("year")[_prov_prod_col].sum().mean()
+            except Exception:
+                latest_production = 0
+        else:
+            latest_production = 0
+        # No latest_selected — anchor to _hist_last +1M, fallback to today only if no history
+        if not pd.isna(_hist_last):
+            _data_start = (_hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp()
+        else:
+            _data_start = _today_month
 
-    next_fancy_pred = _safe_index(forecast_3months_fancy, 0)
-    next_regular_pred = _safe_index(forecast_variety_3months, 0)
+    # Single forecast axis — strictly baseline-aligned, never forced to today
+    _forecast_start = _data_start
+    _fc_len = len(fc_fancy_s) if len(fc_fancy_s) > 0 else 6
+    forecast_months = pd.date_range(start=_forecast_start, periods=_fc_len, freq="MS")
+    # Range label reflects true forecast horizon (e.g. Feb 2026 – Jul 2026)
+    if len(forecast_months) > 1:
+        forecast_range_label = f"{forecast_months[0].strftime('%B %Y')} \u2013 {forecast_months[-1].strftime('%B %Y')}"
+    elif len(forecast_months) > 0:
+        forecast_range_label = forecast_months[0].strftime("%B %Y")
+    else:
+        forecast_range_label = "N/A"
+    # Display month is the current month's label if within horizon, else nearest fallback (last)
+    _today_m = _today_month
+    if len(forecast_months) > 0 and _today_m in forecast_months:
+        next_month_name = _today_m.strftime("%B %Y")
+    elif len(forecast_months) > 0:
+        # Outside/beyond horizon (e.g., today Aug but window Feb-Jul) -> show last/closest month (July)
+        next_month_name = forecast_months[-1].strftime("%B %Y")
+    else:
+        next_month_name = "N/A"
+    # Dynamic LGU update warning — if today beyond max forecasted month
+    # Dynamically extracts last available month so it updates with horizon length (June/July/Sept etc.)
+    last_avail_month = forecast_months[-1].strftime("%B %Y") if len(forecast_months) > 0 else "N/A"
+    is_awaiting_lgu = False
+    if len(forecast_months) > 0 and _today_m > forecast_months[-1]:
+        is_awaiting_lgu = True
+    _hist_last_q = pd.Period(_hist_last, freq="Q") + 1 if not pd.isna(_hist_last) else pd.Period(_today_month, freq="Q") + 1
+    # Baseline: strictly next quarter after last hist — not forced to today
+    _yield_forecast_start_q = _hist_last_q
+
+    # Index-based lookup: map values to actual months, then .loc[_today_month]
+    fancy_indexed = pd.Series(fc_fancy_s.values, index=forecast_months) if len(forecast_months) == len(fc_fancy_s) else pd.Series(list(forecast_3months_fancy), index=forecast_months[:len(forecast_3months_fancy)] if len(forecast_3months_fancy) else forecast_months)
+    regular_indexed = pd.Series(fc_regular_s.values, index=forecast_months) if len(forecast_months) == len(fc_regular_s) else pd.Series(list(forecast_variety_3months), index=forecast_months[:len(forecast_variety_3months)] if len(forecast_variety_3months) else forecast_months)
+
+    # Terminal Debugging: log Month vs Value mapping and selected .loc value
+    print("[DEBUG] Fancy Forecast Series (Month -> Value):")
+    try:
+        print(fancy_indexed.to_string())
+    except Exception as e:
+        print(f"  (could not print fancy_indexed: {e})")
+    print("[DEBUG] Regular Forecast Series (Month -> Value):")
+    try:
+        print(regular_indexed.to_string())
+    except Exception as e:
+        print(f"  (could not print regular_indexed: {e})")
+    print(f"[DEBUG] _today_month for lookup: {_today_m.strftime('%Y-%m-%d')} | forecast_months[0]={forecast_months[0] if len(forecast_months)>0 else 'N/A'} | forecast_range={forecast_range_label}")
+
+    def _forecast_value_for_month(indexed: pd.Series, fallback_list: list):
+        # Keep checking if _today_month exists in fancy_indexed / regular_indexed
+        if not indexed.empty and _today_m in indexed.index:
+            v = indexed.loc[_today_m]
+            print(f"[DEBUG] .loc[{_today_m.strftime('%Y-%m-%d')}] hit -> {v} (exact current month)")
+            if not pd.isna(v):
+                return float(v)
+        # Fallback Adjustment: if _today_month outside/beyond horizon -> .iloc[-1] (last/closest, e.g., July)
+        s = indexed.dropna()
+        if not s.empty:
+            # Beyond horizon (Aug > Jul) -> last; before horizon would also be last per spec (closest forecasted month)
+            print(f"[DEBUG] .loc miss for {_today_m.strftime('%Y-%m-%d')} (outside/beyond forecast horizon {forecast_months[0].strftime('%Y-%m-%d') if len(forecast_months)>0 else 'N/A'} – {forecast_months[-1].strftime('%Y-%m-%d') if len(forecast_months)>0 else 'N/A'}) — fallback to .iloc[-1] latest available {s.index[-1].strftime('%Y-%m-%d')} -> {s.iloc[-1]}")
+            return float(s.iloc[-1])
+        print(f"[DEBUG] .loc miss & empty indexed — fallback to _safe_index list[0] -> {_safe_index(fallback_list, 0)}")
+        return _safe_index(fallback_list, 0)
+
+    _fancy_current = _forecast_value_for_month(fancy_indexed, forecast_3months_fancy)
+    _regular_current = _forecast_value_for_month(regular_indexed, forecast_variety_3months)
+    print(f"[DEBUG] Selected _fancy_current for {_today_m.strftime('%B %Y')}: {_fancy_current}")
+    print(f"[DEBUG] Selected _regular_current for {_today_m.strftime('%B %Y')}: {_regular_current}")
+    # Single source for both display and variance
+    next_fancy_pred = _fancy_current
+    next_regular_pred = _regular_current
+    _fancy_0 = _fancy_current
+    _regular_0 = _regular_current
+    percent_change_fancy = _pct_change(_fancy_0, avg_fancy_price) or 0.0
+    percent_change_regular = _pct_change(_regular_0, avg_regular_price) or 0.0
+    avg_yield_forecast = _safe_mean(forecast_quarterly_yield)
 
     # ========================================================
     # CHART GENERATION SETUP
@@ -1557,6 +1631,26 @@ def overview_page():
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        /* Forecasted banner — single bar above forecasted KPIs */
+        .forecast-bar {
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            color: #FFFFFF;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 0.3px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(27,94,32,0.15);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .forecast-bar small {
+            font-weight: 500;
+            opacity: 0.9;
+            font-size: 0.75rem;
+        }
         /* KPI Cards - Glassmorphism */
         .kpi-row {
             display: grid;
@@ -1813,16 +1907,106 @@ def overview_page():
     # dynamic subtext; fallback to forecast if historical missing.
     yield_display = _yield_display_str
     yield_footer = _yield_subtext
-    fancy_display = f"{fancy_arrow} {abs(percent_change_fancy):.1f}%" if fancy_has_data else "No Data Available"
-    regular_display = f"{regular_arrow} {abs(percent_change_regular):.1f}%" if regular_has_data else "No Data Available"
-    fancy_class = fancy_color if fancy_has_data else "metric-footer"
-    regular_class = regular_color if regular_has_data else "metric-footer"
+
+    # Expected Yield (existing 3.74 MT/ha card) — forecast cycle target, now
+    # with year in subtext per request: "Target weight per hectare this cycle • 2026"
+    expected_has_data = bool(forecast_quarterly_yield) and not pd.isna(avg_yield_forecast)
+    expected_display = f"{avg_yield_forecast:.2f} MT/ha" if expected_has_data else "No Data Available"
+    # forecast year anchor (dynamic, from forecast_quarters or selected year)
+    try:
+        _exp_year = int(forecast_year1) if forecast_year1 else int(selected_end_year) + 1
+    except Exception:
+        _exp_year = int(selected_end_year) if selected_end_year else 2026
+    # 4th KPI now forecasted-only (per latest request — not merged Expected)
+    forecasted_has_data = bool(forecast_quarterly_yield) and not pd.isna(avg_yield_forecast)
+    forecasted_display = f"{avg_yield_forecast:.2f} MT/ha" if forecasted_has_data else "No Data Available"
+    try:
+        _fc_year = int(forecast_year1) if forecast_year1 else int(selected_end_year) + 1
+    except Exception:
+        _fc_year = int(selected_end_year) if selected_end_year else 2026
+    _fc_period_suf = _period_suffix(selected_period)
+    _fc_vs_hist = _pct_change(avg_yield_forecast, _yield_display_val) if forecasted_has_data and _yield_display_val is not None else None
+    if forecasted_has_data:
+        _fc_extra = ""
+        if _fc_vs_hist is not None and not pd.isna(_fc_vs_hist):
+            _sign = "+" if _fc_vs_hist >= 0 else ""
+            _fc_extra = f" \u2022 {_sign}{_fc_vs_hist:.1f}% vs hist avg"
+        forecasted_sub = f"Forecasted \u2022 {forecast_range_label}{_fc_period_suf}{_fc_extra}"
+        # also show next Q / peak for context in inner line
+        forecast_q1 = _safe_index(forecast_quarterly_yield, 0, default=None)
+        forecast_peak = _safe_max(forecast_quarterly_yield) if forecast_quarterly_yield else None
+        forecast_low = _safe_min(forecast_quarterly_yield) if forecast_quarterly_yield else None
+        _fc_detail_parts = []
+        if forecast_q1 is not None and not pd.isna(forecast_q1):
+            _fc_detail_parts.append(f"Next Q {forecast_q1:.2f}")
+        if forecast_peak is not None and not pd.isna(forecast_peak):
+            _fc_detail_parts.append(f"Peak {forecast_peak:.2f}")
+        if forecast_low is not None and not pd.isna(forecast_low):
+            _fc_detail_parts.append(f"Low {forecast_low:.2f}")
+        if _fc_detail_parts:
+            forecasted_inner = f'<div style="font-size:0.72rem; color:#6B7280; margin-top:4px; line-height:1.3;">{" \u2022 ".join(_fc_detail_parts)} MT/ha</div>'
+        else:
+            forecasted_inner = ""
+        forecasted_title = "🔮 Forecasted Yield"
+    else:
+        forecasted_sub = "No forecast available"
+        forecasted_inner = ""
+        forecasted_title = "🔮 Forecasted Yield"
+        forecasted_display = "No Data Available"
+
+    # Fancy / Regular — invert: real ₱ price is highlight, % is footer badge
+    fancy_price_has = next_fancy_pred is not None and not pd.isna(next_fancy_pred)
+    regular_price_has = next_regular_pred is not None and not pd.isna(next_regular_pred)
+    fancy_price_display = f"\u20B1{next_fancy_pred:.2f}/kg" if fancy_price_has else "No Data Available"
+    regular_price_display = f"\u20B1{next_regular_pred:.2f}/kg" if regular_price_has else "No Data Available"
+    fancy_delta_html = f'<span class="{fancy_color}">{fancy_arrow} {abs(percent_change_fancy):.1f}%</span> vs hist avg' if fancy_has_data else '<span class="metric-footer">No change data</span>'
+    regular_delta_html = f'<span class="{regular_color}">{regular_arrow} {abs(percent_change_regular):.1f}%</span> vs hist avg' if regular_has_data else '<span class="metric-footer">No change data</span>'
+    _price_period_suf = _period_suffix(selected_period)
+    fancy_footer_html = f"{fancy_delta_html} \u2022 Forecast for: {next_month_name}{_price_period_suf}"
+    regular_footer_html = f"{regular_delta_html} \u2022 Forecast for: {next_month_name}{_price_period_suf}"
 
     harv_display = _harv_display_str
     harv_footer = _harv_subtext
 
     if show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Price Forecast",
                                       "Yield Insights", "Price Insights"):
+        # Single bar above all forecasted KPIs — shows latest month (Aug 2026),
+        # anchored to today if historical is stale (see metric generation logic)
+        # forecast_range_label is e.g. "August 2026 – January 2027" for 6M fancy
+        st.markdown(f"""
+        <div class="forecast-bar">🔮 Forecasted for {next_month_name} <small>({forecast_range_label})</small></div>
+        """, unsafe_allow_html=True)
+        # Row 1 — Forecasted KPIs on top
+        st.markdown(f"""
+        <div class="kpi-row">
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <div class="metric-title">{forecasted_title}</div>
+                </div>
+                <div class="metric-data">{forecasted_display}</div>
+                {forecasted_inner}
+                <div class="metric-footer">{forecasted_sub}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <div class="metric-title">⭐ Fancy Palay Price</div>
+                </div>
+                <div class="metric-data">{fancy_price_display}</div>
+                <div class="metric-footer">{fancy_footer_html}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-header">
+                    <div class="metric-title">📦 Regular Palay Price</div>
+                </div>
+                <div class="metric-data">{regular_price_display}</div>
+                <div class="metric-footer">{regular_footer_html}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        # Dynamic LGU update warning — shown when today beyond forecast horizonstr
+        if is_awaiting_lgu:
+            st.caption(f"⚠️ Showing latest available forecast ({last_avail_month}). Status: Pending Next Cycle Data Input.")
+        # Row 2 — Historical KPIs below
         st.markdown(f"""
         <div class="kpi-row">
             <div class="metric-card">
@@ -1845,20 +2029,6 @@ def overview_page():
                 </div>
                 <div class="metric-data">{harv_display}</div>
                 <div class="metric-footer">{harv_footer}</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-card-header">
-                    <div class="metric-title">⭐ Fancy Price Trend</div>
-                </div>
-                <div class="metric-data {fancy_class}">{fancy_display}</div>
-                <div class="metric-footer">Forecast for: {next_month_name}</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-card-header">
-                    <div class="metric-title">📦 Regular Price Trend</div>
-                </div>
-                <div class="metric-data {regular_class}">{regular_display}</div>
-                <div class="metric-footer">Forecast for: {next_month_name}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
