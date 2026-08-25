@@ -22,39 +22,44 @@ from app_pages.upload_dataset import upload_dataset
 # Logo helper
 # ------------------------------------------------------------------
 def _get_base64(path):
-    try:
-        with open(path, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    except Exception:
-        return ""
+  try:
+    with open(path, "rb") as f:
+      return base64.b64encode(f.read()).decode()
+  except Exception:
+    return ""
 
 
 # ------------------------------------------------------------------
-# Sidebar navigation model
+# Sidebar navigation model — Style C: Grouped Comprehensive, Farmer Tagalog, Minimal
 # ------------------------------------------------------------------
-# Each entry: (key, label, icon, group)
+# Each entry: (key, label, icon, group) — Tagalog minimal for farmer comprehension
 NAV_GROUPS = [
-    {
-        "label": "Data Management",
-        "items": [("import_data", "Import Data", "upload_file")],
-    },
-    {
-        "label": "Dashboard",
-        "items": [
-            ("overview", "Overview", "dashboard"),
-            ("provincial", "Provincial Analytics", "location_city"),
-            ("municipal", "Municipal Analytics", "location_on"),
-            ("forecasting", "Forecasting", "query_stats"),
-            ("historical", "Historical Comparison", "compare_arrows"),
-        ],
-    },
-    {
-        "label": "Settings",
-        "items": [
-            ("settings", "Settings", "settings"),
-            ("logout", "Logout", "logout"),
-        ],
-    },
+  {
+    "label": "PANGKALAHATAN",
+    "items": [("overview", "Buong Dashboard", "dashboard")],
+  },
+  {
+    "label": "ANALYTICS",
+    "items": [
+      ("provincial", "Lalawigan", "location_city"),
+      ("municipal", "Bayan", "location_on"),
+      ("historical", "Pagkumpara", "compare_arrows"),
+    ],
+  },
+  {
+    "label": "FORECAST",
+    "items": [
+      ("forecasting", "Hula ng Ani", "query_stats"),
+    ],
+  },
+  {
+    "label": "SUPORTA",
+    "items": [
+      ("import_data", "Mag-import", "upload_file"),
+      ("settings", "Settings", "settings"),
+      ("logout", "Logout", "logout"),
+    ],
+  },
 ]
 
 # Flatten: key -> label
@@ -62,89 +67,129 @@ _KEY_TO_LABEL = {k: label for g in NAV_GROUPS for (k, label, _) in g["items"]}
 
 
 def _render_sidebar(active_page):
-    with st.sidebar:
-        # Logo
-        logo = _get_base64("assets/logo.png")
-        if logo:
-            st.markdown(
-                f'<div class="ps-side-logo"><img src="data:image/png;base64,{logo}" width="140" style="border-radius:6px;"/></div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown('<div class="ps-side-logo" style="font-size:1.6rem;">🌾</div>', unsafe_allow_html=True)
-        st.markdown('<hr class="ps-side-divider">', unsafe_allow_html=True)
+  with st.sidebar:
+    # Style C — Compact, no-scroll, minimal professional (fits exactly)
+    st.markdown("""
+    <style>
+    /* Compact desktop — tight spacing to fit without scroll */
+    section[data-testid="stSidebar"] > div:first-child { padding-top: 0.3rem !important; gap: 2px !important; }
+    section[data-testid="stSidebar"] .stButton > button { margin: 1px 0 !important; min-height: 32px !important; padding: 4px 8px !important; }
+    .ps-side-section { font-size:0.60rem !important; letter-spacing:0.6px !important; color:#A8C3B0 !important; margin:0.45rem 0 0.12rem 0 !important; font-weight:600 !important; }
+    .ps-side-logo { text-align:center; padding:0.3rem 0 0.15rem 0; }
+    /* Mobile: bottom navigation, no hidden text, white icons visible */
+    @media (max-width: 768px) {
+      section[data-testid="stSidebar"] {
+        position: fixed !important; bottom: 0 !important; top: auto !important; left: 0 !important; right: 0 !important;
+        height: 68px !important; width: 100% !important; min-width: 100% !important;
+        background: #123524 !important; border-top: 1px solid rgba(255,255,255,0.15) !important;
+        z-index: 999 !important; overflow-x: auto !important; overflow-y: hidden !important;
+        padding: 0 !important;
+      }
+      section[data-testid="stSidebar"] > div:first-child {
+        padding: 6px 8px !important; flex-direction: row !important; gap: 6px !important;
+        overflow-x: auto !important; overflow-y: hidden !important; flex-wrap: nowrap !important;
+        align-items: center !important;
+      }
+      /* Hide logo/dividers/labels on mobile — keep only buttons */
+      .ps-side-logo, hr.ps-side-divider, .ps-side-section { display: none !important; }
+      section[data-testid="stSidebar"] .stButton { flex: 0 0 auto; }
+      section[data-testid="stSidebar"] .stButton > button {
+        min-width: 64px !important; flex-direction: column !important; gap: 2px !important;
+        font-size: 0.62rem !important; padding: 6px 6px !important; white-space: nowrap !important;
+        background: transparent !important; border: none !important;
+      }
+      section[data-testid="stSidebar"] .stButton > button p { font-size: 0.62rem !important; line-height: 1 !important; }
+      section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: rgba(255,255,255,0.12) !important; border-radius: 10px !important;
+      }
+      /* Content padding to avoid bottom bar overlap */
+      .block-container { padding-bottom: 80px !important; }
+      div[data-testid="stAppViewContainer"] { padding-bottom: 72px; }
+    }
+    /* Desktop: compact dividers */
+    hr.ps-side-divider { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 0.30rem 0 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+    # Logo — minimal, centered
+    logo = _get_base64("assets/logo.png")
+    if logo:
+      st.markdown(
+        f'<div class="ps-side-logo"><img src="data:image/png;base64,{logo}" width="132" style="border-radius:6px;"/></div>',
+        unsafe_allow_html=True,
+      )
+    else:
+      st.markdown('<div class="ps-side-logo"><i class="material-symbols-outlined" style="font-size:1.5rem; color:#C8E6C9; vertical-align:middle;">agriculture</i> <span style="font-weight:700; color:#FFFFFF; font-size:0.9rem; margin-left:6px;">PalaySense</span></div>', unsafe_allow_html=True)
+    st.markdown('<hr class="ps-side-divider">', unsafe_allow_html=True)
 
-        for group in NAV_GROUPS:
-            st.markdown(f'<p class="ps-side-section">{group["label"]}</p>', unsafe_allow_html=True)
-            for key, label, icon in group["items"]:
-                is_active = (active_page == key)
-                # Use Streamlit's native Material icon in button labels
-                # (streamlit 1.30+ supports icon=":material/name:")
-                if st.button(
-                    label,
-                    icon=f":material/{icon}:" if icon else None,
-                    use_container_width=True,
-                    type="primary" if is_active else "secondary",
-                    key=f"nav_{key}",
-                ):
-                    st.session_state["lgu_page"] = key
-                    st.rerun()
-            st.markdown('<hr class="ps-side-divider">', unsafe_allow_html=True)
+    for group in NAV_GROUPS:
+      st.markdown(f'<p class="ps-side-section">{group["label"]}</p>', unsafe_allow_html=True)
+      for key, label, icon in group["items"]:
+        is_active = (active_page == key)
+        if st.button(
+          label,
+          icon=f":material/{icon}:" if icon else None,
+          use_container_width=True,
+          type="primary" if is_active else "secondary",
+          key=f"nav_{key}",
+        ):
+          st.session_state["lgu_page"] = key
+          st.rerun()
+      st.markdown('<hr class="ps-side-divider">', unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------
 # Main entry
 # ------------------------------------------------------------------
 def lgu_dashboard():
-    # Toast on login
-    if st.session_state.pop("login_success", False):
-        st.toast("Logged in successfully!")
+  # Toast on login
+  if st.session_state.pop("login_success", False):
+    st.toast("Logged in successfully!")
 
-    theme.load_global_css()
+  theme.load_global_css()
 
-    # Init active page
-    if "lgu_page" not in st.session_state:
-        st.session_state["lgu_page"] = "overview"
-    active_page = st.session_state["lgu_page"]
+  # Init active page
+  if "lgu_page" not in st.session_state:
+    st.session_state["lgu_page"] = "overview"
+  active_page = st.session_state["lgu_page"]
 
-    # Handle logout
-    if active_page == "logout":
-        st.session_state.logout_success = True
-        st.query_params["page"] = "home"
-        st.stop()
+  # Handle logout
+  if active_page == "logout":
+    st.session_state.logout_success = True
+    st.query_params["page"] = "home"
+    st.stop()
 
-    # Load data
-    dr = dl.load_dashboard()
-    df = dl.get_provincial_df(dr)
+  # Load data
+  dr = dl.load_dashboard()
+  df = dl.get_provincial_df(dr)
 
-    # Sidebar
-    _render_sidebar(active_page)
+  # Sidebar
+  _render_sidebar(active_page)
 
-    # Route — each page renders its OWN single title header.
-    # The user profile header (Hello, User) appears ONLY on the Dashboard.
-    # The global YEAR filter has been removed from this wrapper; pages that
-    # need year filtering render a compact YEAR dropdown inside their content.
-    if active_page == "import_data":
-        upload_dataset()
-    elif active_page == "overview":
-        overview.render(df, dr)
-    elif active_page == "provincial":
-        provincial_analytics.render(df, dr)
-    elif active_page == "municipal":
-        municipal_analytics.render(df, dr)
-    elif active_page == "forecasting":
-        forecasting.render(df, dr)
-    elif active_page == "historical":
-        historical_comparison.render(df, dr)
-    elif active_page == "settings":
-        theme.page_title("Settings", "Application preferences.")
-        with theme.section_card(title="Settings",
-                                desc="Application preferences.", icon_name="settings"):
-            st.info("Dashboard settings coming soon.")
+  # Route — each page renders its OWN single title header.
+  # The user profile header (Hello, User) appears ONLY on the Dashboard.
+  # The global YEAR filter has been removed from this wrapper; pages that
+  # need year filtering render a compact YEAR dropdown inside their content.
+  if active_page == "import_data":
+    upload_dataset()
+  elif active_page == "overview":
+    overview.render(df, dr)
+  elif active_page == "provincial":
+    provincial_analytics.render(df, dr)
+  elif active_page == "municipal":
+    municipal_analytics.render(df, dr)
+  elif active_page == "forecasting":
+    forecasting.render(df, dr)
+  elif active_page == "historical":
+    historical_comparison.render(df, dr)
+  elif active_page == "settings":
+    theme.page_title("Settings", "Application preferences.")
+    with theme.section_card(title="Settings",
+                desc="Application preferences.", icon_name="settings"):
+      st.info("Dashboard settings coming soon.")
 
-    # Footer
-    st.markdown("""
-    <div style="text-align:center; padding:1rem 0 0.5rem 0; font-size:0.75rem; color:#9CA3AF; border-top:1px solid #E6EAE6; margin-top:1rem;">
-        🌾 PalaySense · Bataan Rice Monitoring System · v4.0
-    </div>
-    """, unsafe_allow_html=True)
+  # Footer
+  st.markdown("""
+  <div style="text-align:center; padding:1rem 0 0.5rem 0; font-size:0.75rem; color:#9CA3AF; border-top:1px solid #E6EAE6; margin-top:1rem;">
+    <i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#9CA3AF;">agriculture</i> PalaySense · Bataan Rice Monitoring System · v4.0
+  </div>
+  """, unsafe_allow_html=True)
