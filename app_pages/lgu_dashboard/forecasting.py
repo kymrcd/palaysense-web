@@ -9,7 +9,7 @@ Layout:
   • Middle Section: NEW Price & Yield Forecast visual chart (line with dashed
     forecast + yield forecast bar) + Yield Forecast Summary side-card.
   • Bottom Section: Pure forecast data tables inside card containers, using
-    the seasonal tabs ☀️ Dry Season Forecasts and 🌧️ Wet Season Forecasts.
+    the seasonal tabs Dry Season Forecasts and Wet Season Forecasts.
     The local filters (Rice Type / Classification / Municipality) live here
     and ONLY scope the table DataFrames.
 
@@ -207,7 +207,7 @@ def _forecast_visual_chart(dr, selected_class, selected_munis):
         col_price, col_yield = st.columns(2, gap="medium")
 
         with col_price:
-            st.markdown("### 📈 Price Forecast")
+            st.markdown("### :material/show_chart: Price Forecast")
             if fancy or regular:
                 fig = go.Figure()
                 if fancy:
@@ -235,7 +235,7 @@ def _forecast_visual_chart(dr, selected_class, selected_munis):
                 st.info("Price forecast data not available.")
 
         with col_yield:
-            st.markdown("### 🌱 Yield Forecast")
+            st.markdown("### :material/eco: Yield Forecast")
             if yield_fc:
                 ydf = pd.DataFrame({"Quarter": yield_labels,
                                     "Forecasted Yield (MT/ha)": yield_fc})
@@ -262,11 +262,11 @@ def _forecast_visual_chart(dr, selected_class, selected_munis):
                             border-radius:16px; border-left:6px solid #2E7D32;
                             box-shadow:0 6px 18px rgba(0,0,0,0.08); font-size:0.9rem; line-height:1.7;">
                     <div style="font-size:1rem; font-weight:700; color:#1B5E20; margin-bottom:0.5rem;">
-                        📊 Yield Forecast Summary
+                        <i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">analytics</i> Yield Forecast Summary
                     </div>
-                    <div>📈 Average: <b>{avg_y:.2f} MT/ha</b></div>
-                    <div>🏆 Peak: <b>{max_y:.2f} MT/ha</b></div>
-                    <div>📉 Low: <b>{min_y:.2f} MT/ha</b></div>
+                    <div><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">trending_up</i> Average: <b>{avg_y:.2f} MT/ha</b></div>
+                    <div><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">emoji_events</i> Peak: <b>{max_y:.2f} MT/ha</b></div>
+                    <div><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">trending_down</i> Low: <b>{min_y:.2f} MT/ha</b></div>
                     <hr style="border:none; border-top:1px solid #C8E6C9; margin:0.6rem 0;">
                     <div style="font-size:0.85rem; color:#2E7D32;">Based on next 4 forecast quarters</div>
                 </div>
@@ -293,7 +293,7 @@ def _render_forecast_tables(dr, month_labels):
             st.info("No forecast configurations available for the selected filters.")
             return
 
-        tab_dry, tab_wet = st.tabs(["☀️ Dry Season Forecasts", "🌧️ Wet Season Forecasts"])
+        tab_dry, tab_wet = st.tabs([":material/wb_sunny: Dry Season Forecasts", ":material/water_drop: Wet Season Forecasts"])
 
         labels = month_labels if len(month_labels) == 3 else ["Month 1", "Month 2", "Month 3"]
 
@@ -314,9 +314,9 @@ def _render_forecast_tables(dr, month_labels):
             st.caption(f"Displaying {len(display)} season configurations.")
 
         with tab_dry:
-            _display(df_dry, "☀️ Peak & Off-Peak Dry Season Metrics")
+            _display(df_dry, ":material/wb_sunny: Peak & Off-Peak Dry Season Metrics")
         with tab_wet:
-            _display(df_wet, "🌧️ Rain-fed & High-Moisture Wet Season Metrics")
+            _display(df_wet, ":material/water_drop: Rain-fed & High-Moisture Wet Season Metrics")
 
 
 def render(df, dr):

@@ -150,8 +150,8 @@ def YieldForecast1():
 
 
         tab1, tab2 = st.tabs([
-            "📈 Yield Trends",
-            "🔮 Forecast Trends"
+            ":material/show_chart: Yield Trends",
+            ":material/query_stats: Forecast Trends"
         ])
 
         # ==========================
@@ -440,7 +440,7 @@ def YieldForecast1():
     # -----------------------------
     # METRICS EXPLANATION (COLLAPSIBLE)
     # -----------------------------
-    with st.expander("ℹ️ Understanding Accuracy Metrics"):
+    with st.expander(" Understanding Accuracy Metrics"):
         components.html("""
             <div style="background:#ffffff;
                         padding:0.5rem 0.8rem;

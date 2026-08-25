@@ -3,9 +3,9 @@ PalaySense LGU Dashboard — Historical Comparison
 ================================================
 Consolidates all historical/trend views into a single page with 3 tabs:
 
-  Tab 1: 📊 Municipal Production Comparison
-  Tab 2: 📈 Provincial Price Trends
-  Tab 3: 🏷️ Municipal Price Trends
+  Tab 1: Municipal Production Comparison
+  Tab 2: Provincial Price Trends
+  Tab 3: Municipal Price Trends
 
 Year filtering uses an unlimited st.multiselect (no arbitrary range limits).
 """
@@ -268,9 +268,9 @@ def render(df, dr):
                      "Compare municipalities and historical trends across the selected range.")
 
     tab_prod, tab_prov_price, tab_muni_price = st.tabs([
-        "📊 Municipal Production Comparison",
-        "📈 Provincial Price Trends",
-        "🏷️ Municipal Price Trends",
+        ":material/bar_chart: Municipal Production Comparison",
+        ":material/trending_up: Provincial Price Trends",
+        ":material/label: Municipal Price Trends",
     ])
 
     with tab_prod:

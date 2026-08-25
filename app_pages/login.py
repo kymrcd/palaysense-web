@@ -1,5 +1,7 @@
 import base64
+import time
 import streamlit as st
+from components.loading_screen import show_loading_screen, get_loading_html
 
 # Function to convert your local image file to a base64 text string
 def get_base64(image_path):
@@ -157,7 +159,7 @@ def login_page():
     # 3. Gamit ang Streamlit Container na may key para siguradong NAKALOOB LAHAT
     with st.container(key="login_box"):
         # Logo Image
-        logo_html = f'<img class="login-logo" src="data:image/png;base64,{logo_base64}">' if logo_base64 else '<div class="login-logo" style="text-align:center; font-size: 2rem;">🌾</div>'
+        logo_html = f'<img class="login-logo" src="data:image/png;base64,{logo_base64}">' if logo_base64 else '<div class="login-logo" style="text-align:center;"><i class="material-symbols-outlined" style="font-size:2rem; color:#1B5E20; vertical-align:middle;">agriculture</i></div>'
         st.markdown(logo_html, unsafe_allow_html=True)
 
         # Text Inputs (Lahat 'to ay nasa LOOB na ng white box)
@@ -189,7 +191,7 @@ def login_page():
             unsafe_allow_html=True,
         )
 
-    # 4. Authentication Logic
+    # 4. Authentication Logic — with full-screen loading overlay
     if login_clicked:
         if not username or not password:
             st.error("Please enter both email and password.")
@@ -197,20 +199,49 @@ def login_page():
             try:
                 from utils.firebase_config import pyrebase_sign_in, set_session_user
 
-                with st.spinner("Authenticating..."):
-                    result = pyrebase_sign_in(username, password)
+                # Show PalaySense loading screen while authenticating
+                loading_placeholder = st.empty()
+                loading_placeholder.markdown(
+                    get_loading_html(
+                        message="Logging in...",
+                        submessage="Verifying your credentials — please wait",
+                        logo_base64=logo_base64,
+                    ),
+                    unsafe_allow_html=True,
+                )
+                # Small UX delay so animation is visible even on fast networks
+                time.sleep(0.85)
+
+                result = pyrebase_sign_in(username, password)
 
                 if isinstance(result, dict) and "error" not in result:
+                    # Keep loading visible briefly, then show redirect state
+                    loading_placeholder.markdown(
+                        get_loading_html(
+                            message="Login successful!",
+                            submessage="Redirecting to LGU Dashboard...",
+                            logo_base64=logo_base64,
+                        ),
+                        unsafe_allow_html=True,
+                    )
                     set_session_user(result)
                     st.session_state["login_success"] = True
+                    time.sleep(1.1)
+                    loading_placeholder.empty()
                     st.query_params["page"] = "lgu_dashboard"
-                    st.success("Login successful! Redirecting...")
                     st.rerun()
                 elif isinstance(result, dict) and "error" in result:
+                    loading_placeholder.empty()
                     st.error(result["error"])
                 else:
+                    loading_placeholder.empty()
                     st.error("Invalid response received from authentication service.")
             except Exception as e:
+                # Ensure overlay is cleared on exception
+                try:
+                    loading_placeholder.empty()
+                except Exception:
+                    pass
                 st.error(f"Authentication error: {str(e)}")
 
 

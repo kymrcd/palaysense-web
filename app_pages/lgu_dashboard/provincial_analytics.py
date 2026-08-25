@@ -266,8 +266,8 @@ def render(df, dr):
                      "Provincial price and yield analytics for Bataan.")
 
     tab_price, tab_yield = st.tabs([
-        "💰 Provincial Price",
-        "🌱 Provincial Yield",
+        ":material/payments: Provincial Price",
+        ":material/eco: Provincial Yield",
     ])
 
     with tab_price:
