@@ -90,6 +90,224 @@ def _pick_column(df, candidates):
 
 
 # ------------------------------------------------------------------
+# BENCHMARK REFERENCE LINE HELPERS — Inflation-Aware Rolling + Policy Standards
+# ------------------------------------------------------------------
+def _add_benchmark_ref_line(fig, y_value, label, line_color="#78909C",
+                annotation_position="top left"):
+  """Add a THIN DOTTED benchmark hline to a Plotly figure.
+
+  Visual hierarchy per spec:
+  - Benchmark lines MUST be ``line_dash='dot'``, ``line_width=1.2``, ``opacity=0.6``
+    so they never conflict with main forecast trendlines (which remain ``dash``).
+  - Annotation kept at ``top left`` / ``bottom left`` to avoid peak markers
+    (e.g. ₱27.04 / ₱20.52).
+  """
+  if fig is None or y_value is None:
+    return fig
+  try:
+    y = float(y_value)
+  except (TypeError, ValueError):
+    return fig
+  if pd.isna(y):
+    return fig
+  try:
+    fig.add_hline(
+      y=y,
+      line_dash="dot",
+      line_width=1.2,
+      line_color=line_color,
+      opacity=0.6,
+      annotation_text=label,
+      annotation_position=annotation_position,
+      annotation=dict(
+        font=dict(size=10, color=line_color),
+        bgcolor="rgba(255,255,255,0.85)",
+      ),
+    )
+  except Exception:
+    # Fallback without annotation dict for older Plotly versions
+    try:
+      fig.add_hline(
+        y=y,
+        line_dash="dot",
+        line_width=1.2,
+        line_color=line_color,
+        opacity=0.6,
+        annotation_text=label,
+        annotation_position=annotation_position,
+      )
+    except Exception:
+      pass
+  return fig
+
+
+def _benchmark_yield_config(benchmark_option, historical_avg):
+  """Return (y_value, label, color) for yield benchmark or None.
+
+  Supported options (Tagalog refactor + legacy):
+  - "Presyo sa Merkado" / "3-Year/Quarter Rolling Market Average" / "10-Year Historical Average" -> 10-year dynamic mean of quarterly_yield_mt_per_ha
+  - "Target ng Gobyerno" / "NFA / DA Policy Baseline" / "DA Target (4.50 MT/ha)" -> DA Target 4.50
+  """
+  opt = str(benchmark_option).strip() if benchmark_option is not None else ""
+  # Yield: rolling option still uses 10-year mean (per spec: Yield compute dynamic 10-year mean)
+  if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+    if historical_avg is None or pd.isna(historical_avg):
+      return None
+    try:
+      v = float(historical_avg)
+    except (TypeError, ValueError):
+      return None
+    if pd.isna(v):
+      return None
+    return (v, f"Bataan 10-Yr Avg Yield ({v:.2f} MT/ha)", "#616161")
+  if opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline", "DA Target (4.50 MT/ha)", "DA Target", "DA Target Yield (4.50 MT/ha)", "DA Target Yield"):
+    return (4.50, "DA Target Yield (4.50 MT/ha)", "#2E7D32")
+  return None
+
+
+def _benchmark_price_config(benchmark_option, historical_avg):
+  """Return (y_value, label, color) for price benchmark or None — legacy single-line helper.
+
+  For "Presyo sa Merkado" / "3-Year/Quarter Rolling Market Average" this helper is NOT used for price;
+  the multi-line rolling logic is handled directly in _apply_benchmarks_to_fig.
+  Kept for backwards-compat with single-line callers.
+  """
+  opt = str(benchmark_option).strip() if benchmark_option is not None else ""
+  if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+    if historical_avg is None or pd.isna(historical_avg):
+      return None
+    try:
+      v = float(historical_avg)
+    except (TypeError, ValueError):
+      return None
+    if pd.isna(v):
+      return None
+    return (v, f"Bataan 10-Yr Avg Regular Price (\u20B1{v:.2f}/kg)", "#616161")
+  if opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline", "NFA Floor Price (₱19.00/kg)", "NFA Floor Price", "NFA Procurement Floor Price (₱19.00/kg)", "NFA Procurement Floor Price"):
+    return (19.00, "NFA Procurement Floor Price (\u20B119.00/kg)", "#EF4444")
+  return None
+
+
+def _normalize_benchmarks(benchmark_option):
+  """Normalize benchmark_option (str or list/set) to a set of strings.
+
+  Supports Tagalog refactor:
+  - "Presyo sa Merkado" / "Target ng Gobyerno" / "Wala"
+  - legacy: "3-Year/Quarter Rolling Market Average" / "NFA / DA Policy Baseline" / "Itago (None)" / "10-Year Historical Average"
+  - list/set for multi-select (kept for compat)
+  Returns empty set for "Wala" / "Itago (None)".
+  """
+  if benchmark_option is None:
+    return set()
+  if isinstance(benchmark_option, (list, set, tuple)):
+    return {str(o).strip() for o in benchmark_option if str(o).strip() and str(o).strip() not in ("Itago (None)", "Wala")}
+  s = str(benchmark_option).strip()
+  if not s or s in ("Itago (None)", "Wala"):
+    return set()
+  return {s}
+
+
+def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_df=None):
+  """Apply 0..N thin-dotted benchmark hlines per Refactored spec (Tagalog + legacy).
+
+  Spec Tagalog:
+  - "Presyo sa Merkado" (3-Year/Quarter Rolling Market Average, Inflation-Aware):
+      Yield: 10-year mean of quarterly_yield_mt_per_ha (dynamic)
+      Price: 3-Year Rolling Average = last 12 quarterly records (tail 12) for BOTH varieties -> two dotted lines
+  - "Target ng Gobyerno" (NFA / DA Policy Baseline):
+      Yield: DA Target 4.50 MT/ha
+      Price: Regular 19.00 + Fancy Commercial Target 23.75 (19*1.25) -> two dotted lines
+  - "Wala" / "Itago (None)": no lines
+  All benchmark lines use line_dash="dot", line_width=1.2, opacity=0.6.
+  """
+  opts = _normalize_benchmarks(benchmark_options)
+  if not opts:
+    return fig
+  src_df = provincial_df if provincial_df is not None and chart_type in ("yield", "price") else df
+  if src_df is None:
+    src_df = df
+  for opt in opts:
+    try:
+      # --- Yield ---
+      if chart_type == "yield":
+        if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+          _col = "quarterly_yield_mt_per_ha"
+          _col = _col if src_df is not None and _col in src_df.columns else _pick_column(src_df, ["quarterly_yield_mt_per_ha", "yield", "yield_mt_per_ha"])
+          hist_avg = None
+          if _col and src_df is not None and _col in src_df.columns:
+            hist_avg = pd.to_numeric(src_df[_col], errors="coerce").dropna().mean()
+            if pd.isna(hist_avg):
+              hist_avg = None
+          cfg = _benchmark_yield_config(opt, hist_avg)
+          if cfg is not None:
+            y_val, label, color = cfg
+            pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
+            fig = _add_benchmark_ref_line(fig, y_val, label, line_color=color, annotation_position=pos)
+        elif opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
+          cfg = _benchmark_yield_config(opt, None)
+          if cfg is not None:
+            y_val, label, color = cfg
+            pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
+            fig = _add_benchmark_ref_line(fig, y_val, label, line_color=color, annotation_position=pos)
+        elif opt in ("DA Target (4.50 MT/ha)", "DA Target", "DA Target Yield (4.50 MT/ha)"):
+          cfg = _benchmark_yield_config(opt, None)
+          if cfg is not None:
+            y_val, label, color = cfg
+            pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
+            fig = _add_benchmark_ref_line(fig, y_val, label, line_color=color, annotation_position=pos)
+        continue
+
+      # --- Price ---
+      if chart_type == "price":
+        if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+          # Inflation-aware: tail(12) rolling for both varieties
+          rolling_regular_avg = None
+          rolling_fancy_avg = None
+          try:
+            if src_df is not None and "other_variety_price" in src_df.columns:
+              rolling_regular_avg = pd.to_numeric(src_df["other_variety_price"], errors="coerce").dropna().tail(12).mean()
+              if pd.isna(rolling_regular_avg):
+                rolling_regular_avg = None
+            if src_df is not None and "fancy_palay_price" in src_df.columns:
+              rolling_fancy_avg = pd.to_numeric(src_df["fancy_palay_price"], errors="coerce").dropna().tail(12).mean()
+              if pd.isna(rolling_fancy_avg):
+                rolling_fancy_avg = None
+          except Exception:
+            pass
+          # Plot both as thin dotted (spec: thin dotted reference lines)
+          if rolling_regular_avg is not None and not pd.isna(rolling_regular_avg):
+            try:
+              v = float(rolling_regular_avg)
+              label = f"Regular 3-Yr Rolling Avg (\u20B1{v:.2f}/kg)"
+              pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
+              fig = _add_benchmark_ref_line(fig, v, label, line_color="#616161", annotation_position=pos)
+            except Exception:
+              pass
+          if rolling_fancy_avg is not None and not pd.isna(rolling_fancy_avg):
+            try:
+              v = float(rolling_fancy_avg)
+              label = f"Fancy 3-Yr Rolling Avg (\u20B1{v:.2f}/kg)"
+              pos = "bottom left" if fig.layout.shapes is None or len(fig.layout.shapes) == 1 else "top left"
+              fig = _add_benchmark_ref_line(fig, v, label, line_color="#78909C", annotation_position=pos)
+            except Exception:
+              pass
+          if rolling_regular_avg is None and rolling_fancy_avg is None:
+            pass
+        elif opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
+          # Regular NFA floor 19.00 (#EF4444 spec example) + Fancy commercial target 23.75 (19*1.25)
+          fig = _add_benchmark_ref_line(fig, 19.00, "NFA Floor Price (\u20B119.00/kg)", line_color="#EF4444", annotation_position="bottom left")
+          fig = _add_benchmark_ref_line(fig, 23.75, "Fancy Commercial Target (\u20B123.75/kg)", line_color="#F59E0B", annotation_position="top left")
+        elif opt in ("NFA Floor Price (₱19.00/kg)", "NFA Floor Price", "NFA Procurement Floor Price (₱19.00/kg)"):
+          fig = _add_benchmark_ref_line(fig, 19.00, "NFA Floor Price (\u20B119.00/kg)", line_color="#EF4444", annotation_position="bottom left")
+        elif opt == "DA Target (4.50 MT/ha)":
+          pass
+        continue
+    except Exception:
+      continue
+  return fig
+
+
+# ------------------------------------------------------------------
 # KPI SUBTEXT HELPERS — dynamic per Year Range / Period / Municipality
 # ------------------------------------------------------------------
 def _period_suffix(period: str) -> str:
@@ -359,11 +577,16 @@ def _group_by_period(df, period="ANNUAL", value_cols=None):
     return grouped
 
 
-def _price_historical_chart(df, period="ANNUAL"):
+def _price_historical_chart(df, period="ANNUAL", benchmark_option="Itago (None)"):
   """Historical price chart grouped by the selected period with peak annotations.
 
   The period value now comes from the updated dropdown:
   ANNUAL / SEMESTER 1/2 / QUARTER 1-4 (legacy QUARTERLY/MONTHLY still supported).
+
+  benchmark_option controls the optional horizontal reference line:
+  - "10-Year Historical Average" -> mean of other_variety_price
+  - "NFA / DA Policy Baseline" -> Php 19.00/kg NFA floor
+  - "Itago (None)" -> no line
   """
   value_cols = []
   if "fancy_palay_price" in df.columns:
@@ -428,6 +651,9 @@ def _price_historical_chart(df, period="ANNUAL"):
         bgcolor="rgba(255,255,255,0.9)", bordercolor="#6D28D9", borderwidth=1, borderpad=4,
       )
 
+  # --- Benchmark / Reference line(s) — supports multi-select (Yield/Price split) ---
+  fig = _apply_benchmarks_to_fig(fig, df, "price", benchmark_option)
+
   fig.update_layout(
     height=370, margin=dict(l=10, r=10, t=10, b=10),
     xaxis_title=xaxis_title, yaxis_title="₱/kg",
@@ -439,7 +665,7 @@ def _price_historical_chart(df, period="ANNUAL"):
   return fig
 
 
-def _price_forecast_chart(provincial_df, fancy_forecast, regular_forecast):
+def _price_forecast_chart(provincial_df, fancy_forecast, regular_forecast, benchmark_option="Itago (None)"):
   """Price forecast line chart (next 6 months) for Fancy & Regular.
 
   Fancy and Regular arrays are aligned via outer-join Series so they always
@@ -450,6 +676,10 @@ def _price_forecast_chart(provincial_df, fancy_forecast, regular_forecast):
   provincial data (where the forecast actually starts), NOT to the system
   clock. Using pd.Timestamp.today() would shift the whole line to e.g.
   September instead of January when the model runs on stale historical data.
+
+  benchmark_option controls the optional horizontal reference line:
+  Forecast View uses DA Target / NFA floor for Policy Baseline and
+  historical average for "10-Year Historical Average".
   """
   fig = go.Figure()
   try:
@@ -484,6 +714,9 @@ def _price_forecast_chart(provincial_df, fancy_forecast, regular_forecast):
       marker=dict(size=6, symbol="diamond"),
       connectgaps=False,
     ))
+    # --- Benchmark / Reference line(s) — supports multi-select (Forecast View) ---
+    fig = _apply_benchmarks_to_fig(fig, provincial_df, "price", benchmark_option)
+
     fig.update_layout(
       height=370, margin=dict(l=10, r=10, t=10, b=10),
       xaxis_title=None, yaxis_title="₱/kg",
@@ -497,8 +730,14 @@ def _price_forecast_chart(provincial_df, fancy_forecast, regular_forecast):
   return fig
 
 
-def _yield_historical_chart(df, period="ANNUAL"):
-  """Historical yield chart grouped by the selected period with peak annotation."""
+def _yield_historical_chart(df, period="ANNUAL", benchmark_option="Itago (None)"):
+  """Historical yield chart grouped by the selected period with peak annotation.
+
+  benchmark_option controls the optional horizontal reference line:
+  - "10-Year Historical Average" -> mean of quarterly_yield_mt_per_ha
+  - "NFA / DA Policy Baseline" -> 4.50 MT/ha DA Target
+  - "Itago (None)" -> no line
+  """
   grouped = _group_by_period(df, period, ["quarterly_yield_mt_per_ha"])
   if grouped.empty or "quarterly_yield_mt_per_ha" not in grouped.columns:
     return go.Figure()
@@ -535,6 +774,9 @@ def _yield_historical_chart(df, period="ANNUAL"):
       bgcolor="rgba(255,255,255,0.9)", bordercolor="#F57C00", borderwidth=1, borderpad=4,
     )
 
+  # --- Benchmark / Reference line(s) — supports multi-select ---
+  fig = _apply_benchmarks_to_fig(fig, df, "yield", benchmark_option)
+
   fig.update_layout(
     height=350, margin=dict(l=10, r=10, t=10, b=10),
     xaxis_title=xaxis_title, yaxis_title="MT/ha",
@@ -546,10 +788,13 @@ def _yield_historical_chart(df, period="ANNUAL"):
   return fig
 
 
-def _yield_forecast_chart(provincial_df, yield_forecast):
+def _yield_forecast_chart(provincial_df, yield_forecast, benchmark_option="Itago (None)"):
   """Yield forecast line chart (next forecast quarters) with peak annotation.
 
   Quarter axis is strictly 1 quarter after last historical date (baseline).
+
+  benchmark_option controls the optional horizontal reference line
+  (Forecast View: DA Target 4.50 MT/ha for Policy Baseline).
   """
   fig = go.Figure()
   try:
@@ -583,6 +828,9 @@ def _yield_forecast_chart(provincial_df, yield_forecast):
         font=dict(size=10, color="#C2410C", weight="bold"),
         bgcolor="rgba(255,255,255,0.9)", bordercolor="#F57C00", borderwidth=1, borderpad=4,
       )
+    # --- Benchmark / Reference line(s) — supports multi-select (Forecast View) ---
+    fig = _apply_benchmarks_to_fig(fig, provincial_df, "yield", benchmark_option)
+
     fig.update_layout(
       height=350, margin=dict(l=10, r=10, t=10, b=10),
       xaxis_title=None, yaxis_title="MT/ha",
@@ -2102,6 +2350,75 @@ def overview_page():
           f'<div class="metric-card"><div class="metric-card-header"><div class="metric-title"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">agriculture</i> Harvested Area</div></div><div class="metric-data">{harv_display}</div><div class="metric-footer">{harv_footer}</div></div>'
           f'</div>', unsafe_allow_html=True)
 
+  # --- Section Divider: Provincial Yield & Price Forecast Graphs ---
+  if show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Price Forecast", "Yield Insights", "Price Insights"):
+    st.markdown("""
+    <div style="margin: 1.4rem 0 0.6rem 0; border-top: 2px solid #C8E6C9; padding-top: 0.9rem; display:flex; align-items:center; gap:10px;">
+      <span style="display:flex; align-items:center; gap:6px; font-weight:700; color:#1B5E20; font-size:1.02rem; white-space:nowrap;">
+        <i class="material-symbols-outlined" style="font-size:19px; color:#1B5E20; vertical-align:middle;">show_chart</i>
+        Provincial Yield & Price Forecast
+      </span>
+      <span style="flex:1; height:1px; background:#E8F5E9; margin-left:4px;"></span>
+    </div>
+    """, unsafe_allow_html=True)
+
+  # --- Embedded Header Controls & Farmer-Friendly Popover (Tagalog refactor, Forecast default) ---
+  _show_benchmark = show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Price Forecast", "Yield Insights", "Price Insights")
+  if _show_benchmark:
+    hdr_col1, hdr_col2 = st.columns([0.78, 0.22], vertical_alignment="center")
+    with hdr_col1:
+      # Use segmented_control for intuitive pill UI; fallback to radio if unavailable
+      try:
+        benchmark_option = st.segmented_control(
+          "Ipakita ang Benchmark / Reference Line:",
+          options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"],
+          key="benchmark_toggle",
+        )
+        # segmented_control returns None when no selection; default to "Wala"
+        if benchmark_option is None:
+          benchmark_option = "Wala"
+      except Exception:
+        benchmark_option = st.radio(
+          "Ipakita ang Benchmark / Reference Line:",
+          options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"],
+          horizontal=True,
+          key="benchmark_toggle",
+        )
+      # Backwards-compat: map legacy English options if session holds old value
+      if benchmark_option in ("3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+        benchmark_option = "Presyo sa Merkado"
+      elif benchmark_option in ("NFA / DA Policy Baseline",):
+        benchmark_option = "Target ng Gobyerno"
+      elif benchmark_option in ("Itago (None)",):
+        benchmark_option = "Wala"
+    with hdr_col2:
+      with st.popover(":material/info: Gabay sa Benchmark"):
+        st.markdown("""
+### **Ano ang ibig sabihin ng mga guhit (Benchmark Lines)?**
+
+Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta at ani mo.
+
+* **:material/shopping_cart: Presyo sa Merkado (3-Yr Average):**
+  Ito ang karaniwang presyo ng palay sa Bataan sa nakalipas na 3 taon. Ginagamit ito para maiwasan ang epekto ng nagbabagong presyo ng bilihin (inflation).
+
+* **:material/account_balance: Target ng Gobyerno (NFA / DA):**
+  * **Regular Palay:** **\u20B119.00/kg** *(minimum na bilhihan ng NFA)*. Kapag mas mababa dito ang alok sa bukid, lugi ka sa biyahero.
+  * **Fancy Palay:** **\u20B123.75/kg** *(target na presyo para sa Dinorado/Jasmine)*.
+  * **Ani (Yield):** **4.50 MT/ha** *(target na ani ng Department of Agriculture bawat ektarya)*.
+
+* **:material/block: Wala:**
+  Inaalis ang mga guhit para linya lang ng forecast o nakaraang taon ang makita mo.
+""")
+  else:
+    benchmark_option = st.session_state.get("benchmark_toggle", "Wala")
+    # normalize legacy values
+    if benchmark_option in ("3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+      benchmark_option = "Presyo sa Merkado"
+    elif benchmark_option == "NFA / DA Policy Baseline":
+      benchmark_option = "Target ng Gobyerno"
+    elif benchmark_option == "Itago (None)":
+      benchmark_option = "Wala"
+
   # Plots Row 1
   chart_row1_col1, chart_row1_col2 = st.columns(2, gap="medium")
 
@@ -2112,18 +2429,18 @@ def overview_page():
         unsafe_allow_html=True)
 
       try:
-        yield_subtab1, yield_subtab2 = st.tabs([":material/show_chart: Historical Yield Trend", ":material/query_stats: Yield Forecast"])
-        with yield_subtab1:
+        tab_yield_forecast, tab_yield_historical = st.tabs([":material/query_stats: Yield Forecast", ":material/show_chart: Historical Yield Trend"])
+        with tab_yield_forecast:
           st.plotly_chart(
-            _yield_historical_chart(provincial_year, selected_period),
+            _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option=benchmark_option),
             use_container_width=True,
-            key=f"overview_yield_hist_{selected_start_year}_{selected_end_year}_{selected_period}",
+            key=f"overview_yield_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}",
           )
-        with yield_subtab2:
+        with tab_yield_historical:
           st.plotly_chart(
-            _yield_forecast_chart(provincial_df, forecast_quarterly_yield),
+            _yield_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option),
             use_container_width=True,
-            key=f"overview_yield_fc_{selected_start_year}_{selected_end_year}",
+            key=f"overview_yield_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}",
           )
       except Exception as e:
         st.warning(f" Yield forecast chart could not render: {str(e)}")
@@ -2137,22 +2454,26 @@ def overview_page():
         unsafe_allow_html=True)
 
       try:
-        price_subtab1, price_subtab2 = st.tabs([":material/show_chart: Historical Price Trend", ":material/query_stats: Price Forecast"])
-        with price_subtab1:
+        tab_price_forecast, tab_price_historical = st.tabs([":material/query_stats: Price Forecast", ":material/show_chart: Historical Price Trend"])
+        with tab_price_forecast:
           st.plotly_chart(
-            _price_historical_chart(provincial_year, selected_period),
+            _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option=benchmark_option),
             use_container_width=True,
-            key=f"overview_price_hist_{selected_start_year}_{selected_end_year}_{selected_period}",
+            key=f"overview_price_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}",
           )
-        with price_subtab2:
+        with tab_price_historical:
           st.plotly_chart(
-            _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months),
+            _price_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option),
             use_container_width=True,
-            key=f"overview_price_fc_{selected_start_year}_{selected_end_year}",
+            key=f"overview_price_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}",
           )
       except Exception as e:
         st.warning(f" Price forecast chart could not render: {str(e)}")
       st.markdown("</div>", unsafe_allow_html=True)
+
+  # --- End Section Divider: Forecast Graphs (visual close) ---
+  if show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Price Forecast", "Yield Insights", "Price Insights"):
+    st.markdown("""<hr style="border: none; border-top: 1px solid #E8F5E9; margin: 1.0rem 0 0.2rem 0;">""", unsafe_allow_html=True)
 
   # ========================================================
   # MUNICIPAL 3-MONTH PRICE FORECAST WITH SEASONAL TABS
