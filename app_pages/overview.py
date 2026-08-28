@@ -1086,10 +1086,30 @@ def overview_page():
   Renders an accessible, farmer-centric agricultural dashboard for Bataan.
   Supports multi-year selections, 'All' municipality views, and Ecosystem toggle filters.
   """
-
+  # --- PalaySense full-screen loader (assets/logo.png) covering data fetch ---
+  # Uses blocking placeholder so navigation + data load are both covered; spinner from
+  # Dashboard_Ready is now disabled (show_spinner=False) to avoid duplicate tiny spinner.
+  import time as _ov_time
+  from components.loading_screen import get_global_loading_html, _get_logo_base64
+  _ov_loader = st.empty()
+  _ov_loader.markdown(
+      get_global_loading_html(
+          message="Loading Overview...",
+          submessage="Fetching provincial & municipal data — please wait",
+          logo_base64=_get_logo_base64(),
+          duration_ms=3000,
+      ),
+      unsafe_allow_html=True,
+  )
+  _ov_t0 = _ov_time.time()
   # Fetch ALL datasets inside the page via the single data-layer entry point.
   # No module-level globals are read here.
   dr = reload_dashboard_data()
+  # Ensure loader visible at least 0.75s for perceived feedback
+  _ov_elapsed = _ov_time.time() - _ov_t0
+  if _ov_elapsed < 0.75:
+      _ov_time.sleep(0.75 - _ov_elapsed)
+  _ov_loader.empty()
   provincial_df = dr.provincial_df.copy()
   _prod_muni = getattr(dr, "municipal_production_df", None)
   municipality_df = (
@@ -1310,18 +1330,23 @@ def overview_page():
   with st.sidebar:
     st.markdown("""
     <style>
-    /* Quick View — compact, no header, fits without scroll */
-    .ov-qv-group { font-size:0.60rem !important; letter-spacing:0.6px !important; color:#A8C3B0 !important; margin:0.35rem 0 0.15rem 0 !important; font-weight:600 !important; }
-    /* Tighten sidebar buttons to fit exactly — no scroll */
+    /* Quick View — compact, no header, fits without scroll — left-aligned */
+    .ov-qv-group { font-size:0.60rem !important; letter-spacing:0.6px !important; color:#A8C3B0 !important; margin:0.35rem 0 0.15rem 0 !important; font-weight:600 !important; text-align: left !important; }
+    /* Tighten sidebar buttons to fit exactly — no scroll — left-aligned */
     section[data-testid="stSidebar"] .stButton > button {
-      padding: 4px 8px !important; min-height: 32px !important; line-height:1.1 !important;
-      font-size:0.78rem !important; gap: 4px !important; margin: 1px 0 !important;
+      padding: 4px 8px 4px 10px !important; min-height: 32px !important; line-height:1.1 !important;
+      font-size:0.78rem !important; gap: 6px !important; margin: 1px 0 !important;
+      justify-content: flex-start !important; text-align: left !important; align-items: center !important;
     }
+    section[data-testid="stSidebar"] .stButton > button > div { justify-content: flex-start !important; text-align: left !important; }
+    section[data-testid="stSidebar"] .stButton > button p { text-align: left !important; width: 100% !important; }
     section[data-testid="stSidebar"] > div:first-child { padding-top: 0.4rem !important; gap: 2px !important; }
     section[data-testid="stSidebar"] hr.ps-side-divider { margin: 0.35rem 0 !important; }
-    /* Mobile: hide group labels, keep buttons horizontal in bottom bar */
+    /* Mobile: hide group labels, keep buttons horizontal in bottom bar — centered for bottom nav */
     @media (max-width: 768px) {
       .ov-qv-group { display: none !important; }
+      section[data-testid="stSidebar"] .stButton > button { justify-content: center !important; text-align: center !important; }
+      section[data-testid="stSidebar"] .stButton > button p { text-align: center !important; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -2354,7 +2379,7 @@ def overview_page():
   if show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Price Forecast", "Yield Insights", "Price Insights"):
     st.markdown("""
     <div style="margin: 1.4rem 0 0.6rem 0; border-top: 2px solid #C8E6C9; padding-top: 0.9rem; display:flex; align-items:center; gap:10px;">
-      <span style="display:flex; align-items:center; gap:6px; font-weight:700; color:#1B5E20; font-size:1.02rem; white-space:nowrap;">
+      <span style="display:flex; align-items:left; gap:6px; font-weight:700; color:#1B5E20; font-size:1.02rem; white-space:nowrap;">
         <i class="material-symbols-outlined" style="font-size:19px; color:#1B5E20; vertical-align:middle;">show_chart</i>
         Provincial Yield & Price Forecast
       </span>

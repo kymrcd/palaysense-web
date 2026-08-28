@@ -8,7 +8,25 @@ from data.Dashboard_Ready import reload_dashboard_data
 
 
 def YieldForecast1():
+    # PalaySense full-screen loader (assets/logo.png) covering data fetch
+    import time as _yf_time
+    from components.loading_screen import get_global_loading_html, _get_logo_base64
+    _yf_loader = st.empty()
+    _yf_loader.markdown(
+        get_global_loading_html(
+            message="Loading Yield Forecast...",
+            submessage="Calculating yield projections — please wait",
+            logo_base64=_get_logo_base64(),
+            duration_ms=3000,
+        ),
+        unsafe_allow_html=True,
+    )
+    _yf_t0 = _yf_time.time()
     dashboard_ready = reload_dashboard_data()
+    _yf_elapsed = _yf_time.time() - _yf_t0
+    if _yf_elapsed < 0.75:
+        _yf_time.sleep(0.75 - _yf_elapsed)
+    _yf_loader.empty()
 
     provincial_df = dashboard_ready.provincial_df
     forecast_quarterly_yield = dashboard_ready.forecast_quarterly_yield

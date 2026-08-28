@@ -30,32 +30,32 @@ def _get_base64(path):
 
 
 # ------------------------------------------------------------------
-# Sidebar navigation model — Style C: Grouped Comprehensive, Farmer Tagalog, Minimal
+# Sidebar navigation model — Style C: Grouped Comprehensive, LGU English, Minimal
 # ------------------------------------------------------------------
-# Each entry: (key, label, icon, group) — Tagalog minimal for farmer comprehension
+# Each entry: (key, label, icon, group) — English for LGU/OPA (Tagalog was for farmers)
 NAV_GROUPS = [
   {
-    "label": "PANGKALAHATAN",
-    "items": [("overview", "Buong Dashboard", "dashboard")],
+    "label": "OVERVIEW",
+    "items": [("overview", "Overview", "dashboard")],
   },
   {
     "label": "ANALYTICS",
     "items": [
-      ("provincial", "Lalawigan", "location_city"),
-      ("municipal", "Bayan", "location_on"),
-      ("historical", "Pagkumpara", "compare_arrows"),
+      ("provincial", "Provincial", "location_city"),
+      ("municipal", "Municipal", "location_on"),
+      ("historical", "Comparison", "compare_arrows"),
     ],
   },
   {
     "label": "FORECAST",
     "items": [
-      ("forecasting", "Hula ng Ani", "query_stats"),
+      ("forecasting", "Forecast", "query_stats"),
     ],
   },
   {
-    "label": "SUPORTA",
+    "label": "SYSTEM",
     "items": [
-      ("import_data", "Mag-import", "upload_file"),
+      ("import_data", "Import Data", "upload_file"),
       ("settings", "Settings", "settings"),
       ("logout", "Logout", "logout"),
     ],
@@ -68,13 +68,18 @@ _KEY_TO_LABEL = {k: label for g in NAV_GROUPS for (k, label, _) in g["items"]}
 
 def _render_sidebar(active_page):
   with st.sidebar:
-    # Style C — Compact, no-scroll, minimal professional (fits exactly)
+    # Style C — Compact, no-scroll, minimal professional (fits exactly) — left-aligned nav
     st.markdown("""
     <style>
-    /* Compact desktop — tight spacing to fit without scroll */
+    /* Compact desktop — tight spacing to fit without scroll — left-aligned */
     section[data-testid="stSidebar"] > div:first-child { padding-top: 0.3rem !important; gap: 2px !important; }
-    section[data-testid="stSidebar"] .stButton > button { margin: 1px 0 !important; min-height: 32px !important; padding: 4px 8px !important; }
-    .ps-side-section { font-size:0.60rem !important; letter-spacing:0.6px !important; color:#A8C3B0 !important; margin:0.45rem 0 0.12rem 0 !important; font-weight:600 !important; }
+    section[data-testid="stSidebar"] .stButton > button {
+      margin: 1px 0 !important; min-height: 32px !important; padding: 4px 8px 4px 10px !important;
+      justify-content: flex-start !important; text-align: left !important; align-items: center !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button > div { justify-content: flex-start !important; text-align: left !important; }
+    section[data-testid="stSidebar"] .stButton > button p { text-align: left !important; width: 100% !important; }
+    .ps-side-section { font-size:0.60rem !important; letter-spacing:0.6px !important; color:#A8C3B0 !important; margin:0.45rem 0 0.12rem 0 !important; font-weight:600 !important; text-align: left !important; }
     .ps-side-logo { text-align:center; padding:0.3rem 0 0.15rem 0; }
     /* Mobile: bottom navigation, no hidden text, white icons visible */
     @media (max-width: 768px) {
@@ -97,8 +102,10 @@ def _render_sidebar(active_page):
         min-width: 64px !important; flex-direction: column !important; gap: 2px !important;
         font-size: 0.62rem !important; padding: 6px 6px !important; white-space: nowrap !important;
         background: transparent !important; border: none !important;
+        justify-content: center !important; text-align: center !important;
       }
-      section[data-testid="stSidebar"] .stButton > button p { font-size: 0.62rem !important; line-height: 1 !important; }
+      section[data-testid="stSidebar"] .stButton > button > div { justify-content: center !important; }
+      section[data-testid="stSidebar"] .stButton > button p { font-size: 0.62rem !important; line-height: 1 !important; text-align: center !important; }
       section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
         background: rgba(255,255,255,0.12) !important; border-radius: 10px !important;
       }
@@ -152,15 +159,36 @@ def lgu_dashboard():
     st.session_state["lgu_page"] = "overview"
   active_page = st.session_state["lgu_page"]
 
-  # Handle logout
+  # Handle logout — show PalaySense loading screen (assets/logo.png) before redirect
+  # Blocking loader guarantees visibility (same pattern as login), then redirect to home
+  # Home will then show its own "Loading PalaySense..." loader via app.py page_change detection
   if active_page == "logout":
+    try:
+      from components.loading_screen import show_logout_loading
+      show_logout_loading(duration_sec=1.0)
+    except Exception:
+      import time as _t
+      _t.sleep(0.85)
     st.session_state.logout_success = True
     st.query_params["page"] = "home"
-    st.stop()
+    st.rerun()
 
-  # Load data
+  # Load data — PalaySense loader covers this fetch (replaces tiny spinner)
+  import time as _lgu_time
+  from components.loading_screen import get_global_loading_html, _get_logo_base64, LGU_PAGE_LOADING_MESSAGES
+  _lgu_msg = LGU_PAGE_LOADING_MESSAGES.get(active_page, ("Loading LGU Dashboard...", "Syncing latest records — please wait"))
+  _lgu_loader = st.empty()
+  _lgu_loader.markdown(
+      get_global_loading_html(message=_lgu_msg[0], submessage=_lgu_msg[1], logo_base64=_get_logo_base64(), duration_ms=3000),
+      unsafe_allow_html=True,
+  )
+  _lgu_t0 = _lgu_time.time()
   dr = dl.load_dashboard()
   df = dl.get_provincial_df(dr)
+  _lgu_elapsed = _lgu_time.time() - _lgu_t0
+  if _lgu_elapsed < 0.65:
+      _lgu_time.sleep(0.65 - _lgu_elapsed)
+  _lgu_loader.empty()
 
   # Sidebar
   _render_sidebar(active_page)

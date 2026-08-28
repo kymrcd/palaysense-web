@@ -12,10 +12,48 @@ st.set_page_config(
 # -----------------------------
 from components.top_navigation import top_navigation
 from components.styles import load_css
+from components.loading_screen import show_blocking_page_loading
 
 load_css()
 
-query_page = st.query_params.get("page", "home")
+# Robust query_params parsing — handles both str and list returns across Streamlit versions
+_raw_page = st.query_params.get("page", "home")
+if isinstance(_raw_page, list):
+    query_page = _raw_page[0] if _raw_page else "home"
+else:
+    query_page = str(_raw_page).strip() if _raw_page else "home"
+if query_page not in ("home", "overview", "price_forecast", "yield_forecast", "login", "lgu_dashboard"):
+    query_page = "home"
+
+# --- Global PalaySense loading screen (assets/logo.png) — shown on EVERY page load & navigation ---
+# Uses blocking placeholder + sleep (like login) so the overlay is GUARANTEED visible
+# Covers: home, overview, price_forecast, yield_forecast, login, lgu_dashboard + LGU sub-pages + logout
+# Detect page / sub-page transitions via session_state to avoid showing on every widget rerun
+_lgu_page_now = st.session_state.get("lgu_page", "overview")
+_prev_query = st.session_state.get("_prev_query_page", None)
+_prev_lgu = st.session_state.get("_prev_lgu_page", None)
+_is_initial = "_prev_query_page" not in st.session_state
+_is_page_change = (_prev_query is not None and _prev_query != query_page)
+# Exclude logout from subpage blocking — lgu_dashboard shows its own show_logout_loading
+_is_lgu_subpage_change = (
+    query_page == "lgu_dashboard"
+    and _prev_query == "lgu_dashboard"
+    and _prev_lgu is not None
+    and _prev_lgu != _lgu_page_now
+    and _lgu_page_now != "logout"
+)
+_should_show_blocking = _is_initial or _is_page_change or _is_lgu_subpage_change
+
+if _should_show_blocking:
+    if query_page == "lgu_dashboard":
+        show_blocking_page_loading("lgu_dashboard", duration_sec=0.75, subpage_key=_lgu_page_now)
+    else:
+        # Short nav feedback — page-level loader will cover actual data fetch
+        show_blocking_page_loading(query_page, duration_sec=0.65)
+
+# Persist for next run
+st.session_state["_prev_query_page"] = query_page
+st.session_state["_prev_lgu_page"] = _lgu_page_now
 
 # Show top navigation ONLY for public/farmer pages
 if query_page != "lgu_dashboard":

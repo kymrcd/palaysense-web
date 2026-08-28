@@ -124,7 +124,7 @@ def _safe_load_pickle(path: Path) -> Any:
 # =========================
 # CORE DATA LOADERS (cached with st.cache_data)
 # =========================
-@st.cache_data(show_spinner="Loading historical data...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_provincial_history() -> pd.DataFrame:
     """Load cleaned provincial historical data."""
     df = _safe_read_parquet(PROVINCIAL_HISTORY, date_cols=["date"])
@@ -143,7 +143,7 @@ def load_provincial_history() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading municipal history...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_municipal_history() -> pd.DataFrame:
     """Load cleaned municipal historical data."""
     df = _safe_read_parquet(MUNICIPAL_HISTORY, date_cols=["date"])
@@ -162,7 +162,7 @@ def load_municipal_history() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading supply data...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_supply_data() -> pd.DataFrame:
     """Load supply/demand data."""
     df = _safe_read_parquet(SUPPLY_DATA, date_cols=["date"])
@@ -171,7 +171,7 @@ def load_supply_data() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading municipal production...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_municipal_production() -> pd.DataFrame:
     """Load per-municipality palay PRODUCTION (dry/wet season, total, average).
 
@@ -205,13 +205,13 @@ def load_municipal_production() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading forecasts...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_provincial_forecasts() -> pd.DataFrame:
     """Load provincial forecasts (fancy, regular, yield)."""
     return _safe_read_parquet(PROVINCIAL_FORECASTS)
 
 
-@st.cache_data(show_spinner="Loading municipal forecasts...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_municipal_forecasts() -> pd.DataFrame:
     """Load municipal forecasts (test-period format for UI compatibility)."""
     df = _safe_read_parquet(MUNICIPAL_FORECASTS)
@@ -224,13 +224,13 @@ def load_municipal_forecasts() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading municipal forward forecasts...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_municipal_forward_forecasts() -> pd.DataFrame:
     """Load municipal forward forecasts (true future predictions with month labels)."""
     return _safe_read_parquet(MUNICIPAL_FORECASTS_FORWARD)
 
 
-@st.cache_data(show_spinner="Loading metrics...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_metrics() -> dict:
     """Load model performance metrics."""
     metrics = _safe_read_json(METRICS_JSON)
@@ -314,7 +314,7 @@ def build_model_evaluation_frame(metrics: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-@st.cache_data(show_spinner="Loading metadata...", max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_metadata() -> dict:
     """Load forecast metadata (generation time, horizons, etc.)."""
     return _safe_read_json(METADATA_JSON)

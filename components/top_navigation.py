@@ -74,17 +74,28 @@ def top_navigation():
     # =====================================================
     # NAVIGATION BUTTONS & ROUTING LOGIC
     # =====================================================
-    current_page = st.query_params.get("page", "home")
+    _raw = st.query_params.get("page", "home")
+    if isinstance(_raw, list):
+        current_page = _raw[0] if _raw else "home"
+    else:
+        current_page = str(_raw).strip() if _raw else "home"
 
     with col1:
         if st.button("Home", use_container_width=True):
             st.query_params["page"] = "home"
-            st.rerun()
+            # st.rerun() is optional — query_params change already triggers rerun
+            try:
+                st.rerun()
+            except Exception:
+                pass
 
     with col2:
         if st.button("Overview", use_container_width=True):
             st.query_params["page"] = "overview"
-            st.rerun()
+            try:
+                st.rerun()
+            except Exception:
+                pass
 
     # =====================================================
     # SINGLE-PAGE ANCHOR JUMP FOR "ABOUT US"
@@ -121,7 +132,10 @@ def top_navigation():
     with col5:
         if st.button("LGU Portal", use_container_width=True):
             st.query_params["page"] = "login"
-            st.rerun()
+            try:
+                st.rerun()
+            except Exception:
+                pass
 
     # =====================================================
     # NAVBAR DIVIDER

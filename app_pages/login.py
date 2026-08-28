@@ -2,6 +2,11 @@ import base64
 import time
 import streamlit as st
 from components.loading_screen import show_loading_screen, get_loading_html
+from components.error_popup import (
+    get_error_popup_html,
+    GENERIC_LOGIN_ERROR,
+    _should_show_popup,
+)
 
 # Function to convert your local image file to a base64 text string
 def get_base64(image_path):
@@ -13,6 +18,25 @@ def get_base64(image_path):
 
 
 def login_page():
+    # 0. Auto-expire error popup after 4.5s (so it does not reappear on next unrelated rerun)
+    if st.session_state.get("show_login_error_popup"):
+        err_time = st.session_state.get("login_error_time", 0)
+        try:
+            if time.time() - float(err_time) > 4.6:
+                st.session_state.pop("show_login_error_popup", None)
+                st.session_state.pop("login_error_time", None)
+                st.session_state.pop("login_error_msg", None)
+        except Exception:
+            pass
+
+    # Render popup overlay if active (Option B - CSS-only auto-hide, no JS removeChild to avoid React mismatch)
+    if st.session_state.get("show_login_error_popup"):
+        popup_msg = st.session_state.get("login_error_msg", GENERIC_LOGIN_ERROR)
+        st.markdown(
+            get_error_popup_html(message=popup_msg, duration_ms=4500),
+            unsafe_allow_html=True,
+        )
+
     # 1. Fetch logo
     logo_base64 = get_base64("assets/logo.png")
 
@@ -95,6 +119,11 @@ def login_page():
             box-shadow: none !important;
         }}
 
+        /* Field error wrapper adjustments inside login_box */
+        div[class*="st-key-login_box"] .field-error {{
+            margin-top: 4px !important;
+        }}
+
         /* Log in button sa loob ng card */
         .stButton > button {{
             width: 100% !important;
@@ -115,11 +144,14 @@ def login_page():
         }}
 
         /* Footer text sa loob ng card */
-        .forgot-password {{
+        .need-help {{
             text-align: center;
             margin-top: 12px;
             color: #4B5563;
             font-size: 11px;
+        }}
+        .need-help strong {{
+            color: #55751B;
         }}
 
         .divider {{
@@ -151,10 +183,50 @@ def login_page():
             font-weight: 600 !important;
             text-decoration: none !important;
         }}
+
+        /* Inline field error - malapit sa input box */
+        .field-error {{
+            color: #DC2626 !important;
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            margin: 4px 0 8px 2px !important;
+            line-height: 1.3 !important;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }}
+        .field-error::before {{
+            content: "⚠";
+            font-size: 11px;
+        }}
+        /* Red border - pure CSS, no JS/iframe (when any field-error exists inside login_box, both inputs get red) */
+        div[class*="st-key-login_box"]:has(.field-error) div[data-testid="stTextInput"] input {{
+            border: 1.5px solid #EF4444 !important;
+            background-color: #FEF2F2 !important;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
     )
+
+    # 2b. Auto-clear individual field errors when user has corrected them (so red border via :has disappears)
+    _stored_field_errors = st.session_state.get("login_field_errors", {})
+    if _stored_field_errors:
+        _cur_u = str(st.session_state.get("username", "")).strip()
+        _cur_p = str(st.session_state.get("password", "")).strip()
+        _needs_update = False
+        if _stored_field_errors.get("username") and _cur_u:
+            _stored_field_errors.pop("username", None)
+            _needs_update = True
+        if _stored_field_errors.get("password") and _cur_p:
+            _stored_field_errors.pop("password", None)
+            _needs_update = True
+        if not _stored_field_errors:
+            st.session_state.pop("login_field_errors", None)
+        elif _needs_update:
+            st.session_state["login_field_errors"] = _stored_field_errors
+
+    field_errors = st.session_state.get("login_field_errors", {})
 
     # 3. Gamit ang Streamlit Container na may key para siguradong NAKALOOB LAHAT
     with st.container(key="login_box"):
@@ -169,6 +241,9 @@ def login_page():
             key="username",
             label_visibility="visible"
         )
+        # Inline error malapit sa username input
+        if field_errors.get("username"):
+            st.markdown(f'<div class="field-error">{field_errors["username"]}</div>', unsafe_allow_html=True)
 
         password = st.text_input(
             "Password",
@@ -177,14 +252,17 @@ def login_page():
             key="password",
             label_visibility="visible"
         )
+        # Inline error malapit sa password input
+        if field_errors.get("password"):
+            st.markdown(f'<div class="field-error">{field_errors["password"]}</div>', unsafe_allow_html=True)
 
         # Login Button (Full width sa loob ng box)
         login_clicked = st.button("LOG IN", key="login_btn", use_container_width=True)
 
-        # Links sa ilalim
+        # Links sa ilalim - Forgot Password removed, replaced with Need help?
         st.markdown(
             """
-            <div class="forgot-password">Forgot Password?</div>
+            <div class="need-help">Need help? <strong>Contact support via login error popup</strong></div>
             <div class="divider"><span>or</span></div>
             <div class="back-link"><a href="?page=home" target="_self">Back to Public Dashboard</a></div>
             """,
@@ -193,8 +271,23 @@ def login_page():
 
     # 4. Authentication Logic — with full-screen loading overlay
     if login_clicked:
-        if not username or not password:
-            st.error("Please enter both email and password.")
+        # Clear previous field errors on new attempt
+        st.session_state.pop("login_field_errors", None)
+        # Also clear any lingering popup state on new click (will be re-set if needed)
+        st.session_state.pop("show_login_error_popup", None)
+        st.session_state.pop("login_error_time", None)
+
+        # A: Blank fields -> inline error malapit sa input (hindi popup)
+        username_stripped = (username or "").strip()
+        password_stripped = (password or "").strip()
+        field_err = {}
+        if not username_stripped:
+            field_err["username"] = "Username is required."
+        if not password_stripped:
+            field_err["password"] = "Password is required."
+        if field_err:
+            st.session_state["login_field_errors"] = field_err
+            st.rerun()
         else:
             try:
                 from utils.firebase_config import pyrebase_sign_in, set_session_user
@@ -232,7 +325,18 @@ def login_page():
                     st.rerun()
                 elif isinstance(result, dict) and "error" in result:
                     loading_placeholder.empty()
-                    st.error(result["error"])
+                    raw_err = str(result.get("error", ""))
+                    # B lang ang popup (3,4,5) -> generic message + 4.5s auto-dismiss
+                    if _should_show_popup(raw_err):
+                        st.session_state["show_login_error_popup"] = True
+                        st.session_state["login_error_msg"] = GENERIC_LOGIN_ERROR
+                        st.session_state["login_error_time"] = time.time()
+                        # Clear any field errors so red border doesn't persist
+                        st.session_state.pop("login_field_errors", None)
+                        st.rerun()
+                    else:
+                        # Other firebase errors (USER_DISABLED, TOO_MANY, etc.) stay as inline st.error
+                        st.error(result["error"])
                 else:
                     loading_placeholder.empty()
                     st.error("Invalid response received from authentication service.")
