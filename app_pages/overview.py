@@ -1349,16 +1349,12 @@ def overview_page():
       display: none !important; position: fixed !important; top: 10px !important; right: 12px !important;
       z-index: 1001 !important;
     }
-    .ov-mobile-nav-overlay-wrap { display: none; }
     @media (max-width: 768px) {
-      section[data-testid="stSidebar"] { display: none !important; }
       .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] { display: flex !important; }
-      .ov-mobile-nav-overlay-wrap { display: block; }
     }
     @media (min-width: 769px) {
       .ov-mobile-nav-trigger { display: none !important; }
       .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] { display: none !important; }
-      .ov-mobile-nav-overlay-wrap { display: none !important; }
     }
     .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] .stButton > button {
       background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%) !important;
@@ -1374,13 +1370,7 @@ def overview_page():
       background: linear-gradient(135deg, #145A1E 0%, #256E30 100%) !important;
       box-shadow: 0 6px 18px rgba(27,94,32,0.45) !important;
     }
-    .ov-mobile-nav-overlay-wrap {
-      position: fixed !important; top: 60px !important; right: 12px !important; left: 12px !important;
-      z-index: 1000 !important; background: #FFFFFF !important;
-      border: 1px solid #C8E6C9 !important; border-radius: 16px !important;
-      box-shadow: 0 12px 32px rgba(27,94,32,0.18) !important;
-      padding: 12px !important; max-height: 72vh !important; overflow-y: auto !important;
-    }
+
     .ov-mobile-nav-overlay-wrap .ov-qv-group { color: #1B5E20 !important; font-weight: 700 !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -1399,9 +1389,8 @@ def overview_page():
           st.session_state["overview_section"] = label
           st.rerun()
     section_choice = st.session_state.get("overview_section", "Buong Dashboard")
-  # --- Mobile: green pop-trigger (upper right, Material icon, highly visible) ---
+  # --- Mobile: green pop-trigger that toggles EXISTING sidebar (no duplicate nav) ---
   st.session_state.setdefault("ov_mobile_nav_open", False)
-  # Fixed floating button — visible only on mobile via CSS (.ov-mobile-nav-trigger)
   st.markdown('<div class="ov-mobile-nav-trigger">', unsafe_allow_html=True)
   _is_open = st.session_state.get("ov_mobile_nav_open", False)
   _toggle_label = "Isara" if _is_open else "Menu"
@@ -1410,19 +1399,29 @@ def overview_page():
     st.session_state["ov_mobile_nav_open"] = not _is_open
     st.rerun()
   st.markdown('</div>', unsafe_allow_html=True)
-  # Pop overlay — same QUICK_VIEW_GROUPS, green-themed, noticeable card
+  # Use existing st.sidebar navigation — just toggle its visibility on phone
   if st.session_state.get("ov_mobile_nav_open", False):
-    st.markdown('<div class="ov-mobile-nav-overlay-wrap">', unsafe_allow_html=True)
-    st.markdown('<div style="display:flex; align-items:center; gap:8px; font-weight:800; color:#1B5E20; margin-bottom:8px;"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">dashboard</i> Navigation</div>', unsafe_allow_html=True)
-    for grp_label, items in QUICK_VIEW_GROUPS:
-      st.markdown(f'<p class="ov-qv-group" style="color:#1B5E20 !important; margin-top:8px !important;">{grp_label}</p>', unsafe_allow_html=True)
-      for label, icon in items:
-        is_active = (st.session_state.get("overview_section") == label)
-        if st.button(label, icon=f":material/{icon}:" if icon else None, use_container_width=True, type="primary" if is_active else "secondary", key=f"ov_mobile_{label}"):
-          st.session_state["overview_section"] = label
-          st.session_state["ov_mobile_nav_open"] = False
-          st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+      @media (max-width: 768px) {
+        section[data-testid="stSidebar"] {
+          display: flex !important; position: fixed !important;
+          left: 0 !important; top: 0 !important; bottom: 0 !important;
+          width: 78% !important; max-width: 300px !important; min-width: 260px !important;
+          z-index: 1000 !important; box-shadow: 4px 0 24px rgba(0,0,0,0.35) !important;
+          overflow-y: auto !important;
+        }
+      }
+    </style>
+    """, unsafe_allow_html=True)
+  else:
+    st.markdown("""
+    <style>
+      @media (max-width: 768px) {
+        section[data-testid="stSidebar"] { display: none !important; }
+      }
+    </style>
+    """, unsafe_allow_html=True)
   show_all = section_choice == "Buong Dashboard"
 
   # ========================================================
