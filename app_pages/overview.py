@@ -1342,30 +1342,29 @@ def overview_page():
     section[data-testid="stSidebar"] .stButton > button p { text-align: left !important; width: 100% !important; }
     section[data-testid="stSidebar"] > div:first-child { padding-top: 0.4rem !important; gap: 2px !important; }
     section[data-testid="stSidebar"] hr.ps-side-divider { margin: 0.35rem 0 !important; }
-    /* Phone: hide sidebar by default, show via JS toggle */
+    /* Phone: hide sidebar by default — toggled via Python button below */
     @media (max-width: 768px) {
       section[data-testid="stSidebar"] { display: none !important; }
-      section[data-testid="stSidebar"].ov-open {
-        display: flex !important; position: fixed !important;
-        left: 0 !important; top: 0 !important; bottom: 0 !important;
-        width: 78% !important; max-width: 300px !important; min-width: 260px !important;
-        z-index: 1000 !important; box-shadow: 4px 0 24px rgba(0,0,0,0.35) !important;
-        overflow-y: auto !important;
-      }
     }
-    /* Phone-only green trigger button (HTML) — hidden on desktop */
-    .ov-phone-toggle {
-      display: none; position: fixed; top: 10px; right: 12px;
-      z-index: 1001; background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
-      color: #FFFFFF; border: 1px solid rgba(255,255,255,0.25);
-      border-radius: 12px; padding: 8px 14px; height: 42px;
-      font-weight: 700; font-size: 0.85rem; font-family: 'Poppins', sans-serif;
-      box-shadow: 0 4px 14px rgba(27,94,32,0.35);
-      align-items: center; gap: 6px; cursor: pointer;
+    /* Phone-only trigger — marker + next button container */
+    div[data-testid="stElementContainer"]:has(.ov-phone-marker) { display: none !important; }
+    div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] {
+      display: none !important; position: fixed !important; top: 10px !important; right: 12px !important;
+      z-index: 1001 !important;
     }
-    .ov-phone-toggle .material-symbols-outlined { font-size: 20px; color: #FFFFFF; vertical-align: middle; }
-    @media (max-width: 768px) { .ov-phone-toggle { display: flex !important; } }
-    @media (min-width: 769px) { .ov-phone-toggle { display: none !important; } }
+    div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] .stButton > button {
+      background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%) !important;
+      color: #FFFFFF !important; border: 1px solid rgba(255,255,255,0.25) !important;
+      border-radius: 12px !important; padding: 8px 14px !important; height: 42px !important; min-height: 42px !important;
+      font-weight: 700 !important; font-size: 0.85rem !important; box-shadow: 0 4px 14px rgba(27,94,32,0.35) !important;
+    }
+    div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] .stButton > button p { color:#FFFFFF !important; font-weight:700 !important; }
+    @media (max-width: 768px) {
+      div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] { display: flex !important; }
+    }
+    @media (min-width: 769px) {
+      div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] { display: none !important; }
+    }
     </style>
     """, unsafe_allow_html=True)
     # Render grouped buttons — moved up (header removed), active = primary
@@ -1383,31 +1382,30 @@ def overview_page():
           st.session_state["overview_section"] = label
           st.rerun()
     section_choice = st.session_state.get("overview_section", "Buong Dashboard")
-  # --- Mobile: HTML green toggle that shows/hides EXISTING sidebar (no duplicate) ---
-  st.markdown("""
-  <button id="ov-phone-toggle" class="ov-phone-toggle" onclick="
-    (function(){
-      var sel='section[data-testid=&quot;stSidebar&quot;]';
-      var sb = window.parent.document.querySelector(sel) || document.querySelector(sel);
-      if(!sb) return;
-      var isOpen = sb.classList.contains('ov-open');
-      var btnIcon = document.getElementById('ov-phone-toggle-icon');
-      var btnText = document.getElementById('ov-phone-toggle-text');
-      if(isOpen){
-        sb.classList.remove('ov-open');
-        if(btnIcon) btnIcon.textContent='menu';
-        if(btnText) btnText.textContent='Menu';
-      } else {
-        sb.classList.add('ov-open');
-        if(btnIcon) btnIcon.textContent='close';
-        if(btnText) btnText.textContent='Isara';
+  # --- Mobile: phone-only green toggle for EXISTING sidebar (no duplicate) ---
+  st.session_state.setdefault("ov_mobile_nav_open", False)
+  st.markdown('<div class="ov-phone-marker" style="display:none;"></div>', unsafe_allow_html=True)
+  _is_open = st.session_state.get("ov_mobile_nav_open", False)
+  _lbl = "Isara" if _is_open else "Menu"
+  _ico = "close" if _is_open else "menu"
+  if st.button(_lbl, icon=f":material/{_ico}:", key="ov_phone_toggle", type="primary"):
+    st.session_state["ov_mobile_nav_open"] = not _is_open
+    st.rerun()
+  # Toggle existing sidebar visibility on phone via injected CSS
+  if st.session_state.get("ov_mobile_nav_open", False):
+    st.markdown("""
+    <style>
+      @media (max-width: 768px) {
+        section[data-testid="stSidebar"] {
+          display: flex !important; position: fixed !important;
+          left: 0 !important; top: 0 !important; bottom: 0 !important;
+          width: 78% !important; max-width: 300px !important; min-width: 260px !important;
+          z-index: 1000 !important; box-shadow: 4px 0 24px rgba(0,0,0,0.35) !important;
+          overflow-y: auto !important;
+        }
       }
-    })();
-  ">
-    <span id="ov-phone-toggle-icon" class="material-symbols-outlined">menu</span>
-    <span id="ov-phone-toggle-text">Menu</span>
-  </button>
-  """, unsafe_allow_html=True)
+    </style>
+    """, unsafe_allow_html=True)
   show_all = section_choice == "Buong Dashboard"
 
   # ========================================================
