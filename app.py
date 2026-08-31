@@ -4,7 +4,7 @@ import base64
 st.set_page_config(
     page_title="PalaySense",
     layout="wide",
-    initial_sidebar_state="collapsed"  # Forces any default sidebar completely out of view
+    initial_sidebar_state="expanded"  # Show farmer/LGU sidebar navigation by default
 )
 
 # -----------------------------
