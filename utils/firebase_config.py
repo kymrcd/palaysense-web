@@ -55,12 +55,6 @@ FIREBASE_APP_ID = get_secret("FIREBASE_APP_ID", "")
 
 SERVICE_ACCOUNT_KEY_PATH = os.path.join(PROJECT_ROOT, "serviceAccountKey.json")
 
-# REST API URLs for direct Firebase Auth calls
-FIREBASE_AUTH_BASE_URL = "https://identitytoolkit.googleapis.com/v1/accounts"
-FIREBASE_SIGN_IN_URL = f"{FIREBASE_AUTH_BASE_URL}:signInWithPassword?key={FIREBASE_WEB_API_KEY}"
-FIREBASE_SIGN_UP_URL = f"{FIREBASE_AUTH_BASE_URL}:signUp?key={FIREBASE_WEB_API_KEY}"
-FIREBASE_RESET_PASSWORD_URL = f"{FIREBASE_AUTH_BASE_URL}:sendOobCode?key={FIREBASE_WEB_API_KEY}"
-
 # =============================================================
 # PYRERASE AUTH (Client-side Firebase Authentication)
 # =============================================================
@@ -352,118 +346,6 @@ def get_user_profile(uid: str) -> dict:
     except Exception as e:
         print(f"[Firestore] Get user error: {e}")
         return {}
-
-
-# =============================================================
-# AUTHENTICATION (Firebase Auth REST API) - Legacy
-# =============================================================
-
-def sign_in_with_email_password(email: str, password: str) -> dict:
-    """Authenticate a user with email + password via Firebase Auth REST API."""
-    if not FIREBASE_WEB_API_KEY:
-        return {"error": "Firebase not configured. Contact admin."}
-
-    payload = {
-        "email": email.strip().lower(),
-        "password": password,
-        "returnSecureToken": True
-    }
-
-    try:
-        resp = requests.post(FIREBASE_SIGN_IN_URL, json=payload)
-        data = resp.json()
-
-        if "error" in data:
-            code = data["error"].get("message", "")
-            msg_map = {
-                "EMAIL_NOT_FOUND": "No account found with this email.",
-                "INVALID_PASSWORD": "Incorrect password.",
-                "USER_DISABLED": "Account disabled.",
-                "INVALID_EMAIL": "Invalid email format.",
-                "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Try later.",
-            }
-            return {"error": msg_map.get(code, code.replace("_", " ").title())}
-
-        uid = data.get("localId")
-        email_addr = data.get("email", "")
-        display_name = data.get("displayName", "")
-        if uid:
-            save_user_profile(uid, email_addr, display_name)
-
-        return {
-            "idToken": data.get("idToken"),
-            "localId": uid,
-            "email": email_addr,
-            "registered": data.get("registered", False),
-            "displayName": display_name,
-        }
-
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Network error: {str(e)}"}
-
-
-def sign_up_with_email_password(email: str, password: str, display_name: str = "") -> dict:
-    """Create a new Firebase Auth user account via REST API."""
-    if not FIREBASE_WEB_API_KEY:
-        return {"error": "Firebase not configured. Contact admin."}
-
-    payload = {
-        "email": email.strip().lower(),
-        "password": password,
-        "returnSecureToken": True
-    }
-    if display_name:
-        payload["displayName"] = display_name
-
-    try:
-        resp = requests.post(FIREBASE_SIGN_UP_URL, json=payload)
-        data = resp.json()
-
-        if "error" in data:
-            code = data["error"].get("message", "")
-            msg_map = {
-                "EMAIL_EXISTS": "An account with this email already exists.",
-                "WEAK_PASSWORD": "Password must be at least 6 characters.",
-                "INVALID_EMAIL": "Invalid email format.",
-                "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Try later.",
-            }
-            return {"error": msg_map.get(code, code.replace("_", " ").title())}
-
-        uid = data.get("localId")
-        email_addr = data.get("email", "")
-        name = data.get("displayName", display_name)
-        if uid:
-            save_user_profile(uid, email_addr, name)
-
-        return {
-            "idToken": data.get("idToken"),
-            "localId": uid,
-            "email": email_addr,
-            "displayName": name,
-        }
-
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Network error: {str(e)}"}
-
-
-def send_password_reset_email(email: str) -> dict:
-    """Send password reset email via Firebase."""
-    if not FIREBASE_WEB_API_KEY:
-        return {"error": "Firebase not configured."}
-
-    payload = {
-        "requestType": "PASSWORD_RESET",
-        "email": email.strip().lower()
-    }
-
-    try:
-        resp = requests.post(FIREBASE_RESET_PASSWORD_URL, json=payload)
-        data = resp.json()
-        if "error" in data:
-            return {"error": data["error"].get("message", "")}
-        return {"success": True, "email": email}
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Network error: {str(e)}"}
 
 
 def verify_id_token(id_token: str) -> dict:
