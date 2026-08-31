@@ -236,7 +236,10 @@ def get_firebase_app():
         except Exception as e:
             print(f"[Firebase] Failed to load serviceAccountKey.json: {e}")
 
-    env_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") or st.secrets.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+    try:
+        env_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") or st.secrets.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+    except Exception:
+        env_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") or ""
     if env_json:
         try:
             cred_dict = json.loads(env_json) if isinstance(env_json, str) else env_json
