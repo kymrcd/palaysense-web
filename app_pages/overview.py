@@ -1342,36 +1342,41 @@ def overview_page():
     section[data-testid="stSidebar"] .stButton > button p { text-align: left !important; width: 100% !important; }
     section[data-testid="stSidebar"] > div:first-child { padding-top: 0.4rem !important; gap: 2px !important; }
     section[data-testid="stSidebar"] hr.ps-side-divider { margin: 0.35rem 0 !important; }
-    /* Mobile: transform sidebar into fixed bottom navigation (like LGU) */
+    /* Mobile: hide desktop sidebar, show green pop-trigger in upper corner */
     @media (max-width: 768px) {
-      section[data-testid="stSidebar"] {
-        position: fixed !important; bottom: 0 !important; top: auto !important; left: 0 !important; right: 0 !important;
-        height: 68px !important; width: 100% !important; min-width: 100% !important;
-        background: #123524 !important; border-top: 1px solid rgba(255,255,255,0.15) !important;
-        z-index: 999 !important; overflow-x: auto !important; overflow-y: hidden !important;
-        padding: 0 !important;
-      }
-      section[data-testid="stSidebar"] > div:first-child {
-        padding: 6px 8px !important; flex-direction: row !important; gap: 6px !important;
-        overflow-x: auto !important; overflow-y: hidden !important; flex-wrap: nowrap !important;
-        align-items: center !important;
-      }
-      .ov-qv-group, hr.ps-side-divider { display: none !important; }
-      section[data-testid="stSidebar"] .stButton { flex: 0 0 auto; }
-      section[data-testid="stSidebar"] .stButton > button {
-        min-width: 64px !important; flex-direction: column !important; gap: 2px !important;
-        font-size: 0.62rem !important; padding: 6px 6px !important; white-space: nowrap !important;
-        background: transparent !important; border: none !important;
-        justify-content: center !important; text-align: center !important;
-      }
-      section[data-testid="stSidebar"] .stButton > button > div { justify-content: center !important; }
-      section[data-testid="stSidebar"] .stButton > button p { font-size: 0.62rem !important; line-height: 1 !important; text-align: center !important; }
-      section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: rgba(255,255,255,0.12) !important; border-radius: 10px !important;
-      }
-      .block-container { padding-bottom: 80px !important; }
-      div[data-testid="stAppViewContainer"] { padding-bottom: 72px; }
+      section[data-testid="stSidebar"] { display: none !important; }
+      .ov-mobile-nav-trigger { display: flex !important; }
     }
+    @media (min-width: 769px) {
+      .ov-mobile-nav-trigger { display: none !important; }
+      .ov-mobile-nav-overlay-wrap { display: none !important; }
+    }
+    .ov-mobile-nav-trigger {
+      display: none; position: fixed !important; top: 10px !important; right: 12px !important;
+      z-index: 1001 !important;
+    }
+    .ov-mobile-nav-trigger .stButton > button {
+      background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%) !important;
+      color: #FFFFFF !important; border: 1px solid rgba(255,255,255,0.25) !important;
+      border-radius: 12px !important; padding: 8px 14px !important;
+      min-height: 42px !important; height: 42px !important;
+      font-weight: 700 !important; font-size: 0.85rem !important;
+      box-shadow: 0 4px 14px rgba(27,94,32,0.35) !important;
+      gap: 6px !important;
+    }
+    .ov-mobile-nav-trigger .stButton > button p { color: #FFFFFF !important; font-weight: 700 !important; }
+    .ov-mobile-nav-trigger .stButton > button:hover {
+      background: linear-gradient(135deg, #145A1E 0%, #256E30 100%) !important;
+      box-shadow: 0 6px 18px rgba(27,94,32,0.45) !important;
+    }
+    .ov-mobile-nav-overlay-wrap {
+      position: fixed !important; top: 60px !important; right: 12px !important; left: 12px !important;
+      z-index: 1000 !important; background: #FFFFFF !important;
+      border: 1px solid #C8E6C9 !important; border-radius: 16px !important;
+      box-shadow: 0 12px 32px rgba(27,94,32,0.18) !important;
+      padding: 12px !important; max-height: 72vh !important; overflow-y: auto !important;
+    }
+    .ov-mobile-nav-overlay-wrap .ov-qv-group { color: #1B5E20 !important; font-weight: 700 !important; }
     </style>
     """, unsafe_allow_html=True)
     # Render grouped buttons — moved up (header removed), active = primary
@@ -1389,6 +1394,30 @@ def overview_page():
           st.session_state["overview_section"] = label
           st.rerun()
     section_choice = st.session_state.get("overview_section", "Buong Dashboard")
+  # --- Mobile: green pop-trigger (upper right, Material icon, highly visible) ---
+  st.session_state.setdefault("ov_mobile_nav_open", False)
+  # Fixed floating button — visible only on mobile via CSS (.ov-mobile-nav-trigger)
+  st.markdown('<div class="ov-mobile-nav-trigger">', unsafe_allow_html=True)
+  _is_open = st.session_state.get("ov_mobile_nav_open", False)
+  _toggle_label = "Isara" if _is_open else "Menu"
+  _toggle_icon = "close" if _is_open else "menu"
+  if st.button(_toggle_label, icon=f":material/{_toggle_icon}:", key="ov_mobile_toggle", type="primary"):
+    st.session_state["ov_mobile_nav_open"] = not _is_open
+    st.rerun()
+  st.markdown('</div>', unsafe_allow_html=True)
+  # Pop overlay — same QUICK_VIEW_GROUPS, green-themed, noticeable card
+  if st.session_state.get("ov_mobile_nav_open", False):
+    st.markdown('<div class="ov-mobile-nav-overlay-wrap">', unsafe_allow_html=True)
+    st.markdown('<div style="display:flex; align-items:center; gap:8px; font-weight:800; color:#1B5E20; margin-bottom:8px;"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">dashboard</i> Navigation</div>', unsafe_allow_html=True)
+    for grp_label, items in QUICK_VIEW_GROUPS:
+      st.markdown(f'<p class="ov-qv-group" style="color:#1B5E20 !important; margin-top:8px !important;">{grp_label}</p>', unsafe_allow_html=True)
+      for label, icon in items:
+        is_active = (st.session_state.get("overview_section") == label)
+        if st.button(label, icon=f":material/{icon}:" if icon else None, use_container_width=True, type="primary" if is_active else "secondary", key=f"ov_mobile_{label}"):
+          st.session_state["overview_section"] = label
+          st.session_state["ov_mobile_nav_open"] = False
+          st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
   show_all = section_choice == "Buong Dashboard"
 
   # ========================================================
