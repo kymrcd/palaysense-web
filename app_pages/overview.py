@@ -1342,11 +1342,35 @@ def overview_page():
     section[data-testid="stSidebar"] .stButton > button p { text-align: left !important; width: 100% !important; }
     section[data-testid="stSidebar"] > div:first-child { padding-top: 0.4rem !important; gap: 2px !important; }
     section[data-testid="stSidebar"] hr.ps-side-divider { margin: 0.35rem 0 !important; }
-    /* Mobile: hide group labels, keep buttons horizontal in bottom bar — centered for bottom nav */
+    /* Mobile: transform sidebar into fixed bottom navigation (like LGU) */
     @media (max-width: 768px) {
-      .ov-qv-group { display: none !important; }
-      section[data-testid="stSidebar"] .stButton > button { justify-content: center !important; text-align: center !important; }
-      section[data-testid="stSidebar"] .stButton > button p { text-align: center !important; }
+      section[data-testid="stSidebar"] {
+        position: fixed !important; bottom: 0 !important; top: auto !important; left: 0 !important; right: 0 !important;
+        height: 68px !important; width: 100% !important; min-width: 100% !important;
+        background: #123524 !important; border-top: 1px solid rgba(255,255,255,0.15) !important;
+        z-index: 999 !important; overflow-x: auto !important; overflow-y: hidden !important;
+        padding: 0 !important;
+      }
+      section[data-testid="stSidebar"] > div:first-child {
+        padding: 6px 8px !important; flex-direction: row !important; gap: 6px !important;
+        overflow-x: auto !important; overflow-y: hidden !important; flex-wrap: nowrap !important;
+        align-items: center !important;
+      }
+      .ov-qv-group, hr.ps-side-divider { display: none !important; }
+      section[data-testid="stSidebar"] .stButton { flex: 0 0 auto; }
+      section[data-testid="stSidebar"] .stButton > button {
+        min-width: 64px !important; flex-direction: column !important; gap: 2px !important;
+        font-size: 0.62rem !important; padding: 6px 6px !important; white-space: nowrap !important;
+        background: transparent !important; border: none !important;
+        justify-content: center !important; text-align: center !important;
+      }
+      section[data-testid="stSidebar"] .stButton > button > div { justify-content: center !important; }
+      section[data-testid="stSidebar"] .stButton > button p { font-size: 0.62rem !important; line-height: 1 !important; text-align: center !important; }
+      section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: rgba(255,255,255,0.12) !important; border-radius: 10px !important;
+      }
+      .block-container { padding-bottom: 80px !important; }
+      div[data-testid="stAppViewContainer"] { padding-bottom: 72px; }
     }
     </style>
     """, unsafe_allow_html=True)
