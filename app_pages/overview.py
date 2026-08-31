@@ -1342,20 +1342,25 @@ def overview_page():
     section[data-testid="stSidebar"] .stButton > button p { text-align: left !important; width: 100% !important; }
     section[data-testid="stSidebar"] > div:first-child { padding-top: 0.4rem !important; gap: 2px !important; }
     section[data-testid="stSidebar"] hr.ps-side-divider { margin: 0.35rem 0 !important; }
-    /* Mobile: hide desktop sidebar, show green pop-trigger in upper corner */
+    /* Phone-only green pop-trigger — hidden on laptop/desktop */
+    .ov-mobile-nav-trigger { display: none !important; }
+    /* The actual Streamlit button is the NEXT sibling after the marker div */
+    .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] {
+      display: none !important; position: fixed !important; top: 10px !important; right: 12px !important;
+      z-index: 1001 !important;
+    }
+    .ov-mobile-nav-overlay-wrap { display: none; }
     @media (max-width: 768px) {
       section[data-testid="stSidebar"] { display: none !important; }
-      .ov-mobile-nav-trigger { display: flex !important; }
+      .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] { display: flex !important; }
+      .ov-mobile-nav-overlay-wrap { display: block; }
     }
     @media (min-width: 769px) {
       .ov-mobile-nav-trigger { display: none !important; }
+      .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] { display: none !important; }
       .ov-mobile-nav-overlay-wrap { display: none !important; }
     }
-    .ov-mobile-nav-trigger {
-      display: none; position: fixed !important; top: 10px !important; right: 12px !important;
-      z-index: 1001 !important;
-    }
-    .ov-mobile-nav-trigger .stButton > button {
+    .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] .stButton > button {
       background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%) !important;
       color: #FFFFFF !important; border: 1px solid rgba(255,255,255,0.25) !important;
       border-radius: 12px !important; padding: 8px 14px !important;
@@ -1364,8 +1369,8 @@ def overview_page():
       box-shadow: 0 4px 14px rgba(27,94,32,0.35) !important;
       gap: 6px !important;
     }
-    .ov-mobile-nav-trigger .stButton > button p { color: #FFFFFF !important; font-weight: 700 !important; }
-    .ov-mobile-nav-trigger .stButton > button:hover {
+    .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] .stButton > button p { color: #FFFFFF !important; font-weight: 700 !important; }
+    .ov-mobile-nav-trigger + div[data-testid="stElementContainer"] .stButton > button:hover {
       background: linear-gradient(135deg, #145A1E 0%, #256E30 100%) !important;
       box-shadow: 0 6px 18px rgba(27,94,32,0.45) !important;
     }
