@@ -8,8 +8,12 @@ from pathlib import Path
 from utils.upload_datasets import (
     save_temp_file,
     validate_template,
+    validate_file_size,
+    validate_row_limit,
     archive_upload,
     append_to_raw_master,
+    create_snapshot,
+    SNAPSHOT_FOLDER,
     MASTER_FOLDER,
     CLEAN_FOLDER,
     TEMP_FOLDER,
@@ -113,6 +117,13 @@ def upload_dataset():
 
     st.markdown("## **Dataset Management**")
     st.caption("Upload the latest datasets to update the forecasting system.")
+    # Option B safety notice — evaluators see limits clearly
+    st.info(
+        "**Safe Upload Mode (Evaluator-Friendly):** "
+        "Max **5 MB** per file, max **2000 rows**, Year **2000-2027**, Month must be **January-December**. "
+        "A snapshot is auto-created before any save — rollback is instant if needed.",
+        icon="🛡️"
+    )
     st.divider()
 
     col1, col2 = st.columns([2, 1])
@@ -170,25 +181,67 @@ def upload_dataset():
 
             for file in uploaded_files:
                 temp_path = save_temp_file(file)
-                df = pd.read_excel(temp_path, engine='openpyxl')
 
+                # --- 1. File size guard (<5 MB) ---
+                try:
+                    validate_file_size(temp_path)
+                    size_mb = os.path.getsize(temp_path) / (1024 * 1024)
+                    st.caption(f"📄 {file.name}: {size_mb:.2f} MB — size OK")
+                except ValueError as e:
+                    st.error(f"❌ {file.name}: {e}")
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+                    return
+
+                # --- 2. Read + row limit guard (<2000 rows) ---
+                try:
+                    df = pd.read_excel(temp_path, engine='openpyxl')
+                except Exception as e:
+                    st.error(f"❌ {file.name}: Cannot read Excel — {e}")
+                    return
+
+                try:
+                    validate_row_limit(df)
+                except ValueError as e:
+                    st.error(f"❌ {file.name}: {e}")
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+                    return
+
+                # --- 3. Strict Year/Month validation (now enforced in validate_template) ---
+                prov_err, muni_err = None, None
                 try:
                     validate_template(df, "Provincial")
                     prov_file_path = temp_path
                     prov_file_name = file.name
+                    st.success(f"✅ {file.name}: Provincial template — validated ({len(df)} rows)")
                     continue
-                except Exception:
-                    pass
+                except Exception as e:
+                    prov_err = str(e)
 
                 try:
                     validate_template(df, "Municipality")
                     muni_file_path = temp_path
                     muni_file_name = file.name
+                    st.success(f"✅ {file.name}: Municipality template — validated ({len(df)} rows)")
                     continue
+                except Exception as e:
+                    muni_err = str(e)
+
+                # Neither template passed — show detailed reason
+                st.error(f"❌ {file.name} is not a valid template.")
+                with st.expander(f"Why {file.name} failed?"):
+                    st.write("**Provincial check:**", prov_err)
+                    st.write("**Municipality check:**", muni_err)
+                    st.write("**Tip:** Year must be 2000-2027, Month = January-December, Province/Municipality not empty, Month_Num must match Month if present.")
+                try:
+                    os.remove(temp_path)
                 except Exception:
                     pass
-
-                st.error(f"{file.name} is not a valid template.")
                 return
 
             prov_file = prov_file_path
@@ -207,10 +260,18 @@ def upload_dataset():
                     st.error(f"Error in process_municipality: {e}")
                     return
 
-            # ---------- SAVE TO RAW MASTER (PRESERVES ALL SHEETS) ----------
+            # ---------- SAVE TO RAW MASTER (auto-snapshot inside append_to_raw_master) ----------
             if prov_file:
                 try:
-                    append_to_raw_master(prov_file, "Provincial")
+                    st.info("🛡️ Creating snapshot of provincial master before append...")
+                    prov_master_snapshot = append_to_raw_master(prov_file, "Provincial")
+                    # append_to_raw_master auto-creates timestamped snapshot; show latest snapshot
+                    try:
+                        snaps = sorted([f for f in os.listdir(SNAPSHOT_FOLDER) if f.startswith("provincial_raw")], reverse=True)
+                        if snaps:
+                            st.caption(f"Snapshot created: `{snaps[0]}` — rollback available in `data/uploads/snapshots/`.")
+                    except Exception:
+                        pass
                     st.success("Provincial data saved to master (all sheets preserved).")
                 except Exception as e:
                     st.error(f"Failed to save provincial to master: {e}")
@@ -218,7 +279,14 @@ def upload_dataset():
 
             if muni_file:
                 try:
-                    append_to_raw_master(muni_file, "Municipality")
+                    st.info("🛡️ Creating snapshot of municipality master before append...")
+                    muni_master_snapshot = append_to_raw_master(muni_file, "Municipality")
+                    try:
+                        snaps = sorted([f for f in os.listdir(SNAPSHOT_FOLDER) if f.startswith("municipality_raw")], reverse=True)
+                        if snaps:
+                            st.caption(f"Snapshot created: `{snaps[0]}` — rollback available in `data/uploads/snapshots/`.")
+                    except Exception:
+                        pass
                     st.success("Municipality data saved to master.")
                 except Exception as e:
                     st.error(f"Failed to save municipality to master: {e}")
