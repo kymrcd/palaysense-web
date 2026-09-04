@@ -2549,15 +2549,19 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
       try:
         tab_yield_forecast, tab_yield_historical = st.tabs([":material/query_stats: Yield Forecast", ":material/show_chart: Historical Yield Trend"])
         with tab_yield_forecast:
+          with st.skeleton(height=350):
+            _fig_yf = _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option=benchmark_option)
           st.plotly_chart(
-            _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option=benchmark_option),
-            use_container_width=True,
+            _fig_yf,
+            width="stretch",
             key=f"overview_yield_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}",
           )
         with tab_yield_historical:
+          with st.skeleton(height=350):
+            _fig_yh = _yield_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option)
           st.plotly_chart(
-            _yield_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option),
-            use_container_width=True,
+            _fig_yh,
+            width="stretch",
             key=f"overview_yield_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}",
           )
       except Exception as e:
@@ -2574,15 +2578,19 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
       try:
         tab_price_forecast, tab_price_historical = st.tabs([":material/query_stats: Price Forecast", ":material/show_chart: Historical Price Trend"])
         with tab_price_forecast:
+          with st.skeleton(height=350):
+            _fig_pf = _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option=benchmark_option)
           st.plotly_chart(
-            _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option=benchmark_option),
-            use_container_width=True,
+            _fig_pf,
+            width="stretch",
             key=f"overview_price_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}",
           )
         with tab_price_historical:
+          with st.skeleton(height=350):
+            _fig_ph = _price_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option)
           st.plotly_chart(
-            _price_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option),
-            use_container_width=True,
+            _fig_ph,
+            width="stretch",
             key=f"overview_price_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}",
           )
       except Exception as e:
@@ -2695,7 +2703,7 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
 
           st.plotly_chart(
             fig_muni,
-            use_container_width=True,
+            width="stretch",
             key=f"municipality_production_fig_{selected_start_year}_{selected_end_year}"
           )
         else:
