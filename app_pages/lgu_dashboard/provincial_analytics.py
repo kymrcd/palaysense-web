@@ -262,6 +262,9 @@ def render(df, dr):
     long-range yield trends have been moved to historical_comparison.py.
     Year and Palay Type filters are placed inline inside each card.
     """
+    if dr is None or not getattr(dr, "has_provincial_data", False):
+        st.info("No provincial data — provincial analytics hidden (0 values). Upload data via Import Data.")
+        return
     theme.page_title("Provincial Analytics",
                      "Provincial price and yield analytics for Bataan.")
 

@@ -42,7 +42,10 @@ def _production_comparison_tab(dr):
     with theme.section_card(title="Municipal Production Comparison",
                             desc="Historical production comparison across municipalities.",
                             icon_name="compare_arrows"):
-        muni = dr.municipality_df
+        # Use production dataset (84 rows, palay_production), fallback to municipality_df if needed
+        muni = getattr(dr, "municipal_production_df", None)
+        if muni is None or getattr(muni, "empty", True) or "palay_production" not in muni.columns:
+            muni = getattr(dr, "municipality_df", None)
         if muni is None or getattr(muni, "empty", True) or "palay_production" not in muni.columns:
             st.info("Municipality production dataset not available.")
             return
@@ -264,6 +267,9 @@ def _municipal_price_trends_tab(dr):
 # Main page
 # ------------------------------------------------------------------
 def render(df, dr):
+    if dr is None or not getattr(dr, "has_provincial_data", False):
+        st.info("No historical data — comparison hidden (0 values). Upload data via Import Data.")
+        return
     theme.page_title("Historical Comparison",
                      "Compare municipalities and historical trends across the selected range.")
 

@@ -154,6 +154,52 @@ def lgu_dashboard():
 
   theme.load_global_css()
 
+  # ---- Global persistent upload-success banner (visible on ANY LGU page, survives Back + Refresh) ----
+  # Evaluators often upload on Import Data then press Back / F5 and check charts.
+  # session_state alone disappears on hard reload in some setups, so we also check
+  # the file data/.last_upload.json + query param ?upload=success.
+  try:
+    from utils.upload_datasets import load_last_upload_meta, clear_last_upload_meta
+    _persisted = load_last_upload_meta()
+    _qp_success = False
+    try:
+        _qp_success = st.query_params.get("upload") == "success"
+    except Exception:
+        pass
+    _has_global_success = bool(st.session_state.get("upload_success") or _persisted or _qp_success)
+    if _has_global_success and st.session_state.get("lgu_page") != "import_data":
+        # Hydrate if needed
+        if _persisted and not st.session_state.get("upload_success"):
+            st.session_state["upload_success"] = True
+            st.session_state["upload_success_time"] = _persisted.get("time", "")
+            st.session_state["upload_refresh_key"] = _persisted.get("refresh_key", 0)
+        _g_ts = st.session_state.get("upload_success_time", "") or (_persisted.get("time", "") if _persisted else "")
+        _g_rk = st.session_state.get("upload_refresh_key", 0) or (_persisted.get("refresh_key", 0) if _persisted else 0)
+        st.success(f"✅ Upload successful — {_g_ts} (refresh_key={_g_rk}) — new data is live on the dashboard!")
+        st.caption("Tip: Data was appended, cleaned, and forecasts regenerated. This banner stays until dismissed — even after Back + Refresh.")
+        gc1, gc2 = st.columns([3, 1])
+        with gc1:
+            if st.button("View Import Data →", key="global_goto_import", use_container_width=True):
+                st.session_state["lgu_page"] = "import_data"
+                st.rerun()
+        with gc2:
+            if st.button("Dismiss ✓", key="dismiss_global_success", use_container_width=True):
+                st.session_state["upload_success"] = False
+                st.session_state.pop("upload_success_time", None)
+                clear_last_upload_meta()
+                try:
+                    if "upload" in st.query_params:
+                        del st.query_params["upload"]
+                except Exception:
+                    pass
+                st.rerun()
+        try:
+            st.toast(f"✅ New data live! {_g_ts}", icon="🎉")
+        except Exception:
+            pass
+  except Exception:
+    pass
+
   # Init active page
   if "lgu_page" not in st.session_state:
     st.session_state["lgu_page"] = "overview"

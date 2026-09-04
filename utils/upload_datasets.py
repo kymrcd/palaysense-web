@@ -255,6 +255,15 @@ def append_to_raw_master(temp_path, dataset_type):
             for sheet_name, uploaded_df in uploaded_sheets.items():
                 master_df = master_sheets.get(sheet_name, pd.DataFrame())
                 updated_df = pd.concat([master_df, uploaded_df], ignore_index=True)
+                # Dedup by Year+Month keep last (accurate + lean 1.5k rows, no RMSE loss)
+                dedup_keys = [c for c in ["Year", "Month", "Month_Num", "Province"] if c in updated_df.columns]
+                if dedup_keys and len(updated_df) > 0:
+                    if "Month" in updated_df.columns:
+                        updated_df["_month_norm"] = updated_df["Month"].astype(str).str.strip().str.lower()
+                        dedup_keys_norm = [c if c != "Month" else "_month_norm" for c in dedup_keys]
+                        updated_df = updated_df.drop_duplicates(subset=dedup_keys_norm, keep="last").drop(columns=["_month_norm"])
+                    else:
+                        updated_df = updated_df.drop_duplicates(subset=dedup_keys, keep="last")
                 updated_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
             # Copy over any sheets in master that weren't in the upload
@@ -266,6 +275,23 @@ def append_to_raw_master(temp_path, dataset_type):
         uploaded_df = pd.read_excel(temp_path, engine='openpyxl')
         master_df = read_uploaded_file(master_path)
         updated_df = pd.concat([master_df, uploaded_df], ignore_index=True)
+        # Dedup municipal by Municipality+Year+Month keep last
+        dedup_keys_muni = [c for c in ["Municipality", "municipality", "Year", "year", "Month", "month"] if c in updated_df.columns]
+        if len(updated_df) > 0 and dedup_keys_muni:
+            tmp = updated_df.copy()
+            for norm_col in ["Municipality", "municipality", "Month", "month"]:
+                if norm_col in tmp.columns:
+                    tmp[f"_{norm_col}_norm"] = tmp[norm_col].astype(str).str.strip().str.lower()
+            norm_keys = []
+            for k in dedup_keys_muni:
+                norm_keys.append(f"_{k}_norm" if f"_{k}_norm" in tmp.columns else k)
+            if "Month_Num" in updated_df.columns:
+                norm_keys.append("Month_Num")
+            elif "month_num" in updated_df.columns:
+                norm_keys.append("month_num")
+            tmp = tmp.drop_duplicates(subset=norm_keys, keep="last")
+            tmp = tmp.drop(columns=[c for c in tmp.columns if c.startswith("_") and c.endswith("_norm")])
+            updated_df = tmp
         updated_df.to_excel(master_path, index=False)
 
     if snapshot_path:

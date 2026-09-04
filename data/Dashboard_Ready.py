@@ -217,6 +217,8 @@ def load_municipal_forecasts() -> pd.DataFrame:
     df = _safe_read_parquet(MUNICIPAL_FORECASTS)
     if not df.empty:
         return df
+    # TODO: DEPRECATION WARNING - Parquet/JSON migration complete. 
+    # Verify production parity on Railway, then completely remove this .pkl fallback branch in the next minor release.
     # Fallback to legacy pickle
     legacy = _safe_load_pickle(LEGACY_MUNICIPAL_FORECASTS_PKL)
     if isinstance(legacy, pd.DataFrame):
@@ -236,6 +238,8 @@ def load_metrics() -> dict:
     metrics = _safe_read_json(METRICS_JSON)
     if metrics:
         return metrics
+    # TODO: DEPRECATION WARNING - Parquet/JSON migration complete. 
+    # Verify production parity on Railway, then completely remove this .pkl fallback branch in the next minor release.
     # Fallback to legacy pickle
     legacy = _safe_load_pickle(LEGACY_METRICS_PKL)
     if isinstance(legacy, dict):

@@ -683,7 +683,9 @@ def _production_quarterly(df, year):
   with theme.section_card(title="Provincial Quarterly Production",
               desc="Production per quarter with high/low insight.",
               icon_name="bar_chart"):
-
+    if df is None or getattr(df, "empty", True) or "date" not in df.columns:
+        st.info("No production data — no chart to display (0 values).")
+        return
     prod = df.copy()
     prod["year"] = pd.to_datetime(prod["date"]).dt.year
     prod["quarter"] = pd.to_datetime(prod["date"]).dt.quarter
@@ -921,6 +923,8 @@ def _insights_narrative(filtered_df, dr, end_year, selected_muni, selected_eco):
 
 def _render_top_filter_bar(df):
   """Render a top horizontal filter toolbar for the overview page."""
+  if df is None or getattr(df, "empty", True) or "year" not in df.columns:
+      return None, None, "ANNUAL", "All Municipalities"
   years = sorted(pd.Series(df["year"].dropna().astype(int).unique()).tolist())
   if not years:
     return None, None, "ANNUAL", "All Municipalities"
@@ -1004,16 +1008,27 @@ def render(df, dr):
   )
   theme.close_header_card()
 
+  # Banner — true empty vs clean state
+  is_true_empty = not getattr(dr, "has_provincial_data", False)
+  has_fc = getattr(dr, "has_forecasts", False)
+  if is_true_empty:
+      st.info("ℹ️ No data — showing 0 values and empty graphs. Upload data via Import Data to populate.")
+  elif not has_fc:
+      st.info("ℹ️ Forecasts are being prepared — historical graphs below are available. Upload data via Import Data to generate forecasts.")
+
   # Always show all sections
   show_all = True
 
-  # Top Filter Toolbar
+  # Top Filter Toolbar — keep graphs/KPIs visible even when empty (show 0 / empty line)
   start_year, end_year, period, selected_muni = _render_top_filter_bar(df)
   if start_year is None:
-    st.info("No year data available.")
-    return
-
-  filtered_df = df[(df["year"] >= start_year) & (df["year"] <= end_year)].copy()
+      st.info("No year data available — showing empty KPIs and graphs (0 values, no line). Upload data to populate.")
+      filtered_df = pd.DataFrame(columns=df.columns) if not df.empty else pd.DataFrame()
+      start_year = end_year = 0
+      period = "ANNUAL"
+      selected_muni = "All Municipalities"
+  else:
+      filtered_df = df[(df["year"] >= start_year) & (df["year"] <= end_year)].copy()
   metrics = dl.get_year_metrics(filtered_df, end_year, dr)
 
   # ---- Dynamic KPI subtexts (period + muni aware, like farmer) ----
@@ -1022,8 +1037,8 @@ def render(df, dr):
     total_display = f"{total_production:,.0f} MT"
     total_sub = _kpi_subtext_total_production(start_year, end_year, period, selected_muni)
   else:
-    total_display = "No Data Available"
-    total_sub = "Historical/current production"
+    total_display = "0 MT"
+    total_sub = "No data — 0 MT"
 
   # Average Yield dynamic subtext (historical mean, period-filtered, delta vs prev year)
   _yield_candidates = ["quarterly_yield_mt_per_ha", "yield", "yield_mt_per_ha", "Yield"]
@@ -1057,7 +1072,7 @@ def render(df, dr):
   if _yield_display_val is not None and not pd.isna(_yield_display_val):
     yield_display = f"{_yield_display_val:.2f} MT/ha"
   else:
-    yield_display = f"{metrics['yield']:.2f} MT/ha" if metrics['yield'] else "No Data Available"
+    yield_display = f"{metrics['yield']:.2f} MT/ha" if metrics['yield'] else "0 MT/ha"
     if _yield_display_val is None:
       # keep dynamic subtext even when falling back to metrics
       pass
@@ -1098,9 +1113,13 @@ def render(df, dr):
     _h_has_prev = False
   else:
     _harv_sub = _kpi_subtext_yield_or_area(start_year=start_year, end_year=end_year, period=period, muni_name=selected_muni, delta=_h_delta, prev_year=_h_prev_year, has_prev=_h_has_prev, unit=" ha", decimals=0)
-  harv_display = f"{_harv_display_val:,.0f} ha" if _harv_display_val is not None and not pd.isna(_harv_display_val) else f"{metrics['harvested']:,.0f} ha" if metrics['harvested'] else "No Data Available"
+  harv_display = f"{_harv_display_val:,.0f} ha" if _harv_display_val is not None and not pd.isna(_harv_display_val) else f"{metrics['harvested']:,.0f} ha" if metrics['harvested'] else "0 ha"
 
   fc_start, fc_end, fc_months = dl.get_forecast_period(dr)
+  # True empty (no forecasts) → force "No data" for Forecast Period, not months from today
+  if not getattr(dr, "has_forecasts", False):
+      fc_start = fc_end = "No data"
+      fc_months = 0
   supply_status, supply_ratio = dl.get_supply_status(dr, end_year)
   supply_display = _supply_status_display(supply_status)
 
@@ -1111,25 +1130,43 @@ def render(df, dr):
   regular_raw = list(dr.forecast_variety_3months) if hasattr(dr, "forecast_variety_3months") and dr.forecast_variety_3months else []
   fancy_s, regular_s = _align_forecast_arrays(fancy_raw, regular_raw)
   _fc_len = len(fancy_s) if len(fancy_s) > 0 else 3
-  if _hist_last is not None and not pd.isna(_hist_last):
-    _fc_start = (_hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp()
+  if not getattr(dr, "has_forecasts", False):
+      forecast_months = pd.DatetimeIndex([])
+      forecast_range_label = "No data"
+      last_avail_month = "No data"
+      next_month_name = "No data"
+      is_awaiting_lgu = False
+      days_stale = 999
   else:
-    _fc_start = _today_m
-  forecast_months = pd.date_range(start=_fc_start, periods=_fc_len, freq="MS")
-  if len(forecast_months) > 0:
-    forecast_range_label = f"{forecast_months[0].strftime('%b %Y')} \u2013 {forecast_months[-1].strftime('%b %Y')}" if len(forecast_months) > 1 else forecast_months[0].strftime("%b %Y")
-    last_avail_month = forecast_months[-1].strftime("%B %Y")
-    if _today_m in forecast_months:
-      next_month_name = _today_m.strftime("%B %Y")
-    else:
-      next_month_name = forecast_months[-1].strftime("%B %Y")
-    is_awaiting_lgu = _today_m > forecast_months[-1]
-    days_stale = (pd.Timestamp.today() - _hist_last).days if _hist_last is not None and not pd.isna(_hist_last) else 999
+      if _hist_last is not None and not pd.isna(_hist_last):
+          _fc_start = (_hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp()
+      else:
+          _fc_start = _today_m
+      forecast_months = pd.date_range(start=_fc_start, periods=_fc_len, freq="MS")
+      if len(forecast_months) > 0:
+          forecast_range_label = f"{forecast_months[0].strftime('%b %Y')} \u2013 {forecast_months[-1].strftime('%b %Y')}" if len(forecast_months) > 1 else forecast_months[0].strftime("%b %Y")
+          last_avail_month = forecast_months[-1].strftime("%B %Y")
+          if _today_m in forecast_months:
+              next_month_name = _today_m.strftime("%B %Y")
+          else:
+              next_month_name = forecast_months[-1].strftime("%B %Y")
+          is_awaiting_lgu = _today_m > forecast_months[-1]
+          days_stale = (pd.Timestamp.today() - _hist_last).days if _hist_last is not None and not pd.isna(_hist_last) else 999
+      else:
+          forecast_range_label = f"{fc_start} \u2013 {fc_end}"; last_avail_month = fc_end; next_month_name = fc_end; is_awaiting_lgu = False; days_stale = 999
+  # Map values to months for exact loc lookup — empty-safe (no ValueError when no forecasts)
+  if len(forecast_months) == len(fancy_s) and not fancy_s.empty:
+      fancy_indexed = pd.Series(fancy_s.values, index=forecast_months)
+  elif fancy_raw:
+      fancy_indexed = pd.Series(fancy_raw, index=forecast_months[:len(fancy_raw)])
   else:
-    forecast_range_label = f"{fc_start} \u2013 {fc_end}"; last_avail_month = fc_end; next_month_name = fc_end; is_awaiting_lgu = False; days_stale = 999
-  # Map values to months for exact loc lookup
-  fancy_indexed = pd.Series(fancy_s.values, index=forecast_months) if len(forecast_months) == len(fancy_s) else pd.Series(fancy_raw, index=forecast_months[:len(fancy_raw)] if fancy_raw else forecast_months)
-  regular_indexed = pd.Series(regular_s.values, index=forecast_months) if len(forecast_months) == len(regular_s) else pd.Series(regular_raw, index=forecast_months[:len(regular_raw)] if regular_raw else forecast_months)
+      fancy_indexed = pd.Series(dtype=float)
+  if len(forecast_months) == len(regular_s) and not regular_s.empty:
+      regular_indexed = pd.Series(regular_s.values, index=forecast_months)
+  elif regular_raw:
+      regular_indexed = pd.Series(regular_raw, index=forecast_months[:len(regular_raw)])
+  else:
+      regular_indexed = pd.Series(dtype=float)
   def _forecast_value_for_month(indexed, fallback_list):
     if not indexed.empty and _today_m in indexed.index:
       v = indexed.loc[_today_m]
@@ -1221,8 +1258,8 @@ def render(df, dr):
       ),
       theme.kpi_card(
         "Forecast Period",
-        f"{forecast_months[0].strftime('%b %Y')} – {forecast_months[-1].strftime('%b %Y')}" if len(forecast_months)>0 else f"{fc_start} – {fc_end}",
-        _fc_sub,
+        "No data" if not getattr(dr, "has_forecasts", False) else (f"{forecast_months[0].strftime('%b %Y')} – {forecast_months[-1].strftime('%b %Y')}" if len(forecast_months)>0 else f"{fc_start} – {fc_end}"),
+        _fc_sub if getattr(dr, "has_forecasts", False) else "No data — awaiting upload",
         icon_name="calendar_month", icon_bg=_fc_icon_bg, icon_color=_fc_icon_color, accent=_fc_accent,
         compact=True,
       ),

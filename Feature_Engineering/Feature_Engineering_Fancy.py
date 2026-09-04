@@ -6,6 +6,7 @@ def feature_engineering_fancy(provincial_df):
     # =========================================================
 
     df = provincial_df.copy()
+    df.columns = [str(c).strip().lower() for c in df.columns]
 
     # =========================================================
     # TIME FEATURES

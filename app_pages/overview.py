@@ -1110,6 +1110,57 @@ def overview_page():
   if _ov_elapsed < 0.75:
       _ov_time.sleep(0.75 - _ov_elapsed)
   _ov_loader.empty()
+  # Empty-state guard — Farmer view (Tagalog): tiered so graphs stay visible in clean state
+  if not dr.has_provincial_data:
+      # True empty (no cleaned data at all) → full Welcome card + stop
+      st.markdown("""
+          <style>
+          .farmer-empty-card {
+              background-color: #FFFFFF;
+              border: 1px solid #E0E0E0;
+              border-radius: 12px;
+              padding: 40px 32px;
+              min-height: 420px;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              text-align: center;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+              margin: 24px auto;
+              max-width: 640px;
+          }
+          .farmer-empty-badge {
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              background: #E8F5E9;
+              color: #2E7D32;
+              border: 1px solid #C8E6C9;
+              padding: 6px 14px;
+              border-radius: 999px;
+              font-size: 0.82rem;
+              font-weight: 600;
+              margin-top: 16px;
+          }
+          </style>
+          <div class="farmer-empty-card">
+              <h1 style="margin:0; color:#123524; font-size:1.9rem; font-weight:800;">Welcome sa PalaySense Bataan!</h1>
+              <p style="margin:16px 0 0 0; color:#4B5563; font-size:1rem; line-height:1.7; max-width:520px;">
+                  Wala pa pong nakalagay na impormasyon dito. Pakihintay na lamang po habang inihahanda ang mga ulat at presyo ng palay.
+              </p>
+              <div class="farmer-empty-badge">ℹ️ Status: Handa na ang system. Naghihintay na lamang ng bagong impormasyon mula sa LGU.</div>
+          </div>
+      """, unsafe_allow_html=True)
+      _, btn_col, _ = st.columns([1, 1.2, 1])
+      with btn_col:
+          if st.button("🔘 Bumalik sa Home", key="farmer_empty_to_home", type="primary", use_container_width=True):
+              st.query_params["page"] = "home"
+              st.rerun()
+      st.stop()
+  # Clean state (historical exists but forecasts not yet) → banner only, graphs stay visible
+  if dr.has_provincial_data and not dr.has_forecasts:
+      st.info("ℹ️ Forecasts are being prepared — historical graphs below are available. The LGU is generating price and yield forecasts.")
   provincial_df = dr.provincial_df.copy()
   _prod_muni = getattr(dr, "municipal_production_df", None)
   municipality_df = (
@@ -1130,13 +1181,23 @@ def overview_page():
   # DATA PROCESSING & TEMPORAL MAPPING
   # ========================================================
   provincial_df = provincial_df.copy()
-  provincial_df["date"] = pd.to_datetime(provincial_df["date"], errors="coerce")
-  provincial_df = provincial_df.dropna(subset=["date"]).copy()
-  provincial_sorted = provincial_df.sort_values("date").copy()
+  if "date" not in provincial_df.columns or provincial_df.empty:
+      provincial_df = pd.DataFrame(columns=["date", "year", "quarter"])
+  else:
+      provincial_df["date"] = pd.to_datetime(provincial_df["date"], errors="coerce")
+      provincial_df = provincial_df.dropna(subset=["date"]).copy()
+  if provincial_df.empty:
+      provincial_sorted = pd.DataFrame(columns=["date", "year", "quarter"])
+  else:
+      provincial_sorted = provincial_df.sort_values("date").copy()
 
   df = provincial_sorted.copy()
-  df["year"] = df["date"].dt.year
-  df["quarter"] = df["date"].dt.quarter
+  if "date" in df.columns and not df.empty:
+      df["year"] = df["date"].dt.year
+      df["quarter"] = df["date"].dt.quarter
+  else:
+      df["year"] = pd.Series(dtype="int64")
+      df["quarter"] = pd.Series(dtype="int64")
 
   latest_year = df["year"].max()
   provincial_latest = df[df["year"] == latest_year].copy().sort_values("date")
@@ -1527,9 +1588,19 @@ def overview_page():
   # Baseline: strictly next quarter after last hist — not forced to today
   _yield_forecast_start_q = _hist_last_q
 
-  # Index-based lookup: map values to actual months, then .loc[_today_month]
-  fancy_indexed = pd.Series(fc_fancy_s.values, index=forecast_months) if len(forecast_months) == len(fc_fancy_s) else pd.Series(list(forecast_3months_fancy), index=forecast_months[:len(forecast_3months_fancy)] if len(forecast_3months_fancy) else forecast_months)
-  regular_indexed = pd.Series(fc_regular_s.values, index=forecast_months) if len(forecast_months) == len(fc_regular_s) else pd.Series(list(forecast_variety_3months), index=forecast_months[:len(forecast_variety_3months)] if len(forecast_variety_3months) else forecast_months)
+  # Index-based lookup: map values to actual months, then .loc[_today_month] — empty-safe
+  if len(forecast_months) == len(fc_fancy_s) and not fc_fancy_s.empty:
+      fancy_indexed = pd.Series(fc_fancy_s.values, index=forecast_months)
+  elif len(forecast_3months_fancy):
+      fancy_indexed = pd.Series(list(forecast_3months_fancy), index=forecast_months[:len(forecast_3months_fancy)])
+  else:
+      fancy_indexed = pd.Series(dtype=float)
+  if len(forecast_months) == len(fc_regular_s) and not fc_regular_s.empty:
+      regular_indexed = pd.Series(fc_regular_s.values, index=forecast_months)
+  elif len(forecast_variety_3months):
+      regular_indexed = pd.Series(list(forecast_variety_3months), index=forecast_months[:len(forecast_variety_3months)])
+  else:
+      regular_indexed = pd.Series(dtype=float)
 
   # Terminal Debugging: log Month vs Value mapping and selected .loc value
   print("[DEBUG] Fancy Forecast Series (Month -> Value):")
@@ -1601,20 +1672,23 @@ def overview_page():
   })
   yield_chart_df = pd.concat([historical_yield[["Quarter", "Yield", "Type"]], forecast_yield])
 
-  # FORECAST DATAFRAMES (SHARED)
-  # Use the already-aligned series (months 4-6 of Regular are NaN),
-  # so pd.DataFrame never receives mismatched lengths.
-  forecast_df_fancy = pd.DataFrame({
-    "date": forecast_months,
-    "fancy_palay_price": fc_fancy_s.values,
-    "Type": "Forecast"
-  })
-
-  forecast_df_regular = pd.DataFrame({
-    "date": forecast_months,
-    "other_variety_price": fc_regular_s.values,
-    "Type": "Forecast"
-  })
+  # FORECAST DATAFRAMES (SHARED) — empty-safe
+  if not getattr(dr, "has_forecasts", False) or fc_fancy_s.empty or len(forecast_months) != len(fc_fancy_s):
+      forecast_df_fancy = pd.DataFrame(columns=["date", "fancy_palay_price", "Type"])
+  else:
+      forecast_df_fancy = pd.DataFrame({
+        "date": forecast_months,
+        "fancy_palay_price": fc_fancy_s.values,
+        "Type": "Forecast"
+      })
+  if not getattr(dr, "has_forecasts", False) or fc_regular_s.empty or len(forecast_months) != len(fc_regular_s):
+      forecast_df_regular = pd.DataFrame(columns=["date", "other_variety_price", "Type"])
+  else:
+      forecast_df_regular = pd.DataFrame({
+        "date": forecast_months,
+        "other_variety_price": fc_regular_s.values,
+        "Type": "Forecast"
+      })
 
   # ========================================================
   # PRICE DATA (Historical + Forecast)

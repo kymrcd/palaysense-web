@@ -95,9 +95,31 @@ def run_eda_municipality(file_path2):
         if "year" in df.columns:
             df["year"] = pd.to_numeric(df["year"], errors="coerce")
 
+    # Ensure a 'date' column exists — robust to uploads missing it
+    if "date" not in perMunicipality_df.columns:
+        if "year" in perMunicipality_df.columns and "month_num" in perMunicipality_df.columns:
+            perMunicipality_df["date"] = pd.to_datetime(
+                perMunicipality_df["year"].astype(str) + "-" + perMunicipality_df["month_num"].astype(str) + "-01",
+                errors="coerce"
+            )
+        elif "year" in perMunicipality_df.columns and "month" in perMunicipality_df.columns:
+            perMunicipality_df["date"] = pd.to_datetime(
+                perMunicipality_df["year"].astype(str) + "-" + perMunicipality_df["month"].astype(str) + "-01",
+                errors="coerce"
+            )
+        elif "year" in perMunicipality_df.columns:
+            perMunicipality_df["date"] = pd.to_datetime(
+                perMunicipality_df["year"].astype(str) + "-12-01",
+                errors="coerce"
+            )
+        if "date" in perMunicipality_df.columns:
+            print("[EDA_Municipality] Created 'date' column from fallback (year/month)")
+
     # sort data chronologically for correct time-series ordering
     if "month_num" in perMunicipality_df.columns:
         perMunicipality_df = perMunicipality_df.sort_values(["year", "month_num"])
+    elif "date" in perMunicipality_df.columns:
+        perMunicipality_df = perMunicipality_df.sort_values("date")
 
     # -----------------------------
     # DATA OVERVIEW

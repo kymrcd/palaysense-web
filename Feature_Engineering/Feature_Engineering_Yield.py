@@ -4,6 +4,8 @@ def feature_engineering_yield(provincial_df):
 
     # create a copy so the original dataset is not modified
     df = provincial_df.copy()
+    # Normalize columns to lowercase to handle both raw Master (Year) and cleaned (year)
+    df.columns = [str(c).strip().lower() for c in df.columns]
 
     # sort the data in correct time order using year and quarter
     df = df.sort_values(by=["year", "quarter"]).reset_index(drop=True)

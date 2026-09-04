@@ -126,9 +126,19 @@ def run_eda(file_path):
     for df in [provincial_df, supply_df, municipality_df]:
         if "year" in df.columns:
             df["year"] = pd.to_numeric(df["year"], errors="coerce")
+        if "Year" in df.columns:
+            df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
+
+    # Normalize Year/year and month_num for correct chronological ordering (handle both cases)
+    for df in [provincial_df, supply_df, municipality_df]:
+        for col in list(df.columns):
+            if str(col).lower() == "year" and col != "year":
+                df.rename(columns={col: "year"}, inplace=True)
+            if str(col).lower() == "month_num" and col != "month_num":
+                df.rename(columns={col: "month_num"}, inplace=True)
 
     # sort data chronologically for correct time-series ordering
-    if "month_num" in provincial_df.columns:
+    if "month_num" in provincial_df.columns and "year" in provincial_df.columns:
         provincial_df = provincial_df.sort_values(["year", "month_num"])
 
     # -----------------------------

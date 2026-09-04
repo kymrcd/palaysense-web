@@ -664,6 +664,9 @@ def _municipal_yield_tab(dr):
 
 def render(df, dr):
   """Main Municipal Analytics page with tabbed sub-views."""
+  if dr is None or not getattr(dr, "has_provincial_data", False):
+      st.info("No municipal data — municipal analytics hidden (0 values). Provincial data required. Upload via Import Data.")
+      return
   theme.page_title("Municipal Analytics",
            "Municipality-level price and yield analytics.")
 

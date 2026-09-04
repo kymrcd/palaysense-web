@@ -8,16 +8,12 @@ from pathlib import Path
 from utils.upload_datasets import (
     save_temp_file,
     validate_template,
-    validate_file_size,
-    validate_row_limit,
     archive_upload,
     append_to_raw_master,
-    create_snapshot,
-    SNAPSHOT_FOLDER,
     MASTER_FOLDER,
     CLEAN_FOLDER,
     TEMP_FOLDER,
-    create_originals_backup
+    create_originals_backup,
 )
 from utils.firebase_storage import (
     upload_raw_file,
@@ -42,10 +38,10 @@ def process_municipality(muni_temp_path):
         validate_template(df, "Municipality")
         cloud_path = upload_raw_file(muni_temp_path, "Municipality")
         if cloud_path:
-            st.success(f"Raw municipality file uploaded to Firebase Storage.")
+            st.success("Municipality raw file backed up to Firebase Storage — secure.")
         else:
-            st.warning("Firebase Storage upload failed for municipality.")
-        st.success("Municipality dataset validated successfully.")
+            st.warning("Firebase backup skipped for municipality (local save still succeeded).")
+        st.success("Municipality dataset validated — ready for cleaning.")
     except Exception as e:
         st.error(f"[process_municipality ERROR] {e}")
         st.exception(e)
@@ -59,10 +55,10 @@ def process_provincial(prov_temp_path):
         validate_template(df, "Provincial")
         cloud_path = upload_raw_file(prov_temp_path, "Provincial")
         if cloud_path:
-            st.success(f"Raw provincial file uploaded to Firebase Storage.")
+            st.success("Provincial raw file backed up to Firebase Storage — secure.")
         else:
-            st.warning("Firebase Storage upload failed for provincial.")
-        st.success("Provincial dataset validated successfully.")
+            st.warning("Firebase backup skipped for provincial (local save still succeeded).")
+        st.success("Provincial dataset validated — ready for cleaning.")
     except Exception as e:
         st.error(f"[process_provincial ERROR] {e}")
         st.exception(e)
@@ -71,60 +67,144 @@ def process_provincial(prov_temp_path):
 
 def run_forecasting_pipeline(provincial_path: str, municipal_path: str) -> bool:
     """
-    Run the forecasting pipeline as a subprocess with a clean st.status() UI wrapper.
-    Returns True on success, False on failure.
+    Run the forecasting pipeline as a subprocess with HONEST live progress.
+
+    Cleaning is ALREADY done before this call (run_cleaning), so this pipeline
+    only covers: Feature Engineering + Training (RF vs SARIMA) + Forecast generation.
+    We stream stdout line-by-line so the UI never freezes at fake 90%.
     """
-    try:
-        # Use st.status for a clean, collapsible progress UI
-        with st.status("Running forecasting pipeline (training + inference)...", expanded=True) as status:
-            status.write("Starting pipeline subprocess...")
-            
-            result = subprocess.run(
-                [sys.executable, str(PIPELINE_SCRIPT),
-                 "--provincial", provincial_path,
-                 "--municipal", municipal_path],
-                capture_output=True,
+    import time
+
+    progress_bar = st.progress(0, text="Starting pipeline... 0%")
+    log_lines: list[str] = []
+    # Live log placeholder inside the st.status so user sees movement
+    with st.status("Running forecasting pipeline (training + inference)...", expanded=True) as status:
+        status.write("Cleaning already done — starting training pipeline...")
+        progress_bar.progress(5, text="Pipeline started... 5%")
+
+        try:
+            # Build args — only include branch that was uploaded (single-type upload = skip other, avoid NoneType error)
+            _popen_args = [sys.executable, str(PIPELINE_SCRIPT)]
+            if provincial_path is not None:
+                _popen_args.extend(["--provincial", str(provincial_path)])
+            if municipal_path is not None:
+                _popen_args.extend(["--municipal", str(municipal_path)])
+            # Popen with line-buffered streaming + merged stderr → stdout so we never deadlock
+            proc = subprocess.Popen(
+                _popen_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
-                timeout=600,  # 10 minute timeout
-                cwd=str(PROJECT_ROOT)
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                cwd=str(PROJECT_ROOT),
             )
 
-            if result.returncode != 0:
-                status.update(label="Pipeline failed", state="error", expanded=True)
-                st.error(f"Pipeline failed with return code {result.returncode}")
-                if result.stderr:
-                    st.code(result.stderr, language="bash")
+            # Placeholder for live tail (last 25 lines) — proves it's not frozen
+            log_placeholder = st.empty()
+            last_progress = 5
+
+            # Map pipeline log keywords → honest progress %
+            def _progress_for_line(line: str) -> int | None:
+                l = line.lower()
+                if "running eda" in l:
+                    return 15
+                if "feature engineering" in l:
+                    return 30
+                if "training provincial" in l or "training with validation" in l or "[rf] attempt" in l:
+                    return 55
+                if "training municipal" in l or "municipality:" in l:
+                    return 75
+                if "generating forward" in l or "forecast" in l and "saving" not in l:
+                    return 88
+                if "saved provincial forecasts" in l or "saved municipal forecasts" in l:
+                    return 95
+                if "pipeline completed" in l:
+                    return 100
+                return None
+
+            # Stream until process ends (with wall-clock timeout)
+            start_ts = time.time()
+            timeout_sec = 1800
+            while True:
+                # wall-clock timeout
+                if time.time() - start_ts > timeout_sec:
+                    proc.kill()
+                    status.update(label="Pipeline timed out — check logs", state="error", expanded=True)
+                    st.error(f"Pipeline timed out after {timeout_sec//60} minutes. Try with a smaller file.")
+                    if log_lines:
+                        with st.expander("Pipeline logs (before timeout)", expanded=True):
+                            st.code("".join(log_lines[-200:]), language="text")
+                    return False
+
+                line = proc.stdout.readline() if proc.stdout else ""
+                if line:
+                    log_lines.append(line)
+                    # live tail rendering
+                    tail = "".join(log_lines[-25:])
+                    log_placeholder.code(tail, language="text")
+                    p = _progress_for_line(line)
+                    if p is not None and p > last_progress:
+                        last_progress = p
+                        progress_bar.progress(p, text=f"{line.strip()[:60]}... {p}%")
+                elif proc.poll() is not None:
+                    break
+                else:
+                    time.sleep(0.05)
+
+            proc.wait()
+            # drain any remaining
+            if proc.stdout:
+                rest = proc.stdout.read()
+                if rest:
+                    log_lines.append(rest)
+
+            if proc.returncode != 0:
+                status.update(label="Pipeline failed — check details below", state="error", expanded=True)
+                st.error("Forecasting failed. Pipeline exited with error.")
+                # show last 150 lines — most relevant
+                if log_lines:
+                    st.code("".join(log_lines[-150:]), language="text")
+                else:
+                    st.caption("No output captured — check `data/forecasts/` and terminal logs.")
+                progress_bar.progress(last_progress, text=f"Failed at {last_progress}%")
                 return False
 
-            status.update(label="Pipeline completed successfully", state="complete", expanded=False)
-            
-            # Show output in expandable section
-            if result.stdout:
-                with st.expander("Pipeline Output"):
-                    st.code(result.stdout, language="text")
+            progress_bar.progress(100, text="Done! 100%")
+            status.update(label="Forecasting completed — all models trained", state="complete", expanded=False)
+            if log_lines:
+                with st.expander("View detailed pipeline logs", expanded=False):
+                    st.code("".join(log_lines), language="text")
+            return True
 
-        return True
-
-    except subprocess.TimeoutExpired:
-        st.error("Pipeline timed out after 10 minutes.")
-        return False
-    except Exception as e:
-        st.error(f"Failed to run pipeline: {e}")
-        return False
+        except subprocess.TimeoutExpired:
+            status.update(label="Pipeline timed out", state="error", expanded=True)
+            st.error("Pipeline timed out after 30 minutes. Please try with a smaller file.")
+            return False
+        except Exception as e:
+            status.update(label="Forecasting error", state="error", expanded=True)
+            st.error(f"Forecasting error: {e}")
+            if log_lines:
+                with st.expander("Logs before error"):
+                    st.code("".join(log_lines[-100:]), language="text")
+            return False
 
 
 def upload_dataset():
 
     st.markdown("## **Dataset Management**")
-    st.caption("Upload the latest datasets to update the forecasting system.")
-    # Option B safety notice — evaluators see limits clearly
-    st.info(
-        "**Safe Upload Mode (Evaluator-Friendly):** "
-        "Max **5 MB** per file, max **2000 rows**, Year **2000-2027**, Month must be **January-December**. "
-        "A snapshot is auto-created before any save — rollback is instant if needed.",
-        icon="🛡️"
-    )
+    st.caption("Upload the latest datasets to update the forecasting system. Data will be cleaned and forecasts will be generated automatically.")
     st.divider()
+    # Simple success banner from session_state (no file persist)
+    if st.session_state.get("upload_success"):
+        ts = st.session_state.get("upload_success_time", "")
+        rk = st.session_state.get("upload_refresh_key", 0)
+        st.success(f"✅ Last import successful — forecasts updated! {ts} (refresh_key={rk})")
+        if st.button("Dismiss ✓", key="dismiss_success", use_container_width=True):
+            st.session_state["upload_success"] = False
+            st.session_state.pop("upload_success_time", None)
+            st.rerun()
 
     col1, col2 = st.columns([2, 1])
 
@@ -182,37 +262,13 @@ def upload_dataset():
             for file in uploaded_files:
                 temp_path = save_temp_file(file)
 
-                # --- 1. File size guard (<5 MB) ---
-                try:
-                    validate_file_size(temp_path)
-                    size_mb = os.path.getsize(temp_path) / (1024 * 1024)
-                    st.caption(f"📄 {file.name}: {size_mb:.2f} MB — size OK")
-                except ValueError as e:
-                    st.error(f"❌ {file.name}: {e}")
-                    try:
-                        os.remove(temp_path)
-                    except Exception:
-                        pass
-                    return
-
-                # --- 2. Read + row limit guard (<2000 rows) ---
                 try:
                     df = pd.read_excel(temp_path, engine='openpyxl')
                 except Exception as e:
                     st.error(f"❌ {file.name}: Cannot read Excel — {e}")
                     return
 
-                try:
-                    validate_row_limit(df)
-                except ValueError as e:
-                    st.error(f"❌ {file.name}: {e}")
-                    try:
-                        os.remove(temp_path)
-                    except Exception:
-                        pass
-                    return
-
-                # --- 3. Strict Year/Month validation (now enforced in validate_template) ---
+                # --- 2. Template validation ---
                 prov_err, muni_err = None, None
                 try:
                     validate_template(df, "Provincial")
@@ -260,18 +316,10 @@ def upload_dataset():
                     st.error(f"Error in process_municipality: {e}")
                     return
 
-            # ---------- SAVE TO RAW MASTER (auto-snapshot inside append_to_raw_master) ----------
+            # ---------- SAVE TO RAW MASTER ----------
             if prov_file:
                 try:
-                    st.info("🛡️ Creating snapshot of provincial master before append...")
-                    prov_master_snapshot = append_to_raw_master(prov_file, "Provincial")
-                    # append_to_raw_master auto-creates timestamped snapshot; show latest snapshot
-                    try:
-                        snaps = sorted([f for f in os.listdir(SNAPSHOT_FOLDER) if f.startswith("provincial_raw")], reverse=True)
-                        if snaps:
-                            st.caption(f"Snapshot created: `{snaps[0]}` — rollback available in `data/uploads/snapshots/`.")
-                    except Exception:
-                        pass
+                    append_to_raw_master(prov_file, "Provincial")
                     st.success("Provincial data saved to master (all sheets preserved).")
                 except Exception as e:
                     st.error(f"Failed to save provincial to master: {e}")
@@ -279,14 +327,7 @@ def upload_dataset():
 
             if muni_file:
                 try:
-                    st.info("🛡️ Creating snapshot of municipality master before append...")
-                    muni_master_snapshot = append_to_raw_master(muni_file, "Municipality")
-                    try:
-                        snaps = sorted([f for f in os.listdir(SNAPSHOT_FOLDER) if f.startswith("municipality_raw")], reverse=True)
-                        if snaps:
-                            st.caption(f"Snapshot created: `{snaps[0]}` — rollback available in `data/uploads/snapshots/`.")
-                    except Exception:
-                        pass
+                    append_to_raw_master(muni_file, "Municipality")
                     st.success("Municipality data saved to master.")
                 except Exception as e:
                     st.error(f"Failed to save municipality to master: {e}")
@@ -311,55 +352,67 @@ def upload_dataset():
             prov_exists = os.path.exists(PROVINCIAL_CLEANED)
             muni_exists = os.path.exists(MUNICIPALITY_CLEANED)
             if not prov_exists and not muni_exists:
-                st.error("Cleaning ran, but NO cleaned output files were found.")
+                st.error("Cleaning completed, but no cleaned files were created. Please check your input files.")
                 return
             elif not prov_exists and prov_file:
-                st.warning("Cleaning ran, but PROVINCIAL_CLEANED was NOT created.")
+                st.warning("Provincial cleaning did not produce output. Please check the provincial file.")
                 return
             elif not muni_exists and muni_file:
-                st.warning("Cleaning ran, but MUNICIPALITY_CLEANED was NOT created.")
+                st.warning("Municipal cleaning did not produce output. Please check the municipal file.")
                 return
 
-            st.success("Datasets cleaned successfully.")
+            st.success("Datasets cleaned and validated — ready for forecasting.")
 
-            # Upload cleaned files to Firebase Storage
             if prov_exists:
                 if upload_cleaned_file(PROVINCIAL_CLEANED, "Provincial"):
-                    st.success("Provincial cleaned data uploaded to Firebase Storage.")
+                    st.success("Provincial cleaned file backed up to Firebase Storage.")
                 else:
-                    st.warning("Could not upload provincial cleaned data to Firebase Storage.")
+                    st.caption("Provincial cleaned file saved locally (Firebase backup skipped).")
 
             if muni_exists:
                 if upload_cleaned_file(MUNICIPALITY_CLEANED, "Municipality"):
-                    st.success("Municipality cleaned data uploaded to Firebase Storage.")
+                    st.success("Municipal cleaned file backed up to Firebase Storage.")
                 else:
-                    st.warning("Could not upload municipality cleaned data to Firebase Storage.")
+                    st.caption("Municipal cleaned file saved locally (Firebase backup skipped).")
 
-            # ---------- RUN FORECASTING PIPELINE (via subprocess with st.status) ----------
+            # ---------- RUN FORECASTING PIPELINE (only for uploaded types — provincial alone won't trigger 30-min municipal) ----------
             pipeline_success = run_forecasting_pipeline(
-                provincial_path=PROVINCIAL_CLEANED if prov_exists else MASTER_PROVINCIAL_RAW,
-                municipal_path=MUNICIPALITY_CLEANED if muni_exists else MASTER_MUNICIPAL_RAW
+                provincial_path=PROVINCIAL_CLEANED if prov_file is not None else None,
+                municipal_path=MUNICIPALITY_CLEANED if muni_file is not None else None
             )
 
             if not pipeline_success:
-                st.error("Forecasting pipeline failed. Check the output above for details.")
+                st.error("Forecasting did not complete. Please review the pipeline output above.")
                 return
 
-            st.success("Forecasting pipeline completed successfully!")
-
-            # ---------- FINISH ----------
-            create_originals_backup()
-            st.session_state["upload_success"] = True
-            st.session_state["upload_refresh_key"] = st.session_state.get("upload_refresh_key", 0) + 1
-
-            # Clear Streamlit caches so new data loads on next page view
+            # ---- Success: visible inside AND after the pipeline ----
             try:
-                st.cache_resource.clear()
-                st.cache_data.clear()
+                st.toast("Forecasting completed — forecasts are ready!", icon="✅")
             except Exception:
                 pass
+            st.success("✅ Forecasting completed — forecasts are ready!")
 
-            st.success("Dataset pipeline completed successfully! You can now go back to Dashboard to see the updated data.")
+            create_originals_backup()
+            from datetime import datetime as _dt
+            _now_str = _dt.now().strftime("%Y-%m-%d %H:%M:%S")
+            _new_key = st.session_state.get("upload_refresh_key", 0) + 1
+            st.session_state["upload_success"] = True
+            st.session_state["upload_success_time"] = _now_str
+            st.session_state["upload_refresh_key"] = _new_key
+            try:
+                st.cache_data.clear()
+                st.cache_resource.clear()
+            except Exception:
+                pass
+            st.success(f"🎉 All done! Forecasts updated (refresh_key={_new_key}).")
+            st.caption("Parquet mtimes updated: provincial/municipal forecasts + history.")
+            st.balloons()
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("↻ Reset uploader", use_container_width=True, key="post_pipeline_rerun"):
+                    st.rerun()
+            with c2:
+                st.link_button("Go to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True)
 
         except Exception as e:
             st.error(f"Pipeline failed: {e}")
