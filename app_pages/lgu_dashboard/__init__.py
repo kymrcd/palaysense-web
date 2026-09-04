@@ -205,36 +205,15 @@ def lgu_dashboard():
     st.session_state["lgu_page"] = "overview"
   active_page = st.session_state["lgu_page"]
 
-  # Handle logout — show PalaySense loading screen (assets/logo.png) before redirect
-  # Blocking loader guarantees visibility (same pattern as login), then redirect to home
-  # Home will then show its own "Loading PalaySense..." loader via app.py page_change detection
+  # Handle logout — instant redirect (no blocking loader)
   if active_page == "logout":
-    try:
-      from components.loading_screen import show_logout_loading
-      show_logout_loading(duration_sec=1.0)
-    except Exception:
-      import time as _t
-      _t.sleep(0.85)
     st.session_state.logout_success = True
     st.query_params["page"] = "home"
     st.rerun()
 
-  # Load data — PalaySense loader covers this fetch (replaces tiny spinner)
-  import time as _lgu_time
-  from components.loading_screen import get_global_loading_html, _get_logo_base64, LGU_PAGE_LOADING_MESSAGES
-  _lgu_msg = LGU_PAGE_LOADING_MESSAGES.get(active_page, ("Loading LGU Dashboard...", "Syncing latest records — please wait"))
-  _lgu_loader = st.empty()
-  _lgu_loader.markdown(
-      get_global_loading_html(message=_lgu_msg[0], submessage=_lgu_msg[1], logo_base64=_get_logo_base64(), duration_ms=3000),
-      unsafe_allow_html=True,
-  )
-  _lgu_t0 = _lgu_time.time()
+  # Load data — instant (no full-screen overlay, no artificial delay)
   dr = dl.load_dashboard()
   df = dl.get_provincial_df(dr)
-  _lgu_elapsed = _lgu_time.time() - _lgu_t0
-  if _lgu_elapsed < 0.65:
-      _lgu_time.sleep(0.65 - _lgu_elapsed)
-  _lgu_loader.empty()
 
   # Sidebar
   _render_sidebar(active_page)

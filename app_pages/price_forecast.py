@@ -113,25 +113,7 @@ CONFIG = {
 
 
 def PriceForecast():
-  # PalaySense full-screen loader (assets/logo.png) covering data fetch
-  import time as _pf_time
-  from components.loading_screen import get_global_loading_html, _get_logo_base64
-  _pf_loader = st.empty()
-  _pf_loader.markdown(
-      get_global_loading_html(
-          message="Loading Price Forecast...",
-          submessage="Analyzing palay price trends — please wait",
-          logo_base64=_get_logo_base64(),
-          duration_ms=3000,
-      ),
-      unsafe_allow_html=True,
-  )
-  _pf_t0 = _pf_time.time()
   dashboard_ready = reload_dashboard_data()
-  _pf_elapsed = _pf_time.time() - _pf_t0
-  if _pf_elapsed < 0.75:
-      _pf_time.sleep(0.75 - _pf_elapsed)
-  _pf_loader.empty()
 
   provincial_df = dashboard_ready.provincial_df
   municipality_history_df = dashboard_ready.municipality_history_df

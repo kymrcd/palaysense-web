@@ -1086,30 +1086,8 @@ def overview_page():
   Renders an accessible, farmer-centric agricultural dashboard for Bataan.
   Supports multi-year selections, 'All' municipality views, and Ecosystem toggle filters.
   """
-  # --- PalaySense full-screen loader (assets/logo.png) covering data fetch ---
-  # Uses blocking placeholder so navigation + data load are both covered; spinner from
-  # Dashboard_Ready is now disabled (show_spinner=False) to avoid duplicate tiny spinner.
-  import time as _ov_time
-  from components.loading_screen import get_global_loading_html, _get_logo_base64
-  _ov_loader = st.empty()
-  _ov_loader.markdown(
-      get_global_loading_html(
-          message="Loading Overview...",
-          submessage="Fetching provincial & municipal data — please wait",
-          logo_base64=_get_logo_base64(),
-          duration_ms=3000,
-      ),
-      unsafe_allow_html=True,
-  )
-  _ov_t0 = _ov_time.time()
-  # Fetch ALL datasets inside the page via the single data-layer entry point.
-  # No module-level globals are read here.
+  # Fetch ALL datasets — instant (no full-screen overlay, no artificial delay)
   dr = reload_dashboard_data()
-  # Ensure loader visible at least 0.75s for perceived feedback
-  _ov_elapsed = _ov_time.time() - _ov_t0
-  if _ov_elapsed < 0.75:
-      _ov_time.sleep(0.75 - _ov_elapsed)
-  _ov_loader.empty()
   # Empty-state guard — Farmer view (Tagalog): tiered so graphs stay visible in clean state
   if not dr.has_provincial_data:
       # True empty (no cleaned data at all) → full Welcome card + stop
