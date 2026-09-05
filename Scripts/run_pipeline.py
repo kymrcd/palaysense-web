@@ -400,7 +400,14 @@ def run_pipeline(
       # (last 3 months of test predictions). We also generate true forward forecasts.
       print("[Pipeline] Generating forward municipal forecasts...")
       municipal_forward_forecasts = []
-      municipalities = perMunicipality_df["municipality"].dropna().unique()
+      # Robust extraction: case-insensitive, normalized, dropna().unique().tolist()
+      _muni_col = next((c for c in perMunicipality_df.columns if str(c).strip().lower() == "municipality"), None)
+      if _muni_col is not None:
+          municipalities = perMunicipality_df[_muni_col].astype(str).str.strip().str.lower().replace({"nan": None, "none": None, "": None}).dropna().unique()
+          # Keep lowercase for internal loop, display will title later
+      else:
+          municipalities = np.array([])
+          print("[WARNING] Municipality column not found! (Walang column na 'municipality') - check case consistency.")
   target_columns = [
     "hybridpremium_dry", "hybridpremium_wet",
     "hybridordinary_dry", "hybridordinary_wet",
@@ -551,21 +558,60 @@ def run_pipeline(
     json.dump(metrics, f, indent=2)
   print("[Pipeline] Saved metrics.json")
 
-  # Metadata
+  # Metadata - robust, case-insensitive extraction; preserve old if provincial-only
+  # Load existing metadata to preserve municipality info when skipping municipal
+  _existing_meta = {}
+  _meta_path = output_dir / "forecast_metadata.json"
+  if _meta_path.exists():
+      try:
+          with open(_meta_path, "r") as f:
+              _existing_meta = json.load(f)
+      except Exception:
+          _existing_meta = {}
+
+  if municipal_path is not None:
+      muni_col_meta = next((c for c in perMunicipality_df.columns if str(c).strip().lower() == "municipality"), None)
+      if muni_col_meta is not None and not perMunicipality_df.empty:
+          municipalities_list = (
+              perMunicipality_df[muni_col_meta]
+              .astype(str).str.strip()
+              .replace({"nan": None, "None": None, "": None, " ": None})
+              .dropna()
+          )
+          municipalities_list = municipalities_list.str.lower().str.strip().unique().tolist()
+          municipalities_list = sorted([m.strip().title() for m in municipalities_list if str(m).strip()])
+      else:
+          municipalities_list = sorted(municipalities.tolist() if hasattr(municipalities, "tolist") else list(municipalities)) if 'municipalities' in locals() and len(municipalities) > 0 else []
+      municipal_rows_val = int(len(perMunicipality_df))
+      municipal_last_val = _get_last_date(perMunicipality_df).isoformat()
+  else:
+      # Provincial-only: keep existing municipality info (don't overwrite with 0)
+      municipalities_list = _existing_meta.get("municipalities", [])
+      municipal_rows_val = int(_existing_meta.get("municipal_rows", 0))
+      municipal_last_val = _existing_meta.get("municipal_last_date", _get_last_date(perMunicipality_df).isoformat())
+      print(f"[Pipeline] Provincial-only: preserving municipalities {municipalities_list} and municipal_rows {municipal_rows_val}")
+
+  # Safety check: warn if 0 (Tagalog/English) only if municipal was requested
+  if len(municipalities_list) == 0 and municipal_path is not None:
+      msg = "[WARNING] No municipalities found! (Walang nahanap na munisipyo) — forecast_metadata will have empty list. Check column 'Municipality' vs 'municipality' and ensure perMunicipality_df not empty."
+      print(msg)
+      import warnings
+      warnings.warn(msg)
+
   metadata = {
     "generated_at": datetime.utcnow().isoformat() + "Z",
     "provincial_last_date": last_prov_date.isoformat(),
-    "municipal_last_date": _get_last_date(perMunicipality_df).isoformat(),
+    "municipal_last_date": municipal_last_val,
     "forecast_horizon_months": FORECAST_HORIZON_MONTHS,
     "forecast_horizon_quarters": FORECAST_HORIZON_QUARTERS,
     "municipal_forecast_months": MUNICIPAL_FORECAST_MONTHS,
     "provincial_rows": int(len(provincial_df)),
-    "municipal_rows": int(len(perMunicipality_df)),
-    "municipalities": sorted(municipalities.tolist() if hasattr(municipalities, "tolist") else list(municipalities)),
+    "municipal_rows": municipal_rows_val,
+    "municipalities": municipalities_list,
   }
   with open(output_dir / "forecast_metadata.json", "w") as f:
     json.dump(metadata, f, indent=2)
-  print("[Pipeline] Saved forecast_metadata.json")
+  print(f"[Pipeline] Saved forecast_metadata.json with {len(municipalities_list)} municipalities: {municipalities_list}")
 
   # ------------------------------------------------------------------
   # 7. Save Municipal Models (for future inference without retraining)

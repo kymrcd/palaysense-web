@@ -19,6 +19,12 @@ def feature_engineering_variety(provincial_df):
         # Convert month to cosine form for season pattern
         df["month_cos"] = np.cos(2 * np.pi * df["month_num"] / 12)
 
+    # Extra harvest flag (occasional 3rd harvest: July-Sept, only if actual harvest)
+    if "month_num" in df.columns and "harvested_total" in df.columns:
+        df["is_extra_harvest"] = ((df["harvested_total"] > 0) & (df["month_num"].isin([7, 8, 9]))).astype(int)
+    elif "month_num" in df.columns:
+        df["is_extra_harvest"] = df["month_num"].isin([7, 8, 9]).astype(int)
+
     # Keep quarter column if it exists
     if "quarter" in df.columns:
         df["quarter"] = df["quarter"]

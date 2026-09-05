@@ -1,25 +1,27 @@
 import numpy as np
+import pandas as pd
 
 def feature_engineering_municipal(perMunicipality_df):
-    # Make a copy of the data so the original dataset is not modified
+    # Make a copy so original is not modified
     df = perMunicipality_df.copy()
+    # Normalize columns: lowercase + stripped -> fixes "Municipality" vs "municipality"
+    df.columns = [str(c).strip().lower() for c in df.columns]
+
+    # Strict sort first -> correct time order per municipality
+    sort_cols = [c for c in ["municipality", "year", "month_num", "date"] if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(sort_cols).reset_index(drop=True)
 
     # -----------------------------
     # TIME FEATURES
     # -----------------------------
     if "date" in df.columns:
-
-        # Month number (1-12)
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df["month_num"] = df["date"].dt.month
-
-        # Continuous time index
         df["year_index"] = np.arange(len(df))
-
-        # Cyclical month encoding
         df["month_sin"] = np.sin(2 * np.pi * df["month_num"] / 12)
         df["month_cos"] = np.cos(2 * np.pi * df["month_num"] / 12)
 
-    # Keep quarter if available
     if "quarter" in df.columns:
         df["quarter"] = df["quarter"]
 
@@ -38,42 +40,53 @@ def feature_engineering_municipal(perMunicipality_df):
     ]
 
     # -----------------------------
-    # FEATURE ENGINEERING
+    # FEATURE ENGINEERING - per municipality, no leakage
     # -----------------------------
     for col in price_columns:
-
         if col not in df.columns:
             continue
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        # Previous values
-        for lag in [1, 2, 3]:
-            df[f"{col}_lag{lag}"] = df[col].shift(lag)
+        if "municipality" in df.columns:
+            g = df.groupby("municipality")[col]
+            # Lags per town
+            df[f"{col}_lag1"] = g.shift(1)
+            df[f"{col}_lag2"] = g.shift(2)
+            df[f"{col}_lag12"] = g.shift(12)
+            # Rolling means with shift(1) -> strictly prevent target leakage
+            df[f"{col}_rolling_mean_3"] = g.shift(1).rolling(3).mean().reset_index(level=0, drop=True)
+            df[f"{col}_rolling_mean_6"] = g.shift(1).rolling(6).mean().reset_index(level=0, drop=True)
+            # Keep old names for backward compatibility
+            df[f"{col}_roll3"] = df[f"{col}_rolling_mean_3"]
+            df[f"{col}_roll6"] = df[f"{col}_rolling_mean_6"]
+            # Also create lag3 for compatibility if needed
+            df[f"{col}_lag3"] = g.shift(3)
+        else:
+            df[f"{col}_lag1"] = df[col].shift(1)
+            df[f"{col}_lag2"] = df[col].shift(2)
+            df[f"{col}_lag12"] = df[col].shift(12)
+            df[f"{col}_rolling_mean_3"] = df[col].shift(1).rolling(3).mean()
+            df[f"{col}_rolling_mean_6"] = df[col].shift(1).rolling(6).mean()
+            df[f"{col}_roll3"] = df[f"{col}_rolling_mean_3"]
+            df[f"{col}_roll6"] = df[f"{col}_rolling_mean_6"]
+            df[f"{col}_lag3"] = df[col].shift(3)
 
-        # Previous year's value
-        df[f"{col}_lag12"] = df[col].shift(12)
+    # Handle NaNs per group with bfill().ffill() - not drop all
+    lag_roll_cols = [c for c in df.columns if any(x in c for x in ["lag", "rolling", "roll"])]
+    for col in lag_roll_cols:
+        if "municipality" in df.columns:
+            df[col] = df.groupby("municipality")[col].transform(lambda s: s.bfill().ffill())
+        else:
+            df[col] = df[col].bfill().ffill()
 
-        # Rolling averages
-        df[f"{col}_roll3"] = df[col].rolling(window=3).mean()
-        df[f"{col}_roll6"] = df[col].rolling(window=6).mean()
-        df[f"{col}_roll12"] = df[col].rolling(window=12).mean()
+    # Drop only rows where all price originals are NaN (keep max data)
+    valid_price_cols = [c for c in price_columns if c in df.columns]
+    if valid_price_cols:
+        df = df.dropna(subset=valid_price_cols, how="all").reset_index(drop=True)
+    # Fill any remaining NaNs
+    df = df.fillna(0)
 
-        # Rolling variability
-        df[f"{col}_std3"] = df[col].rolling(window=3).std()
-
-        # Month-to-month price change
-        df[f"{col}_change"] = df[col].diff()
-
-    # -----------------------------
-    # REMOVE ROWS WITH NaN
-    # -----------------------------
-    # Lag and rolling features create missing values
-    df = df.dropna().reset_index(drop=True)
-
-    # -----------------------------
-    # PREPARE FEATURES
-    # -----------------------------
-    # Remove only the date column.
-    # Target variables will be separated during model training.
+    # Prepare features - drop only date
     df_features = df.drop(columns=["date"], errors="ignore")
 
     return df, df_features

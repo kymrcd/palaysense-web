@@ -28,6 +28,13 @@ def feature_engineering_fancy(provincial_df):
             2 * np.pi * df["month_num"] / 12
         )
 
+    # Extra harvest flag (occasional 3rd harvest in Bataan irrigated areas: July-Sept)
+    # Honest flag: 1 only if actual harvest exists in that month, 0 otherwise
+    if "month_num" in df.columns and "harvested_total" in df.columns:
+        df["is_extra_harvest"] = ((df["harvested_total"] > 0) & (df["month_num"].isin([7, 8, 9]))).astype(int)
+    elif "month_num" in df.columns:
+        df["is_extra_harvest"] = df["month_num"].isin([7, 8, 9]).astype(int)
+
     # Quarter
     if "quarter" in df.columns:
         df["quarter"] = df["quarter"]
