@@ -44,6 +44,16 @@ data/forecasts_ext/
 # ---------- Office lock / temp files ----------
 ~$*.xlsx
 *.tmp
+*.bak
+*.bak_*
+
+# ---------- Pipeline temp / backups (accuracy) ----------
+temp_log/
+temp_run_pipeline.py
+data/Master/backup_*/
+data/forecasts/*.bak
+data/Master/*.bak
+data/Master/*.bak_*
 
 # ---------- OS ----------
 Thumbs.db
