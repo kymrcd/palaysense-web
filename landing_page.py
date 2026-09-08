@@ -405,11 +405,11 @@ def landing_page():
             <div class="stats-label">Tons / Hectare</div>
         </div>
         <div class="stats-card">
-            <div class="stats-number">₱42</div>
+            <div class="stats-number">₱22.44</div>
             <div class="stats-label">Avg Palay Price / Kg</div>
         </div>
         <div class="stats-card">
-            <div class="stats-number">92%</div>
+            <div class="stats-number">86%</div>
             <div class="stats-label">Forecast Confidence</div>
         </div>
     </div>
@@ -459,7 +459,7 @@ def landing_page():
                 <div class="team-card">
                     <div class="team-avatar">KM</div>
                     <div class="member-name">Kyla Mercado</div>
-                    <div class="member-role">UI/UX Designer</div>
+                    <div class="member-role">Web Developer</div>
                 </div>
                 <div class="team-card">
                     <div class="team-avatar">JS</div>
