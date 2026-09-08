@@ -206,6 +206,25 @@ def validate_template(df, dataset_type):
                 f"e.g. Month='January' must have Month_Num=1."
             )
 
+    # Step 2: auto-reject harvested outliers (>500 ha) - agronomist threshold (handles new template units e.g. Harvested_Total (ha))
+    for col in df.columns:
+        norm = str(col).strip().lower().replace(" ", "_")
+        # strip units like (mt), (ha), (php/kg) for matching
+        import re as _re
+        norm = _re.sub(r"[^\w]", "", norm)
+        for suf in ["_mt_per_ha", "_mtha", "_phpkg", "_mt", "_ha"]:
+            if norm.endswith(suf):
+                norm = norm[: -len(suf)]
+                break
+        if norm in ["harvested_total", "harvested_annual", "harvested_irrigated", "harvested_rainfed", "harvested", "harvested_area"]:
+            vals = pd.to_numeric(df[col], errors="coerce")
+            if (vals > 500).any():
+                bad = vals[vals > 500].dropna().head(3).tolist()
+                raise ValueError(
+                    f"Column '{col}' has outlier >500 ha (e.g. {bad[:2]}). "
+                    f"Normal is 5-120 ha. Check unit/decimal (9111 -> 91.11?). Upload rejected."
+                )
+
     return True
 
 

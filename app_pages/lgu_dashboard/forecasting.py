@@ -132,10 +132,10 @@ def _render_table_filters(dr):
 
 
 def _render_summary_kpis(df_dry, df_wet, selected_class):
-    """Top section: Summary KPI cards in a neat horizontal row."""
-    with theme.section_card(title="Forecast Summary",
-                            desc=f"Average predicted prices by season for {selected_class}.",
-                            icon_name="query_stats"):
+    """Top section: Forecasted values (separate from historical KPIs)."""
+    with theme.section_card(title="Forecasted Values — System-Generated",
+                            desc=f"Average predicted prices by season for {selected_class}. Separate from historical KPIs.",
+                            icon_name="auto_awesome"):
         dry_avg = _season_avg(df_dry)      # Dry Season (Peak)
         wet_avg = _season_avg(df_wet)      # Wet Season (Off-Peak)
         price_diff = dry_avg - wet_avg     # Estimated difference
@@ -324,11 +324,11 @@ def render(df, dr):
     theme.page_title("Forecasting",
                      "Peak and Off-Peak forecast data for palay across Bataan municipalities.")
 
-    # Stable default benchmark for top-level KPIs/chart (unaffected by table filters).
+    # Stable default benchmark for forecast visuals (unaffected by table filters).
     benchmark_class = "Hybrid Premium"
     _, df_dry, df_wet, month_labels = _prepare_forecast_df(dr, [], benchmark_class)
 
-    # Top section: summary KPI cards
+    # Top section: forecasted values (system-generated, separate from historical KPIs)
     _render_summary_kpis(df_dry, df_wet, benchmark_class)
 
     # Middle section: price & yield forecast visual chart + yield summary card

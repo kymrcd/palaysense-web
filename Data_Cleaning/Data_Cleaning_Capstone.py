@@ -59,6 +59,17 @@ def run_cleaning(file_path,
         for col in columns:  # Loop through each column name
             col = str(col).strip().lower().replace(" ", "_")  # Lowercase, remove spaces, replace space with underscore
             col = re.sub(r"[^\w]", "", col)  # Remove special characters
+            # Normalize unit suffixes from templates (e.g., harvested_total_ha -> harvested_total)
+            # Templates now show units like (MT), (ha), (PHP/kg), (MT/ha) for clarity
+            for suf in ["_mt_per_ha", "_mtha", "_phpkg", "_mt", "_ha"]:
+                if col.endswith(suf):
+                    col = col[: -len(suf)]
+                    break
+            # Canonical renames for quarterly_yield variants
+            if col in ["quarterly_yield", "quarterly_yield_mt", "quarterlyyield"]:
+                col = "quarterly_yield_mt_per_ha"
+            if col == "ave_production":
+                col = "ave_production"  # keep, handled via numeric_cols2
             cleaned_columns.append(col)  # Add cleaned name to list
 
         return cleaned_columns  # Return cleaned column names
@@ -126,6 +137,9 @@ def run_cleaning(file_path,
                 # Remove negative values ONLY for selected columns
                 if col in non_negative_cols:
                     df_cleaned[col] = df_cleaned[col].clip(lower=0)
+                # Step 2: auto cap harvested outliers (>500 ha = placeholder, agronomist threshold)
+                if col in ["harvested_irrigated", "harvested_rainfed", "harvested_total", "harvested_annual"]:
+                    df_cleaned[col] = df_cleaned[col].where(df_cleaned[col] <= 500)
 
         # -----------------------------
         # 3. HANDLE MISSING VALUES

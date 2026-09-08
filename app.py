@@ -21,7 +21,7 @@ if isinstance(_raw_page, list):
     query_page = _raw_page[0] if _raw_page else "home"
 else:
     query_page = str(_raw_page).strip() if _raw_page else "home"
-if query_page not in ("home", "overview", "price_forecast", "yield_forecast", "login", "lgu_dashboard"):
+if query_page not in ("home", "overview", "login", "lgu_dashboard"):
     query_page = "home"
 
 # Show top navigation ONLY for public/farmer pages
@@ -78,14 +78,6 @@ if query_page == "home":
 elif query_page == "overview":
     from app_pages.overview import overview_page
     overview_page()
-
-elif query_page == "price_forecast":
-    from app_pages.price_forecast import PriceForecast as price_forecast
-    price_forecast()
-
-elif query_page == "yield_forecast":
-    from app_pages.yield_forecast import YieldForecast1 as yield_forecast
-    yield_forecast()
 
 elif query_page == "login":
     from app_pages.login import login_page

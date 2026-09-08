@@ -144,13 +144,12 @@ def _add_benchmark_ref_line(fig, y_value, label, line_color="#78909C",
 def _benchmark_yield_config(benchmark_option, historical_avg):
   """Return (y_value, label, color) for yield benchmark or None.
 
-  Supported options (Tagalog refactor + legacy):
-  - "Presyo sa Merkado" / "3-Year/Quarter Rolling Market Average" / "10-Year Historical Average" -> 10-year dynamic mean of quarterly_yield_mt_per_ha
-  - "Target ng Gobyerno" / "NFA / DA Policy Baseline" / "DA Target (4.50 MT/ha)" -> DA Target 4.50
+  Supported options (English primary + Tagalog legacy):
+  - "Market Price" / "Presyo sa Merkado" / "3-Year/Quarter Rolling Market Average" -> 10-year dynamic mean
+  - "Government Target" / "Target ng Gobyerno" / "NFA / DA Policy Baseline" -> DA Target 4.50
   """
   opt = str(benchmark_option).strip() if benchmark_option is not None else ""
-  # Yield: rolling option still uses 10-year mean (per spec: Yield compute dynamic 10-year mean)
-  if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+  if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
     if historical_avg is None or pd.isna(historical_avg):
       return None
     try:
@@ -160,20 +159,15 @@ def _benchmark_yield_config(benchmark_option, historical_avg):
     if pd.isna(v):
       return None
     return (v, f"Bataan 10-Yr Avg Yield ({v:.2f} MT/ha)", "#616161")
-  if opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline", "DA Target (4.50 MT/ha)", "DA Target", "DA Target Yield (4.50 MT/ha)", "DA Target Yield"):
+  if opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline", "DA Target (4.50 MT/ha)", "DA Target", "DA Target Yield (4.50 MT/ha)", "DA Target Yield"):
     return (4.50, "DA Target Yield (4.50 MT/ha)", "#2E7D32")
   return None
 
 
 def _benchmark_price_config(benchmark_option, historical_avg):
-  """Return (y_value, label, color) for price benchmark or None — legacy single-line helper.
-
-  For "Presyo sa Merkado" / "3-Year/Quarter Rolling Market Average" this helper is NOT used for price;
-  the multi-line rolling logic is handled directly in _apply_benchmarks_to_fig.
-  Kept for backwards-compat with single-line callers.
-  """
+  """Return (y_value, label, color) for price benchmark or None — legacy single-line helper."""
   opt = str(benchmark_option).strip() if benchmark_option is not None else ""
-  if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+  if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
     if historical_avg is None or pd.isna(historical_avg):
       return None
     try:
@@ -183,26 +177,20 @@ def _benchmark_price_config(benchmark_option, historical_avg):
     if pd.isna(v):
       return None
     return (v, f"Bataan 10-Yr Avg Regular Price (\u20B1{v:.2f}/kg)", "#616161")
-  if opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline", "NFA Floor Price (₱19.00/kg)", "NFA Floor Price", "NFA Procurement Floor Price (₱19.00/kg)", "NFA Procurement Floor Price"):
+  if opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline", "NFA Floor Price (₱19.00/kg)", "NFA Floor Price", "NFA Procurement Floor Price (₱19.00/kg)", "NFA Procurement Floor Price"):
     return (19.00, "NFA Procurement Floor Price (\u20B119.00/kg)", "#EF4444")
   return None
 
 
 def _normalize_benchmarks(benchmark_option):
-  """Normalize benchmark_option (str or list/set) to a set of strings.
-
-  Supports Tagalog refactor:
-  - "Presyo sa Merkado" / "Target ng Gobyerno" / "Wala"
-  - legacy: "3-Year/Quarter Rolling Market Average" / "NFA / DA Policy Baseline" / "Itago (None)" / "10-Year Historical Average"
-  - list/set for multi-select (kept for compat)
-  Returns empty set for "Wala" / "Itago (None)".
-  """
+  """Normalize benchmark_option to a set of strings (English primary + Tagalog legacy)."""
+  _none_vals = ("None", "Hide (None)", "Itago (None)", "Wala")
   if benchmark_option is None:
     return set()
   if isinstance(benchmark_option, (list, set, tuple)):
-    return {str(o).strip() for o in benchmark_option if str(o).strip() and str(o).strip() not in ("Itago (None)", "Wala")}
+    return {str(o).strip() for o in benchmark_option if str(o).strip() and str(o).strip() not in _none_vals}
   s = str(benchmark_option).strip()
-  if not s or s in ("Itago (None)", "Wala"):
+  if not s or s in _none_vals:
     return set()
   return {s}
 
@@ -230,7 +218,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
     try:
       # --- Yield ---
       if chart_type == "yield":
-        if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+        if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
           _col = "quarterly_yield_mt_per_ha"
           _col = _col if src_df is not None and _col in src_df.columns else _pick_column(src_df, ["quarterly_yield_mt_per_ha", "yield", "yield_mt_per_ha"])
           hist_avg = None
@@ -243,7 +231,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
             y_val, label, color = cfg
             pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
             fig = _add_benchmark_ref_line(fig, y_val, label, line_color=color, annotation_position=pos)
-        elif opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
+        elif opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline"):
           cfg = _benchmark_yield_config(opt, None)
           if cfg is not None:
             y_val, label, color = cfg
@@ -259,7 +247,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
 
       # --- Price ---
       if chart_type == "price":
-        if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+        if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
           # Inflation-aware: tail(12) rolling for both varieties
           rolling_regular_avg = None
           rolling_fancy_avg = None
@@ -293,8 +281,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
               pass
           if rolling_regular_avg is None and rolling_fancy_avg is None:
             pass
-        elif opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
-          # Regular NFA floor 19.00 (#EF4444 spec example) + Fancy commercial target 23.75 (19*1.25)
+        elif opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline"):
           fig = _add_benchmark_ref_line(fig, 19.00, "NFA Floor Price (\u20B119.00/kg)", line_color="#EF4444", annotation_position="bottom left")
           fig = _add_benchmark_ref_line(fig, 23.75, "Fancy Commercial Target (\u20B123.75/kg)", line_color="#F59E0B", annotation_position="top left")
         elif opt in ("NFA Floor Price (₱19.00/kg)", "NFA Floor Price", "NFA Procurement Floor Price (₱19.00/kg)"):
@@ -1138,7 +1125,7 @@ def overview_page():
       st.stop()
   # Clean state (historical exists but forecasts not yet) → banner only, graphs stay visible
   if dr.has_provincial_data and not dr.has_forecasts:
-      st.info("ℹ️ Forecasts are being prepared — historical graphs below are available. The LGU is generating price and yield forecasts.")
+      st.info("ℹ️ Inihahanda pa ang hula sa presyo at ani — makikita pa rin ang dati mong datos. Sandali lang po habang ginagawa ng LGU ang bagong hula.")
   provincial_df = dr.provincial_df.copy()
   _prod_muni = getattr(dr, "municipal_production_df", None)
   municipality_df = (
@@ -2492,7 +2479,6 @@ def overview_page():
           options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"],
           key="benchmark_toggle",
         )
-        # segmented_control returns None when no selection; default to "Wala"
         if benchmark_option is None:
           benchmark_option = "Wala"
       except Exception:
@@ -2502,12 +2488,11 @@ def overview_page():
           horizontal=True,
           key="benchmark_toggle",
         )
-      # Backwards-compat: map legacy English options if session holds old value
-      if benchmark_option in ("3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+      if benchmark_option in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
         benchmark_option = "Presyo sa Merkado"
-      elif benchmark_option in ("NFA / DA Policy Baseline",):
+      elif benchmark_option in ("Government Target", "Government Target (NFA/DA)", "NFA / DA Policy Baseline"):
         benchmark_option = "Target ng Gobyerno"
-      elif benchmark_option in ("Itago (None)",):
+      elif benchmark_option in ("None", "Hide (None)", "Itago (None)"):
         benchmark_option = "Wala"
     with hdr_col2:
       with st.popover(":material/info: Gabay sa Benchmark"):
@@ -2516,25 +2501,24 @@ def overview_page():
 
 Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta at ani mo.
 
-* **:material/shopping_cart: Presyo sa Merkado (3-Yr Average):**
-  Ito ang karaniwang presyo ng palay sa Bataan sa nakalipas na 3 taon. Ginagamit ito para maiwasan ang epekto ng nagbabagong presyo ng bilihin (inflation).
+* **:material/shopping_cart: Presyo sa Merkado (3-Taong Average):**
+  Karaniwang presyo ng palay sa Bataan sa huling 3 taon. Para hindi ka malito pag tumaas ang bilihin.
 
 * **:material/account_balance: Target ng Gobyerno (NFA / DA):**
-  * **Regular Palay:** **\u20B119.00/kg** *(minimum na bilhihan ng NFA)*. Kapag mas mababa dito ang alok sa bukid, lugi ka sa biyahero.
-  * **Fancy Palay:** **\u20B123.75/kg** *(target na presyo para sa Dinorado/Jasmine)*.
-  * **Ani (Yield):** **4.50 MT/ha** *(target na ani ng Department of Agriculture bawat ektarya)*.
+  * **Regular na Palay:** **\u20B119.00/kg** *(pinakamababang presyo na binibili ng NFA)*. Pag mas mababa dito ang alok, lugi ka.
+  * **Fancy na Palay:** **\u20B123.75/kg** *(target na presyo para sa Dinorado/Jasmine)*.
+  * **Ani:** **4.50 MT/ha** *(target na ani bawat ektarya)*.
 
 * **:material/block: Wala:**
-  Inaalis ang mga guhit para linya lang ng forecast o nakaraang taon ang makita mo.
+  Walang guhit — makikita mo lang ang tunay na linya ng hula o nakaraang taon.
 """)
   else:
     benchmark_option = st.session_state.get("benchmark_toggle", "Wala")
-    # normalize legacy values
-    if benchmark_option in ("3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+    if benchmark_option in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
       benchmark_option = "Presyo sa Merkado"
-    elif benchmark_option == "NFA / DA Policy Baseline":
+    elif benchmark_option in ("Government Target", "Government Target (NFA/DA)", "NFA / DA Policy Baseline"):
       benchmark_option = "Target ng Gobyerno"
-    elif benchmark_option == "Itago (None)":
+    elif benchmark_option in ("None", "Hide (None)", "Itago (None)"):
       benchmark_option = "Wala"
 
   # Plots Row 1

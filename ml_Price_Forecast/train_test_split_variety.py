@@ -19,6 +19,9 @@ warnings.filterwarnings("ignore")
 
 # Define which columns to use as input features for the model
 def train_variety_price(df, rmse_threshold=2.0, max_attempts=3):
+    if "year" in df.columns:
+        df = df[df["year"] >= 2015].copy().reset_index(drop=True)
+        print(f"[Filter] Training on 2015+ only (real data): {len(df)} samples (2009-2014 kept for lag)")
     print("\nStart of Train and Testing (REGULAR)")
 
     # =========================================================

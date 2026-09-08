@@ -60,9 +60,9 @@ def top_navigation():
     # NAVBAR LAYOUT
     # =====================================================
     # Column structure:
-    # [Left Margin | Logo | Home | Price | Yield | About | LGU]
-    col_space, col_logo, col1, col2, col3, col4, col5 = st.columns(
-        [0.5, 2, 1, 1, 1, 2, 1]
+    # [Left Margin | Logo | Home | Overview | About | LGU]
+    col_space, col_logo, col1, col2, col3, col5 = st.columns(
+        [0.5, 2, 1, 1, 2, 1]
     )
 
     # =====================================================

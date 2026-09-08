@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import numpy as np
 import math
 
@@ -96,10 +97,10 @@ def _footer_banner(next_month_name, risk_text, risk_color="#1B5E20"):
 from data.Dashboard_Ready import reload_dashboard_data
 
 # =========================
-# CONFIG (centralized rules)
+# CONFIG (centralized rules) - horizon must match pipeline 6 months (was 3, caused ValueError)
 # =========================
 CONFIG = {
-  "forecast_horizon": 3,
+  "forecast_horizon": 6,
   "risk_threshold": 3,
   "colors": {
     "up": "#4CAF50",
@@ -151,33 +152,46 @@ def PriceForecast():
 
   next_month_name = forecast_months[0].strftime("%B %Y")
 
-  # FORECAST DATAFRAMES (SHARED)
+  # FORECAST DATAFRAMES (SHARED) - with RMSE prediction interval (Phase 1)
+  # Honest interval: forecast ± RMSE (≈68% CI), ±1.96*RMSE for 95% - we show ±RMSE with 95% in caption
+  fancy_upper = [x + rmse_fancy if pd.notna(x) else np.nan for x in forecast_3months_fancy]
+  fancy_lower = [x - rmse_fancy if pd.notna(x) else np.nan for x in forecast_3months_fancy]
+  regular_upper = [x + rmse_regular if pd.notna(x) else np.nan for x in forecast_variety_3months]
+  regular_lower = [x - rmse_regular if pd.notna(x) else np.nan for x in forecast_variety_3months]
+
   forecast_df_fancy = pd.DataFrame({
     "date": forecast_months,
     "fancy_palay_price": forecast_3months_fancy,
+    "fancy_upper": fancy_upper,
+    "fancy_lower": fancy_lower,
     "Type": "Forecast"
   })
 
   forecast_df_regular = pd.DataFrame({
     "date": forecast_months,
     "other_variety_price": forecast_variety_3months,
+    "regular_upper": regular_upper,
+    "regular_lower": regular_lower,
     "Type": "Forecast"
   })
 
   # =========================
-  # TABLE
+  # TABLE (with prediction interval)
   # =========================
-  st.markdown("<h3 style='color: #2E7D32; font-weight: 600; margin-bottom: 0.8rem;'>Price Projection</h3>",
+  st.markdown("<h3 style='color: #2E7D32; font-weight: 600; margin-bottom: 0.8rem;'>Price Projection (with 95% Prediction Interval ±RMSE)</h3>",
         unsafe_allow_html=True)
 
   projection_table = pd.DataFrame({
     "Province": [province_name] * len(forecast_months),
     "Month": forecast_months.strftime("%B %Y"),
     "Fancy Palay": [f"{CONFIG['currency']}{x:.2f}" for x in forecast_3months_fancy],
-    "Regular Palay": [f"{CONFIG['currency']}{x:.2f}" for x in forecast_variety_3months]
+    "Fancy Range (±RMSE)": [f"{CONFIG['currency']}{lo:.2f} - {CONFIG['currency']}{hi:.2f}" for lo, hi in zip(fancy_lower, fancy_upper)],
+    "Regular Palay": [f"{CONFIG['currency']}{x:.2f}" for x in forecast_variety_3months],
+    "Regular Range (±RMSE)": [f"{CONFIG['currency']}{lo:.2f} - {CONFIG['currency']}{hi:.2f}" for lo, hi in zip(regular_lower, regular_upper)]
   })
 
   st.dataframe(projection_table, use_container_width=True, hide_index=True)
+  st.caption(f"Prediction interval = forecast ± RMSE (Fancy RMSE ₱{rmse_fancy:.2f}, Regular RMSE ₱{rmse_regular:.2f}) • 95% CI ≈ ±{1.96*rmse_fancy:.2f} / ±{1.96*rmse_regular:.2f}. Negative R² = point forecast weak, interval is honest per walk-forward evaluation.")
 
   try:
     # Use the dataframe already loaded by dashboard_ready.py
@@ -427,26 +441,16 @@ def PriceForecast():
 
       if len(selected_years) == 1:
         hist_df = base_df[base_df["year"].isin(selected_years)].copy()
-        hist_df["Type"] = "Historical"
-
-        combined_df = pd.concat([hist_df, forecast_df_fancy])
-
-        fig = px.line(
-          combined_df,
-          x="date",
-          y="fancy_palay_price",
-          color="Type",
-          markers=True,
-          color_discrete_map={
-            "Historical": CONFIG["colors"]["historical"],
-            "Forecast": CONFIG["colors"]["forecast"],
-          },
-          title=chart_title,
-        )
-
-        fig.update_traces(
-          selector=dict(name="Forecast"),
-        )
+        # Build figure with prediction interval band (honest, RMSE-based)
+        fig = go.Figure()
+        # Historical
+        fig.add_trace(go.Scatter(x=hist_df["date"], y=hist_df["fancy_palay_price"], mode="lines+markers", name="Historical", line=dict(color=CONFIG["colors"]["historical"]), marker=dict(size=6)))
+        # Forecast band (upper/lower) - shaded
+        fig.add_trace(go.Scatter(x=forecast_df_fancy["date"], y=forecast_df_fancy["fancy_upper"], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+        fig.add_trace(go.Scatter(x=forecast_df_fancy["date"], y=forecast_df_fancy["fancy_lower"], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(255,235,59,0.25)", name=f"95% Interval (±RMSE ₱{rmse_fancy:.2f})", hoverinfo="skip"))
+        # Forecast line
+        fig.add_trace(go.Scatter(x=forecast_df_fancy["date"], y=forecast_df_fancy["fancy_palay_price"], mode="lines+markers", name="Forecast", line=dict(color=CONFIG["colors"]["forecast"], dash="dash", width=3), marker=dict(size=8, color=CONFIG["colors"]["forecast"])))
+        fig.update_layout(title=chart_title, yaxis_title=f"{CONFIG['currency']} / kg", xaxis_title="Timeline", font_size=11, title_font_size=21, height=400, title_font_color="#1B5E20", margin=dict(t=40, b=20, l=10, r=10), plot_bgcolor="white", paper_bgcolor="white", yaxis=dict(tickprefix=CONFIG["currency"], separatethousands=True, gridcolor="rgba(0,0,0,0.05)"), xaxis=dict(gridcolor="rgba(0,0,0,0.05)"), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
       else:
         yearly = (
@@ -487,27 +491,28 @@ def PriceForecast():
           selector=dict(name="Forecast"),
         )
 
-      fig.update_layout(
-        yaxis_title=f"{CONFIG['currency']} / kg",
-        xaxis_title="Timeline",
-        font_size=11,
-        title_font_size=21,
-        height=400,
-        title_font_color="#1B5E20",
-        margin=dict(t=40, b=20, l=10, r=10),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        yaxis=dict(
-          tickprefix=CONFIG["currency"],
-          separatethousands=True,
-          gridcolor="rgba(0,0,0,0.05)",
-        ),
-        xaxis=dict(
-          gridcolor="rgba(0,0,0,0.05)",
-        ),
-      )
+        fig.update_layout(
+          yaxis_title=f"{CONFIG['currency']} / kg",
+          xaxis_title="Timeline",
+          font_size=11,
+          title_font_size=21,
+          height=400,
+          title_font_color="#1B5E20",
+          margin=dict(t=40, b=20, l=10, r=10),
+          plot_bgcolor="white",
+          paper_bgcolor="white",
+          yaxis=dict(
+            tickprefix=CONFIG["currency"],
+            separatethousands=True,
+            gridcolor="rgba(0,0,0,0.05)",
+          ),
+          xaxis=dict(
+            gridcolor="rgba(0,0,0,0.05)",
+          ),
+        )
 
       st.plotly_chart(fig, use_container_width=True)
+      st.caption(f"Fancy 95% prediction interval: forecast ± RMSE (₱{rmse_fancy:.2f}) • Shown band = ±RMSE (≈68% CI), 95% ≈ ±{1.96*rmse_fancy:.2f}. R² {r2_fancy:.3f} indicates point weakness, interval is defense-grade.")
 
   with col2:
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -700,26 +705,13 @@ def PriceForecast():
 
       if len(selected_years) == 1:
         df = base_df[base_df["year"].isin(selected_years)].copy()
-        df["Type"] = "Historical"
-
-        combined_df = pd.concat([df, forecast_df_regular])
-
-        fig = px.line(
-          combined_df,
-          x="date",
-          y="other_variety_price",
-          color="Type",
-          markers=True,
-          color_discrete_map={
-            "Historical": CONFIG["colors"]["historical"],
-            "Forecast": CONFIG["colors"]["forecast"],
-          },
-          title=chart_title2,
-        )
-
-        fig.update_traces(
-          selector=dict(name="Forecast"),
-        )
+        # Regular with prediction interval band
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df["date"], y=df["other_variety_price"], mode="lines+markers", name="Historical", line=dict(color=CONFIG["colors"]["historical"]), marker=dict(size=6)))
+        fig.add_trace(go.Scatter(x=forecast_df_regular["date"], y=forecast_df_regular["regular_upper"], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+        fig.add_trace(go.Scatter(x=forecast_df_regular["date"], y=forecast_df_regular["regular_lower"], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(255,235,59,0.25)", name=f"95% Interval (±RMSE ₱{rmse_regular:.2f})", hoverinfo="skip"))
+        fig.add_trace(go.Scatter(x=forecast_df_regular["date"], y=forecast_df_regular["other_variety_price"], mode="lines+markers", name="Forecast", line=dict(color=CONFIG["colors"]["forecast"], dash="dash", width=3), marker=dict(size=8, color=CONFIG["colors"]["forecast"])))
+        fig.update_layout(title=chart_title2, yaxis_title=f"{CONFIG['currency']} / kg", xaxis_title="Timeline", font_size=11, title_font_size=21, height=400, title_font_color="#1B5E20", margin=dict(t=40, b=20, l=10, r=10), plot_bgcolor="white", paper_bgcolor="white", yaxis=dict(tickprefix=CONFIG["currency"], separatethousands=True, gridcolor="rgba(0,0,0,0.05)"), xaxis=dict(gridcolor="rgba(0,0,0,0.05)"), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
       else:
         yearly = (
@@ -761,27 +753,28 @@ def PriceForecast():
           selector=dict(name="Forecast"),
         )
 
-      fig.update_layout(
-        yaxis_title=f"{CONFIG['currency']} / kg",
-        xaxis_title="Timeline",
-        font_size=11,
-        title_font_size=21,
-        height=400,
-        title_font_color="#1B5E20",
-        margin=dict(t=40, b=20, l=10, r=10),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        yaxis=dict(
-          tickprefix=CONFIG["currency"],
-          separatethousands=True,
-          gridcolor="rgba(0,0,0,0.05)",
-        ),
-        xaxis=dict(
-          gridcolor="rgba(0,0,0,0.05)",
-        ),
-      )
+        fig.update_layout(
+          yaxis_title=f"{CONFIG['currency']} / kg",
+          xaxis_title="Timeline",
+          font_size=11,
+          title_font_size=21,
+          height=400,
+          title_font_color="#1B5E20",
+          margin=dict(t=40, b=20, l=10, r=10),
+          plot_bgcolor="white",
+          paper_bgcolor="white",
+          yaxis=dict(
+            tickprefix=CONFIG["currency"],
+            separatethousands=True,
+            gridcolor="rgba(0,0,0,0.05)",
+          ),
+          xaxis=dict(
+            gridcolor="rgba(0,0,0,0.05)",
+          ),
+        )
 
       st.plotly_chart(fig, use_container_width=True)
+      st.caption(f"Regular 95% prediction interval: forecast ± RMSE (₱{rmse_regular:.2f}) • Shown band = ±RMSE (≈68% CI), 95% ≈ ±{1.96*rmse_regular:.2f}. R² {r2_regular:.3f} honest, use interval for defense.")
 
   with col2:
     st.markdown("<br><br>", unsafe_allow_html=True)

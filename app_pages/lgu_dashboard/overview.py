@@ -151,7 +151,8 @@ def _add_benchmark_ref_line(fig, y_value, label, line_color="#78909C", annotatio
 
 def _benchmark_yield_config(benchmark_option, historical_avg):
   opt = str(benchmark_option).strip() if benchmark_option is not None else ""
-  if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+  # English primary; Tagalog retained for backwards compatibility
+  if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
     if historical_avg is None or pd.isna(historical_avg):
       return None
     try:
@@ -161,14 +162,14 @@ def _benchmark_yield_config(benchmark_option, historical_avg):
     if pd.isna(v):
       return None
     return (v, f"Bataan 10-Yr Avg Yield ({v:.2f} MT/ha)", "#616161")
-  if opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline", "DA Target (4.50 MT/ha)", "DA Target", "DA Target Yield (4.50 MT/ha)"):
+  if opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline", "DA Target (4.50 MT/ha)", "DA Target", "DA Target Yield (4.50 MT/ha)"):
     return (4.50, "DA Target Yield (4.50 MT/ha)", "#2E7D32")
   return None
 
 
 def _benchmark_price_config(benchmark_option, historical_avg):
   opt = str(benchmark_option).strip() if benchmark_option is not None else ""
-  if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+  if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
     if historical_avg is None or pd.isna(historical_avg):
       return None
     try:
@@ -178,7 +179,7 @@ def _benchmark_price_config(benchmark_option, historical_avg):
     if pd.isna(v):
       return None
     return (v, f"Bataan 10-Yr Avg Regular Price (\u20B1{v:.2f}/kg)", "#616161")
-  if opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline", "NFA Floor Price (\u20B119.00/kg)", "NFA Floor Price"):
+  if opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline", "NFA Floor Price (\u20B119.00/kg)", "NFA Floor Price"):
     return (19.00, "NFA Procurement Floor Price (\u20B119.00/kg)", "#EF4444")
   return None
 
@@ -186,10 +187,12 @@ def _benchmark_price_config(benchmark_option, historical_avg):
 def _normalize_benchmarks(benchmark_option):
   if benchmark_option is None:
     return set()
+  # English "None" + Tagalog legacy
+  _none_vals = ("None", "Hide (None)", "Itago (None)", "Wala")
   if isinstance(benchmark_option, (list, set, tuple)):
-    return {str(o).strip() for o in benchmark_option if str(o).strip() and str(o).strip() not in ("Itago (None)", "Wala")}
+    return {str(o).strip() for o in benchmark_option if str(o).strip() and str(o).strip() not in _none_vals}
   s = str(benchmark_option).strip()
-  if not s or s in ("Itago (None)", "Wala"):
+  if not s or s in _none_vals:
     return set()
   return {s}
 
@@ -204,7 +207,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
   for opt in opts:
     try:
       if chart_type == "yield":
-        if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+        if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
           _col = "quarterly_yield_mt_per_ha"
           _col = _col if src_df is not None and _col in src_df.columns else _pick_column(src_df, ["quarterly_yield_mt_per_ha", "yield", "yield_mt_per_ha"])
           hist_avg = None
@@ -217,7 +220,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
             y_val, label, color = cfg
             pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
             fig = _add_benchmark_ref_line(fig, y_val, label, line_color=color, annotation_position=pos)
-        elif opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline", "DA Target (4.50 MT/ha)", "DA Target"):
+        elif opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline", "DA Target (4.50 MT/ha)", "DA Target"):
           cfg = _benchmark_yield_config(opt, None)
           if cfg is not None:
             y_val, label, color = cfg
@@ -225,7 +228,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
             fig = _add_benchmark_ref_line(fig, y_val, label, line_color=color, annotation_position=pos)
         continue
       if chart_type == "price":
-        if opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+        if opt in ("Market Price", "Market Price (3-Year Average)", "Market Price (3-Yr Average)", "Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
           rolling_regular_avg = None
           rolling_fancy_avg = None
           try:
@@ -255,7 +258,7 @@ def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_
               fig = _add_benchmark_ref_line(fig, v, label, line_color="#78909C", annotation_position=pos)
             except Exception:
               pass
-        elif opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
+        elif opt in ("Government Target", "Government Target (NFA/DA)", "Target ng Gobyerno", "NFA / DA Policy Baseline"):
           fig = _add_benchmark_ref_line(fig, 19.00, "NFA Floor Price (\u20B119.00/kg)", line_color="#EF4444", annotation_position="bottom left")
           fig = _add_benchmark_ref_line(fig, 23.75, "Fancy Commercial Target (\u20B123.75/kg)", line_color="#F59E0B", annotation_position="top left")
         elif opt in ("NFA Floor Price (\u20B119.00/kg)", "NFA Floor Price"):
@@ -272,22 +275,10 @@ def _period_suffix(period: str) -> str:
   p = str(period).strip().upper()
   if p == "ANNUAL":
     return ""
-  if p in ("SEMESTER 1", "SEM 1"):
-    return " \u2022 Sem 1"
-  if p in ("SEMESTER 2", "SEM 2"):
-    return " \u2022 Sem 2"
-  if p == "QUARTER 1":
-    return " \u2022 Q1"
-  if p == "QUARTER 2":
-    return " \u2022 Q2"
-  if p == "QUARTER 3":
-    return " \u2022 Q3"
-  if p == "QUARTER 4":
-    return " \u2022 Q4"
-  if p == "QUARTERLY":
-    return " \u2022 Quarterly"
-  if p == "MONTHLY":
-    return " \u2022 Monthly"
+  if p in ("DRY SEASON", "SEMESTER 1", "SEM 1"):
+    return " \u2022 Dry"
+  if p in ("WET SEASON", "SEMESTER 2", "SEM 2"):
+    return " \u2022 Wet"
   return ""
 
 
@@ -342,9 +333,9 @@ def _filter_df_by_period(df: pd.DataFrame, period: str) -> pd.DataFrame:
     quarters = d.dt.quarter
   except Exception:
     return df
-  if p in ("SEMESTER 1", "SEM 1"):
+  if p in ("DRY SEASON", "SEMESTER 1", "SEM 1"):
     return df[months.between(1, 6)]
-  if p in ("SEMESTER 2", "SEM 2"):
+  if p in ("WET SEASON", "SEMESTER 2", "SEM 2"):
     return df[months.between(7, 12)]
   if p == "QUARTER 1":
     return df[quarters == 1]
@@ -377,19 +368,19 @@ def _group_by_period(df, period="ANNUAL", value_cols=None):
   temp["month_name"] = temp["date"].dt.strftime("%b")
   temp["semester"] = np.where(temp["month"] <= 6, 1, 2)
   p = str(period).strip().upper() if period else "ANNUAL"
-  if p in ("SEMESTER 1", "SEM 1"):
+  if p in ("DRY SEASON", "SEMESTER 1", "SEM 1"):
     temp = temp[temp["semester"] == 1]
     if temp.empty:
       return pd.DataFrame(columns=["period_label"] + value_cols)
     grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
-    grouped["period_label"] = grouped["year"].astype(str) + " Sem 1"
+    grouped["period_label"] = grouped["year"].astype(str) + " Dry"
     return grouped
-  if p in ("SEMESTER 2", "SEM 2"):
+  if p in ("WET SEASON", "SEMESTER 2", "SEM 2"):
     temp = temp[temp["semester"] == 2]
     if temp.empty:
       return pd.DataFrame(columns=["period_label"] + value_cols)
     grouped = temp.groupby("year").mean(numeric_only=True).reset_index()
-    grouped["period_label"] = grouped["year"].astype(str) + " Sem 2"
+    grouped["period_label"] = grouped["year"].astype(str) + " Wet"
     return grouped
   if p == "QUARTER 1":
     temp = temp[temp["quarter"] == 1]
@@ -452,7 +443,7 @@ def _base_layout(fig, yaxis_title="", xaxis_title="Date"):
   return fig
 
 
-def _price_historical_chart(df, year=None, period="ANNUAL", benchmark_option="Wala"):
+def _price_historical_chart(df, year=None, period="ANNUAL", benchmark_option="None"):
   """Line chart for the selected year range and period with peak + benchmark."""
   if year is None:
     hist = df.copy()
@@ -524,7 +515,7 @@ def _price_historical_chart(df, year=None, period="ANNUAL", benchmark_option="Wa
   return fig
 
 
-def _price_forecast_chart(df, dr, benchmark_option="Wala"):
+def _price_forecast_chart(df, dr, benchmark_option="None"):
   """Line chart: ONLY forecasted price values with benchmark + aligned arrays."""
   fig = go.Figure()
   try:
@@ -564,7 +555,7 @@ def _price_forecast_chart(df, dr, benchmark_option="Wala"):
   return _base_layout(fig, yaxis_title="₱ / kg", xaxis_title="Date")
 
 
-def _yield_historical_chart(df, year=None, period="ANNUAL", benchmark_option="Wala"):
+def _yield_historical_chart(df, year=None, period="ANNUAL", benchmark_option="None"):
   """Line chart for historical yield with period + benchmark."""
   quarterly = dl.get_quarterly_yield(df)
   if year is None:
@@ -632,7 +623,7 @@ def _yield_historical_chart(df, year=None, period="ANNUAL", benchmark_option="Wa
   return fig
 
 
-def _yield_forecast_chart(dr, df, benchmark_option="Wala"):
+def _yield_forecast_chart(dr, df, benchmark_option="None"):
   """Line chart: ONLY forecasted yield with benchmark."""
   fig = go.Figure()
   try:
@@ -928,67 +919,85 @@ def _render_top_filter_bar(df):
   years = sorted(pd.Series(df["year"].dropna().astype(int).unique()).tolist())
   if not years:
     return None, None, "ANNUAL", "All Municipalities"
-  st.session_state.setdefault("lgu_start_year", years[0])
+  # Agronomist plan: default last 3 years, Dry/Wet labels for cropping season
+  _default_start = years[-3] if len(years) >= 3 else years[0]
+  st.session_state.setdefault("lgu_start_year", _default_start)
   st.session_state.setdefault("lgu_end_year", years[-1])
   st.session_state.setdefault("lgu_period", "ANNUAL")
-  _valid_periods = ["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4", "QUARTERLY", "MONTHLY"]
-  if st.session_state.get("lgu_period") not in _valid_periods:
+  _valid_periods = ["ANNUAL", "DRY SEASON", "WET SEASON", "DRY SEASON (NOV-APR)", "WET SEASON (MAY-OCT)", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4", "QUARTERLY", "MONTHLY"]
+  if str(st.session_state.get("lgu_period", "ANNUAL")).strip().upper() not in _valid_periods:
     st.session_state["lgu_period"] = "ANNUAL"
   st.session_state.setdefault("lgu_selected_muni", "All Municipalities")
 
+  # Applicable to website now: Tailwind-spec alignment via Streamlit CSS
   st.markdown(
     """
-    <div style="margin:0.3rem 0 1rem 0; padding:0.8rem 1rem; border:1px solid #D8E6DA; border-radius:14px; background:#F8FBF7;">
-    </div>
+    <style>
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-filter-group) {
+        background:#FFFFFF !important; border:1px solid #E5E7EB !important;
+        border-radius:12px !important; box-shadow:0 1px 2px rgba(0,0,0,0.04) !important;
+        padding:0 !important; margin:0.15rem 0 0.9rem 0 !important; overflow:visible !important;
+      }
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-filter-group) > div { padding:0.75rem 1rem 0.75rem 1rem !important; gap:0 !important; }
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-filter-group) div[data-testid="stHorizontalBlock"] { gap:1rem !important; align-items:end !important; }
+      div[data-testid="stSelectbox"] > div { border:none !important; background:transparent !important; box-shadow:none !important; }
+      div[data-testid="stSelectbox"] div[role="combobox"] {
+        border:1px solid #1B5E20 !important; background-color:#FFFFFF !important;
+        border-radius:8px !important; box-shadow:none !important; height:40px !important; min-height:40px !important;
+      }
+      .ps-icon-reset button { border:1px solid #E5E7EB !important; background:#FFFFFF !important; border-radius:8px !important; width:40px !important; height:40px !important; padding:0 !important; }
+      .ps-icon-reset button:hover { border-color:#1B5E20 !important; background:#F0FDF4 !important; }
+      .ps-filter-label { font-size:11px !important; font-weight:700 !important; letter-spacing:0.3px !important; text-transform:uppercase !important; color:#1B5E20 !important; margin-bottom:6px !important; line-height:1 !important; }
+    </style>
     """,
     unsafe_allow_html=True,
   )
-
-  col1, col2, col3, col4 = st.columns([1.0, 1.0, 1.0, 1.2], gap="small")
-  with col1:
-    st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.3rem;">YEAR RANGE</div>', unsafe_allow_html=True)
-    start_year = st.selectbox(
-      "Start Year",
-      options=years,
-      index=years.index(st.session_state["lgu_start_year"]),
-      key="lgu_start_year",
-      label_visibility="collapsed",
-    )
-  with col2:
-    st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.3rem;">TO</div>', unsafe_allow_html=True)
-    end_year = st.selectbox(
-      "End Year",
-      options=years,
-      index=years.index(st.session_state["lgu_end_year"]),
-      key="lgu_end_year",
-      label_visibility="collapsed",
-    )
-  with col3:
-    st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.3rem;">PERIOD</div>', unsafe_allow_html=True)
-    period_opts = ["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"]
-    # keep legacy fallback if somehow still stored
+  # 4 filters + icon Reset, one line, aligned — no box
+  st.markdown(
+    """
+    <style>
+      div[data-testid="stColumn"] { padding-top:0 !important; }
+      div[data-testid="stSelectbox"] > div { border:none !important; background:transparent !important; box-shadow:none !important; }
+      div[data-testid="stSelectbox"] div[role="combobox"] {
+        border:1px solid #E5E7EB !important; background:#F9FAFB !important;
+        border-radius:8px !important; height:38px !important; min-height:38px !important;
+      }
+      .ps-icon-reset button { border:1px solid #E5E7EB !important; background:#FFFFFF !important; border-radius:8px !important; height:38px !important; min-height:38px !important; width:100% !important; }
+      .ps-icon-reset button:hover { border-color:#1B5E20 !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+  )
+  # One straight line: YEAR RANGE | TO | PERIOD | icon — tight, no extra white
+  filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([1, 1, 1, 0.15], gap="small", vertical_alignment="bottom")
+  with filter_col1:
+    st.markdown('<div class="ps-filter-label">YEAR RANGE</div>', unsafe_allow_html=True)
+    start_year = st.selectbox("Start Year", options=years, index=years.index(st.session_state["lgu_start_year"]), key="lgu_start_year", label_visibility="collapsed")
+  with filter_col2:
+    st.markdown('<div class="ps-filter-label">TO</div>', unsafe_allow_html=True)
+    end_year = st.selectbox("End Year", options=years, index=years.index(st.session_state["lgu_end_year"]), key="lgu_end_year", label_visibility="collapsed")
+  with filter_col3:
+    st.markdown('<div class="ps-filter-label">PERIOD</div>', unsafe_allow_html=True)
+    period_opts = ["ANNUAL", "Dry Season", "Wet Season"]
     _cur = st.session_state["lgu_period"]
+    _legacy_to_display = {"SEMESTER 1": "Dry Season", "SEMESTER 2": "Wet Season", "DRY SEASON": "Dry Season", "WET SEASON": "Wet Season"}
+    if str(_cur).strip().upper() in _legacy_to_display:
+      _cur = _legacy_to_display[str(_cur).strip().upper()]; st.session_state["lgu_period"] = _cur
     if _cur not in period_opts:
-      _cur = "ANNUAL"
+      _cur = "ANNUAL"; st.session_state["lgu_period"] = "ANNUAL"
+    period = st.selectbox("Period", options=period_opts, index=period_opts.index(_cur), key="lgu_period", label_visibility="collapsed")
+  with filter_col4:
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="ps-icon-reset">', unsafe_allow_html=True)
+    def _do_reset():
+      st.session_state["lgu_start_year"] = years[-3] if len(years) >= 3 else years[0]
+      st.session_state["lgu_end_year"] = years[-1]
       st.session_state["lgu_period"] = "ANNUAL"
-    period = st.selectbox(
-      "Period",
-      options=period_opts,
-      index=period_opts.index(_cur),
-      key="lgu_period",
-      label_visibility="collapsed",
-    )
-  with col4:
-    st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.3rem;">MUNICIPALITY</div>', unsafe_allow_html=True)
-    muni_options = ["All Municipalities"]
-    muni_options.extend(sorted(pd.Series(df.get("municipality", pd.Series(dtype="object")).dropna().unique()).tolist()))
-    selected_muni = st.selectbox(
-      "Municipality",
-      options=muni_options,
-      index=0 if st.session_state["lgu_selected_muni"] not in muni_options else muni_options.index(st.session_state["lgu_selected_muni"]),
-      key="lgu_selected_muni",
-      label_visibility="collapsed",
-    )
+      st.session_state["lgu_selected_muni"] = "All Municipalities"
+    st.button("", icon=":material/restart_alt:", key="reset_all_filters", on_click=_do_reset, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+  selected_muni = "All Municipalities"
+  st.session_state["lgu_selected_muni"] = "All Municipalities"
   return start_year, end_year, period, selected_muni
 
 
@@ -1029,6 +1038,31 @@ def render(df, dr):
       selected_muni = "All Municipalities"
   else:
       filtered_df = df[(df["year"] >= start_year) & (df["year"] <= end_year)].copy()
+  # Summary line + highlight so it's obvious all cards below respond together
+  _filter_key = (start_year, end_year, str(period), str(selected_muni))
+  _prev_key = st.session_state.get("_prev_filter_key")
+  _just_changed = _prev_key is not None and _prev_key != _filter_key
+  st.session_state["_prev_filter_key"] = _filter_key
+  st.markdown(
+    f"""
+    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin:0.1rem 0 0.7rem 0; font-size:0.78rem; color:#065F46; background:#ECFDF5; border:1px solid #A7F3D0; border-radius:999px; padding:0.35rem 0.75rem; width:fit-content;">
+      <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block;"></span>
+      Showing: <b>{start_year}–{end_year}</b> • {period} • {selected_muni}
+      <span style="color:#6B7280;">— KPI Cards</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+  )
+  if _just_changed:
+    st.markdown(
+      """
+      <style>
+      .ps-kpi, .ps-market-card, .ps-card, .ps-chart-card { animation: ps-pulse 0.65s ease; }
+      @keyframes ps-pulse { 0% { box-shadow:0 0 0 3px rgba(16,185,129,0.35); border-color:#6EE7B7; } 100% { box-shadow:0 1px 3px rgba(0,0,0,0.04); } }
+      </style>
+      """,
+      unsafe_allow_html=True,
+    )
   metrics = dl.get_year_metrics(filtered_df, end_year, dr)
 
   # ---- Dynamic KPI subtexts (period + muni aware, like farmer) ----
@@ -1082,17 +1116,44 @@ def render(df, dr):
   _harv_col = _pick_column(filtered_df, _harv_candidates) or _pick_column(df, _harv_candidates)
   _h_has_prev = False; _h_delta = None; _h_prev_year = None; _harv_display_val = None
   try:
+    # DRY: reuse single source of truth in data_layer (cap 500 + IQR + per-year median)
+    # Fallback to local impl if dl helper not yet loaded (backward compat).
     def _harv_total_for_frame(frame, col, p):
       if frame is None or frame.empty or col not in frame.columns:
         return None
       f = _filter_df_by_period(frame, p)
       if f.empty:
         return None
+      # Prefer shared helper; else local copy with identical logic
+      if hasattr(dl, "_robust_harvested_total") and hasattr(dl, "_clean_harvested_series"):
+        if "year" in f.columns:
+          # Use dl's per-year median via robust helper on the period-filtered frame
+          return dl._robust_harvested_total(f, col)
+        # No year grouping -> cleaned sum
+        vals = dl._clean_harvested_series(f[col], col)
+        return float(vals.sum()) if not vals.empty else None
+      # Fallback local (identical to dl) — cap 500 + IQR + median
+      def _clean_series(s):
+        s = pd.to_numeric(s, errors="coerce").dropna()
+        s = s[s > 0]
+        if "harvest" in str(col).lower():
+          s = s[s <= 500]
+        if s.empty:
+          return s
+        if len(s) >= 4:
+          q1 = s.quantile(0.25); q3 = s.quantile(0.75); iqr = q3 - q1
+          if iqr > 0 and not pd.isna(iqr):
+            lo = q1 - 1.5*iqr; hi = q3 + 1.5*iqr
+            s = s[s.between(lo, hi)]
+        return s
       if "year" in f.columns:
-        per_year = pd.to_numeric(f[col], errors="coerce").groupby(f["year"]).mean().dropna()
+        def _per_year_clean(g):
+          s = _clean_series(g)
+          return float(s.median()) if not s.empty else np.nan
+        per_year = f.groupby("year")[col].apply(_per_year_clean).dropna()
         per_year = per_year[per_year > 0]
         return float(per_year.sum()) if not per_year.empty else None
-      vals = pd.to_numeric(f[col], errors="coerce").dropna()
+      vals = _clean_series(f[col])
       return float(vals.sum()) if not vals.empty else None
     _harv_display_val = _harv_total_for_frame(filtered_df, _harv_col, period) if _harv_col else None
     if start_year == end_year and _harv_col:
@@ -1218,12 +1279,15 @@ def render(df, dr):
       </div>
       """, unsafe_allow_html=True)
 
-  # ---- Primary KPI Row (5 compact cards) - UI kept, Option2 stale styling on Forecast Period ----
+  # ---- Key Performance Indicators (Historical / Actuals) — separate from forecasts ----
   if show_all:
-    _fc_accent = "#DC2626" if is_awaiting_lgu or days_stale > 95 else "#7C3AED"
-    _fc_icon_bg = "rgba(220,38,38,0.12)" if is_awaiting_lgu or days_stale > 95 else "rgba(124,58,237,0.1)"
-    _fc_icon_color = "#DC2626" if is_awaiting_lgu or days_stale > 95 else "#7C3AED"
-    _fc_sub = f"Update Needed • {forecast_range_label}" if is_awaiting_lgu or days_stale > 95 else f"{fc_months}-Month Rolling • {forecast_range_label}"
+    st.markdown("""
+    <div style="margin:0.9rem 0 0.6rem 0; display:flex; align-items:center; gap:8px;">
+      <span style="font-weight:800; color:#1F2937; font-size:0.95rem; letter-spacing:0.3px;">Key Performance Indicators</span>
+      <span style="font-size:0.70rem; color:#065F46; background:#ECFDF5; border:1px solid #A7F3D0; padding:2px 8px; border-radius:999px; font-weight:700;">Historical / Actuals</span>
+      <span style="flex:1; height:1px; background:#E5E7EB; margin-left:6px;"></span>
+    </div>
+    """, unsafe_allow_html=True)
     theme.kpi_row([
       theme.kpi_card(
         "Total Production",
@@ -1256,57 +1320,87 @@ def render(df, dr):
         accent="#DC2626" if supply_display == "At Risk" else "#16A34A",
         compact=True,
       ),
-      theme.kpi_card(
-        "Forecast Period",
-        "No data" if not getattr(dr, "has_forecasts", False) else (f"{forecast_months[0].strftime('%b %Y')} – {forecast_months[-1].strftime('%b %Y')}" if len(forecast_months)>0 else f"{fc_start} – {fc_end}"),
-        _fc_sub if getattr(dr, "has_forecasts", False) else "No data — awaiting upload",
-        icon_name="calendar_month", icon_bg=_fc_icon_bg, icon_color=_fc_icon_color, accent=_fc_accent,
-        compact=True,
-      ),
     ])
 
-    # ---- Market Snapshot ----
-    st.markdown(
-      f'<div class="ps-market-heading">{theme.icon("storefront", "16px", "#1E5C3A")} Market Snapshot — Forecast Prices</div>',
-      unsafe_allow_html=True,
-    )
-    m1, m2 = st.columns(2, gap="medium")
-    with m1:
-      if regular_forecast is not None:
-        st.markdown(
-          theme.market_price_card(
-            "Regular Palay Forecast Price",
-            regular_forecast,
-            regular_change,
-            vs_label=regular_vs_label,
-          ),
-          unsafe_allow_html=True,
-        )
-      else:
-        st.markdown(
-          '<div class="ps-market-card"><span class="ps-market-title">Regular Palay Forecast Price</span>'
-          '<div class="ps-market-price" style="font-size:1rem;">No Data Available</div></div>',
-          unsafe_allow_html=True,
-        )
-    with m2:
-      if fancy_forecast is not None:
-        st.markdown(
-          theme.market_price_card(
-            "Fancy Palay Forecast Price",
-            fancy_forecast,
-            fancy_change,
-            vs_label=fancy_vs_label,
-          ),
-          unsafe_allow_html=True,
-        )
-      else:
-        st.markdown(
-          '<div class="ps-market-card"><span class="ps-market-title">Fancy Palay Forecast Price</span>'
-          '<div class="ps-market-price" style="font-size:1rem;">No Data Available</div></div>',
-          unsafe_allow_html=True,
-        )
-    if is_awaiting_lgu:
-      st.caption(f"Showing latest available forecast ({last_avail_month}). Status: Pending Next Cycle Data Input.")
+    # ---- Forecast Snapshot — System-Generated (separate from KPIs) ----
+    _fc_accent = "#DC2626" if is_awaiting_lgu or days_stale > 95 else "#7C3AED"
+    _fc_icon_bg = "rgba(220,38,38,0.12)" if is_awaiting_lgu or days_stale > 95 else "rgba(124,58,237,0.1)"
+    _fc_icon_color = "#DC2626" if is_awaiting_lgu or days_stale > 95 else "#7C3AED"
+    _fc_sub = f"Update Needed • {forecast_range_label}" if is_awaiting_lgu or days_stale > 95 else f"{fc_months}-Month Rolling • {forecast_range_label}"
+    try:
+      _fc_yield_list = list(getattr(dr, "forecast_quarterly_yield", []) or [])
+      _fc_yield_avg = float(pd.Series(_fc_yield_list, dtype="float64").dropna().mean()) if _fc_yield_list else 0.0
+      _fc_yield_sub = f"Avg next {len(_fc_yield_list)} quarters" if _fc_yield_list else "No forecast"
+      _fc_yield_display = f"{_fc_yield_avg:.2f} MT/ha" if _fc_yield_list else "No data"
+    except Exception:
+      _fc_yield_display = "No data"; _fc_yield_sub = "No forecast"
+
+    with theme.section_card(title="Forecast Snapshot — System-Generated",
+                            desc="AI-generated 3-month price & 4-quarter yield projections. Separate from actual KPIs above.",
+                            icon_name="auto_awesome"):
+      # Forecast period + yield as compact KPI cards inside the forecast card
+      theme.kpi_row([
+        theme.kpi_card(
+          "Forecast Period",
+          "No data" if not getattr(dr, "has_forecasts", False) else (f"{forecast_months[0].strftime('%b %Y')} – {forecast_months[-1].strftime('%b %Y')}" if len(forecast_months)>0 else f"{fc_start} – {fc_end}"),
+          _fc_sub if getattr(dr, "has_forecasts", False) else "No data — awaiting upload",
+          icon_name="calendar_month", icon_bg=_fc_icon_bg, icon_color=_fc_icon_color, accent=_fc_accent,
+          compact=True,
+        ),
+        theme.kpi_card(
+          "Forecasted Yield",
+          _fc_yield_display,
+          _fc_yield_sub,
+          icon_name="trending_up", icon_bg="rgba(16,185,129,0.1)", icon_color="#10B981", accent="#10B981",
+          compact=True,
+        ),
+      ])
+      st.markdown(
+        f'<div class="ps-market-heading" style="margin-top:0.9rem;">{theme.icon("storefront", "16px", "#1E5C3A")} Market Forecast — Predicted Prices</div>',
+        unsafe_allow_html=True,
+      )
+      m1, m2 = st.columns(2, gap="medium")
+      def _advisory(pct):
+        if pct is None: return ""
+        if pct > 5: return " • Hold"
+        if pct < -5: return " • Sell soon"
+        return " • Monitor"
+      with m1:
+        if regular_forecast is not None:
+          st.markdown(
+            theme.market_price_card(
+              "Regular Palay Forecast Price",
+              regular_forecast,
+              regular_change,
+              vs_label=regular_vs_label + _advisory(regular_change),
+            ),
+            unsafe_allow_html=True,
+          )
+        else:
+          st.markdown(
+            '<div class="ps-market-card"><span class="ps-market-title">Regular Palay Forecast Price</span>'
+            '<div class="ps-market-price" style="font-size:1rem;">No Data Available</div></div>',
+            unsafe_allow_html=True,
+          )
+      with m2:
+        if fancy_forecast is not None:
+          st.markdown(
+            theme.market_price_card(
+              "Fancy Palay Forecast Price",
+              fancy_forecast,
+              fancy_change,
+              vs_label=fancy_vs_label + _advisory(fancy_change),
+            ),
+            unsafe_allow_html=True,
+          )
+        else:
+          st.markdown(
+            '<div class="ps-market-card"><span class="ps-market-title">Fancy Palay Forecast Price</span>'
+            '<div class="ps-market-price" style="font-size:1rem;">No Data Available</div></div>',
+            unsafe_allow_html=True,
+          )
+      if is_awaiting_lgu:
+        st.caption(f"Showing latest available forecast ({last_avail_month}). Status: Pending Next Cycle Data Input.")
 
     theme.divider()
 
@@ -1324,27 +1418,35 @@ def render(df, dr):
     hdr_col1, hdr_col2 = st.columns([0.78, 0.22], vertical_alignment="center")
     with hdr_col1:
       try:
-        _benchmark_opt = st.segmented_control("Benchmark / Reference Line:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], key="lgu_benchmark_toggle", default="Wala")
+        _benchmark_opt = st.segmented_control("Benchmark / Reference Line:", options=["Market Price", "Government Target", "None"], key="lgu_benchmark_toggle", default="None")
         if _benchmark_opt is None:
-          _benchmark_opt = "Wala"
+          _benchmark_opt = "None"
       except Exception:
-        _benchmark_opt = st.radio("Benchmark / Reference Line:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], horizontal=True, key="lgu_benchmark_toggle")
-      if _benchmark_opt in ("3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
-        _benchmark_opt = "Presyo sa Merkado"
-      elif _benchmark_opt in ("NFA / DA Policy Baseline",):
-        _benchmark_opt = "Target ng Gobyerno"
-      elif _benchmark_opt in ("Itago (None)",):
-        _benchmark_opt = "Wala"
+        _benchmark_opt = st.radio("Benchmark / Reference Line:", options=["Market Price", "Government Target", "None"], horizontal=True, key="lgu_benchmark_toggle")
+      # Backwards compatibility: map legacy Tagalog values to English
+      if _benchmark_opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average", "Market Price (3-Year Average)", "Market Price (3-Yr Average)"):
+        _benchmark_opt = "Market Price"
+      elif _benchmark_opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
+        _benchmark_opt = "Government Target"
+      elif _benchmark_opt in ("Wala", "Itago (None)", "Hide (None)"):
+        _benchmark_opt = "None"
     with hdr_col2:
-      with st.popover(":material/info: Gabay sa Benchmark"):
+      with st.popover(":material/info: Benchmark Guide"):
         st.markdown("""
-### **Ano ang ibig sabihin ng mga guhit (Benchmark Lines)?**
-* **Presyo sa Merkado (3-Yr Rolling Avg):** Karaniwang presyo sa Bataan sa huling 12 quarters (tail 12) — inflation-aware. Yield: 10-yr mean.
-* **Target ng Gobyerno:** Regular **₱19.00/kg** NFA floor, Fancy **₱23.75/kg** (19×1.25), Yield **4.50 MT/ha** DA target.
-* **Wala:** Walang guhit — linya lang ng forecast/historical.
+### **What do the benchmark lines mean?**
+* **Market Price (3-Yr Rolling Avg):** Average Bataan price over the last 12 quarters (tail 12) — inflation-aware. Yield: 10-year mean.
+* **Government Target:** Regular **₱19.00/kg** NFA floor, Fancy **₱23.75/kg** (19×1.25), Yield **4.50 MT/ha** DA target.
+* **None:** No reference line — forecast/historical line only.
 """)
   else:
-    _benchmark_opt = st.session_state.get("lgu_benchmark_toggle", "Wala")
+    _benchmark_opt = st.session_state.get("lgu_benchmark_toggle", "None")
+    # Normalize legacy stored value
+    if _benchmark_opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
+      _benchmark_opt = "Market Price"
+    elif _benchmark_opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
+      _benchmark_opt = "Government Target"
+    elif _benchmark_opt in ("Wala", "Itago (None)"):
+      _benchmark_opt = "None"
 
   # ---- Charts (with PERIOD + benchmark) — skeleton while Plotly figures generate ----
   if show_all:

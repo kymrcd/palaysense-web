@@ -65,16 +65,80 @@ def filter_by_year(df, year):
     return df[df["year"] == year].copy()
 
 
+# Harvested area: normal ~5-120 ha/row, placeholder outliers 6k-15k inflate mean→
+# use median+IQR+hard cap. Single source of truth for overview.py + data_layer.
+_HARVESTED_HARD_CAP = 500  # ha, agronomist threshold
+_HARVESTED_COL_HINTS = ("harvest", "harvested", "area_harvested", "harvested_annual", "harvested_total")
+
+
+def _is_harvested_col(col: str) -> bool:
+    c = str(col).lower()
+    return any(h in c for h in _HARVESTED_COL_HINTS)
+
+
+def _clean_harvested_series(s: pd.Series, col_hint: str = "") -> pd.Series:
+    """Cap + IQR cleaning for harvested area. Reused by overview.py (DRY)."""
+    s = pd.to_numeric(s, errors="coerce").dropna()
+    s = s[s > 0]
+    # Hard cap for harvested area outliers (agronomist threshold)
+    if _is_harvested_col(col_hint):
+        s = s[s <= _HARVESTED_HARD_CAP]
+    if s.empty:
+        return s
+    # IQR filter for remaining extremes (needs >=4 points to be stable)
+    if len(s) >= 4:
+        q1 = s.quantile(0.25)
+        q3 = s.quantile(0.75)
+        iqr = q3 - q1
+        # Guard degenerate IQR=0 (constant series) -> keep cap-filtered s
+        if iqr > 0 and not pd.isna(iqr):
+            lo = q1 - 1.5 * iqr
+            hi = q3 + 1.5 * iqr
+            s = s[s.between(lo, hi)]
+    return s
+
+
+def _robust_harvested_total(df: pd.DataFrame, col: str) -> float | None:
+    """Per-year median (robust to outlier) then sum across years. Returns None if no valid."""
+    if df is None or df.empty or col not in df.columns:
+        return None
+    if "year" in df.columns:
+        def _per_year_median(g):
+            cleaned = _clean_harvested_series(g, col)
+            return float(cleaned.median()) if not cleaned.empty else np.nan
+        per_year = df.groupby("year")[col].apply(_per_year_median).dropna()
+        per_year = per_year[per_year > 0]
+        return float(per_year.sum()) if not per_year.empty else None
+    vals = _clean_harvested_series(df[col], col)
+    return float(vals.sum()) if not vals.empty else None
+
+
 def _safe_sum_or_mean(df, annual_col, total_col):
-    """Return the appropriate production/harvest aggregate, guarding NaN."""
+    """Return the appropriate production/harvest aggregate, guarding NaN.
+
+    Harvested columns use robust median+cap+IQR (outlier-safe) so
+    2026 9k placeholder doesn't pull 6k mean; production keeps mean/sum.
+    """
     if df is None or df.empty:
         return 0.0
+    # Determine target column and whether it's harvested-area
+    target = None
     if annual_col in df.columns:
-        val = df[annual_col].mean()
+        target = annual_col
     elif total_col in df.columns:
-        val = df[total_col].sum()
+        target = total_col
     else:
         return 0.0
+
+    if _is_harvested_col(target):
+        robust = _robust_harvested_total(df, target)
+        return 0.0 if robust is None or pd.isna(robust) else float(robust)
+
+    # Non-harvested (production) — original mean/sum, NaN-safe
+    if annual_col in df.columns:
+        val = df[annual_col].mean()
+    else:
+        val = df[total_col].sum()
     return 0.0 if pd.isna(val) else float(val)
 
 

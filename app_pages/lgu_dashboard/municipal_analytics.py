@@ -37,6 +37,39 @@ _MUNI_VARIETY_COLS = (
   "inbredordinary_dry", "inbredordinary_wet",
 )
 
+# Irrigated vs Rainfed grouping (historical only) — from LGU briefing
+_IRRIGATED_SET = {"balanga city", "balanga", "dinalupihan", "hermosa", "orani"}
+_RAINFED_SET = {"bagac", "morong", "mariveles"}
+
+
+def _irrigation_chip(key: str) -> str:
+  """Render All | Irrigated | Rainfed chips (historical only)."""
+  try:
+    choice = st.segmented_control(
+      "Irrigation Type", options=["All", "Irrigated", "Rainfed"], default="All",
+      selection_mode="single", key=key, help="Historical only — forecast prices are not split by irrigation type",
+    )
+    return choice if choice else "All"
+  except Exception:
+    choice = st.radio("Irrigation Type", ["All", "Irrigated", "Rainfed"], horizontal=True, key=f"{key}_radio", help="Historical only")
+    return choice if choice else "All"
+
+
+def _filter_by_irrigation(df: pd.DataFrame, choice: str) -> pd.DataFrame:
+  if df is None or df.empty or choice in (None, "All"):
+    return df
+  col = next((c for c in ("municipality", "Municipality") if c in df.columns), None)
+  if col is None:
+    return df
+  lc = df[col].astype(str).str.lower().str.strip()
+  if choice == "Irrigated":
+    mask = lc.isin(_IRRIGATED_SET)
+  elif choice == "Rainfed":
+    mask = lc.isin(_RAINFED_SET)
+  else:
+    return df
+  return df[mask].copy()
+
 
 def _derive_municipal_columns(m):
   """Derive `palay_production`, `dry_season`, `wet_season` from the raw
@@ -244,7 +277,7 @@ def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
 
   # 2. Interactive Crop Cycle Selector Dropdown
   selected_cycle = st.selectbox(
-    "Piliin ang Agrikultural na Siklo (Crop Cycle) na Nais Tingnan:",
+    "Select Crop Cycle to View:",
     [":material/wb_sunny: Dry Season Crop Cycle", ":material/water_drop: Wet Season Crop Cycle"],
     key=f"crop_cycle_picker_{rice_type}_{classification}",
   )
@@ -380,6 +413,8 @@ def _top_municipalities_bar(dr):
               icon_name="leaderboard"):
     # Filter rendered INSIDE the section card (compact Year dropdown).
     selected_year = _year_only_filter(dr, key="muni_year_top")
+    irrig = _irrigation_chip(key="muni_irrig_top")
+    st.caption("Historical only — Irrigated: Balanga, Dinalupihan, Hermosa, Orani | Rainfed: Bagac, Morong, Mariveles")
 
     muni = getattr(dr, "municipal_production_df", None)
     if muni is None or getattr(muni, "empty", True):
@@ -397,9 +432,10 @@ def _top_municipalities_bar(dr):
     m["year"] = m["date"].dt.year
     if selected_year is not None:
       m = m[m["year"] == selected_year]
+    m = _filter_by_irrigation(m, irrig)
 
     if m.empty:
-      st.info("No production data for the selected year.")
+      st.info("No production data for the selected Irrigated/Rainfed filter + year. Try All.")
       return
 
     top5 = (
@@ -436,6 +472,8 @@ def _seasonal_distribution_pies(dr):
               icon_name="pie_chart"):
     # Filter rendered INSIDE the section card (compact Year dropdown).
     selected_year = _year_only_filter(dr, key="muni_year_season")
+    irrig = _irrigation_chip(key="muni_irrig_season")
+    st.caption("Historical only — Irrigated: Balanga, Dinalupihan, Hermosa, Orani | Rainfed: Bagac, Morong, Mariveles")
 
     muni = getattr(dr, "municipal_production_df", None)
     if muni is None or getattr(muni, "empty", True):
@@ -453,9 +491,10 @@ def _seasonal_distribution_pies(dr):
     m["year"] = m["date"].dt.year
     if selected_year is not None:
       m = m[m["year"] == selected_year]
+    m = _filter_by_irrigation(m, irrig)
 
     if m.empty:
-      st.info("No seasonal data for the selected year.")
+      st.info("No seasonal data for the selected Irrigated/Rainfed filter + year. Try All.")
       return
 
     year_label = f"({selected_year})" if selected_year is not None else ""
@@ -506,6 +545,8 @@ def _municipal_yield_tab(dr):
 
     # 2. COMPACT YEAR FILTER (inside the card, single column).
     selected_year = _year_only_filter(dr, key="muni_year_yield")
+    irrig = _irrigation_chip(key="muni_irrig_yield")
+    st.caption("Historical only — Irrigated: Balanga, Dinalupihan, Hermosa, Orani | Rainfed: Bagac, Morong, Mariveles")
 
     muni = getattr(dr, "municipality_df", None)
     if muni is None or getattr(muni, "empty", True):
@@ -516,12 +557,13 @@ def _municipal_yield_tab(dr):
     m["date"] = pd.to_datetime(m["date"])
     m["_year"] = m["date"].dt.year
 
-    # Optional year filter
+    # Optional year filter + irrigation chip
     if selected_year is not None:
       m = m[m["_year"] == selected_year]
+    m = _filter_by_irrigation(m, irrig)
 
     if m.empty:
-      st.info("No municipal yield data for the selected filter.")
+      st.info("No municipal yield data for the selected Irrigated/Rainfed filter + year. Try All.")
       return
 
     # Aggregate per-municipality production by season

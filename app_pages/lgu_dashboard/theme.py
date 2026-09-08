@@ -64,7 +64,7 @@ _GLOBAL_CSS = """
 
 html, body, #root { font-family: var(--ps-font); background-color: var(--ps-bg); color: var(--ps-text); }
 .stApp { background-color: var(--ps-bg); }
-.block-container { padding-top: 1rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; padding-bottom: 2rem !important; max-width: 1400px !important; }
+.block-container { padding-top: 0.6rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; padding-bottom: 2rem !important; max-width: 1400px !important; }
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; display: none; }
 div[data-testid="stToolbar"], div[data-testid="stDecoration"], .stAppDeployButton { display: none; }
 
@@ -77,20 +77,79 @@ div[data-testid="stToolbar"], div[data-testid="stDecoration"], .stAppDeployButto
     -webkit-font-smoothing: antialiased;
 }
 
-/* --- Top header banner (single white card) --- */
+/* --- Flush page header (Option C: title sits on whitespace, no white card) --- */
 .ps-header-card {
-    background: var(--ps-card);
-    border: 1px solid var(--ps-border);
-    border-radius: 18px;
-    padding: 1rem 1.4rem 0.6rem 1.4rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    margin-bottom: 1.2rem;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0.2rem 0 0.4rem 0 !important;
+    box-shadow: none !important;
+    margin-bottom: 0.4rem !important;
 }
-.ps-header-card .ps-topbar-title { font-size: 2rem; font-weight: 800; color: var(--ps-dark); margin: 0; letter-spacing: -0.5px; }
-.ps-header-card .ps-topbar-subtitle { font-size: 0.82rem; color: var(--ps-text-secondary); margin: 0.2rem 0 0 0; font-weight: 400; }
+.ps-page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap;
+    padding: 0.2rem 0 0.4rem 0;
+    margin-bottom: 0.4rem;
+    background: transparent; border: none;
+}
+.ps-header-card .ps-topbar-title,
+.ps-page-header .ps-topbar-title { font-size: 2rem; font-weight: 800; color: var(--ps-dark); margin: 0; letter-spacing: -0.5px; line-height: 1.2; }
+.ps-header-card .ps-topbar-subtitle,
+.ps-page-header .ps-topbar-subtitle { font-size: 0.82rem; color: var(--ps-text-secondary); margin: 0.2rem 0 0 0; font-weight: 400; }
 .ps-header-right { display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem; }
 
-/* Compact native selectbox inside the header card */
+/* --- Filter card (Option C: subtle white card for filters, aligned to whitespace) --- */
+.ps-filter-card {
+    background: var(--ps-card);
+    border: 1px solid var(--ps-border);
+    border-radius: 14px;
+    padding: 0.85rem 1rem 0.75rem 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    margin: 0.2rem 0 1rem 0;
+}
+.ps-filter-card .ps-filter-label,
+.ps-filter-label {
+    font-size: 0.68rem; font-weight: 700; color: var(--ps-dark);
+    text-transform: uppercase; letter-spacing: 0.4px;
+    margin-bottom: 0.15rem; display: block; line-height: 1;
+}
+.ps-filter-card div[data-testid="stSelectbox"] > div {
+    background: #FFFFFF !important;
+    border: 1px solid var(--ps-border) !important;
+    border-radius: 10px !important;
+    min-height: 38px !important; height: 38px !important;
+    font-size: 0.85rem !important; color: var(--ps-dark) !important;
+    font-weight: 600 !important;
+}
+.ps-filter-card div[data-testid="stSelectbox"] > div:hover { border-color: var(--ps-primary) !important; }
+.ps-filter-card div[data-testid="stSelectbox"] span { color: var(--ps-dark) !important; font-weight: 600 !important; }
+
+/* --- Agriflood-style stacked filter cards (Dashboard Data Filters) --- */
+.ps-filter-section-title { font-size:1.05rem; font-weight:700; color:#1F2937; margin:0; }
+.ps-filter-section-desc { font-size:0.82rem; color:#6B7280; margin:0.15rem 0 0 0; }
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-filter-card-ref) {
+    background:#FFFFFF !important; border:1px solid #E5E7EB !important;
+    border-radius:12px !important; box-shadow:0 1px 3px rgba(0,0,0,0.05) !important;
+    overflow:visible !important; padding:0 !important; margin:0 0 0.9rem 0 !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-filter-card-ref) > div { padding:0 !important; gap:0 !important; }
+.ps-filter-card-ref .ps-filter-label { font-size:0.68rem; font-weight:700; color:#475569; letter-spacing:0.3px; text-transform:uppercase; margin:0 0 0.35rem 0; display:block; }
+.ps-filter-card-ref div[data-testid="stSelectbox"] { width:100% !important; }
+.ps-filter-card-ref div[data-testid="stSelectbox"] > div {
+    min-height:42px !important; height:42px !important; border-radius:12px !important;
+    border:1px solid #E5E7EB !important; background:#FFFFFF !important;
+    box-shadow:none !important; padding:0 0.7rem !important; width:100% !important; margin:0 !important;
+}
+.ps-filter-card-ref div[data-testid="stSelectbox"] span { font-size:0.88rem !important; }
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-filter-card-ref) [data-testid="column"] { padding:0 !important; min-width:0 !important; overflow:visible !important; }
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-filter-card-ref) [data-testid="column"] > div { padding:0 !important; }
+div[data-baseweb="popover"] { margin-top:4px !important; }
+div[data-baseweb="menu"] { border:1px solid #E5E7EB !important; border-radius:12px !important; box-shadow:0 8px 24px rgba(0,0,0,0.10) !important; overflow:hidden !important; padding:4px !important; }
+div[data-baseweb="menu"] li { border-radius:8px !important; margin:1px 0 !important; }
+div[data-baseweb="menu"] li[aria-selected="true"] { background:#E8F5E9 !important; }
+
+/* Legacy header-card selectbox fallback (now transparent, keep for compat) */
 .ps-header-card div[data-testid="stSelectbox"] label {
     font-size: 0.68rem !important; font-weight: 600 !important;
     color: var(--ps-text-secondary) !important;
@@ -98,7 +157,7 @@ div[data-testid="stToolbar"], div[data-testid="stDecoration"], .stAppDeployButto
     margin-bottom: 0.1rem !important;
 }
 .ps-header-card div[data-testid="stSelectbox"] > div {
-    background: #F7F8F7 !important;
+    background: #FFFFFF !important;
     border: 1px solid var(--ps-border) !important;
     border-radius: 10px !important;
     min-height: 38px !important; height: 38px !important;
@@ -232,17 +291,14 @@ def icon(name, size="20px", color=None):
 
 
 def topbar(title, subtitle, as_of=""):
-    """Render the top header as a single white card.
+    """Render a flush page header (Option C: no white card, sits on whitespace).
 
-    The card shows the page title/subtitle on the left and the "updated"
-    chip on the right. The user profile badge ("Hello, User") has been
-    removed entirely as requested.
+    Single self-contained markdown block — no split open/close tags — to avoid
+    the empty white capsule bug. Shows title/subtitle left, updated chip right.
     """
     updated = f'<span class="ps-updated-chip">{icon("schedule", "15px")} As of {as_of} · Auto-updated</span>' if as_of else ""
-    st.markdown(f"""<div class="ps-header-card"><div class="ps-topbar">""", unsafe_allow_html=True)
-
     st.markdown(f"""
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+    <div class="ps-page-header">
         <div>
             <div class="ps-topbar-title" style="font-size:2rem;font-weight:800;color:#123524;letter-spacing:-0.5px;line-height:1.2;">{title}</div>
             <div class="ps-topbar-subtitle">{subtitle}</div>
@@ -255,8 +311,8 @@ def topbar(title, subtitle, as_of=""):
 
 
 def close_header_card():
-    """Close the header card opened by topbar()."""
-    st.markdown("</div></div>", unsafe_allow_html=True)
+    """No-op for backward compatibility — topbar() now self-closes."""
+    return
 
 
 def kpi_card(label, value, sub="", icon_name="", icon_bg="rgba(30,92,58,0.1)", icon_color="#1E5C3A", accent="#1E5C3A",
