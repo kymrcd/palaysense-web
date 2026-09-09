@@ -141,36 +141,22 @@ def _primary_filters(dr):
     unsafe_allow_html=True,
   )
 
-  # Compact top toolbar: Year dropdown takes only ~20-25% of the width.
+  # Compact one-line toolbar: Year | Rice Type | Classification | Municipalities
   with st.container():
     st.markdown('<div class="muni-filter-toolbar">', unsafe_allow_html=True)
-    col_year, _ = st.columns([1, 4])
+    col_year, f1, f2, f4 = st.columns([0.9, 1, 1, 1.6], gap="small")
     with col_year:
       if year_list:
-        selected_year = st.selectbox("Year",
-                       options=year_list,
-                       index=len(year_list) - 1,
-                       key="muni_year",
-                       label_visibility="visible")
+        selected_year = st.selectbox("Year", options=year_list, index=len(year_list) - 1, key="muni_year", label_visibility="visible")
       else:
         selected_year = None
-        st.selectbox("Year", options=["N/A"], disabled=True,
-               key="muni_year_na", label_visibility="visible")
-
-    # Remaining filters in a 3-column row beneath the Year toolbar.
-    f1, f2, f4 = st.columns(3)
+        st.selectbox("Year", options=["N/A"], disabled=True, key="muni_year_na", label_visibility="visible")
     with f1:
-      selected_rice_type = st.selectbox("Rice Type (Municipal)",
-                       options=rice_types, key="muni_rice_type")
+      selected_rice_type = st.selectbox("Rice Type (Municipal)", options=rice_types, key="muni_rice_type")
     with f2:
-      selected_class = st.selectbox(
-        "Rice Classification",
-        options=[f"{selected_rice_type} {c}" for c in class_options],
-        key="muni_rice_class",
-      )
+      selected_class = st.selectbox("Rice Classification", options=[f"{selected_rice_type} {c}" for c in class_options], key="muni_rice_class")
     with f4:
-      selected_munis = st.multiselect("Municipalities", options=muni_list,
-                      default=[], key="muni_munis")
+      selected_munis = st.multiselect("Municipalities", options=muni_list, default=[], key="muni_munis", placeholder="All municipalities")
     st.markdown('</div>', unsafe_allow_html=True)
 
   return selected_class, selected_munis, selected_year
@@ -275,10 +261,10 @@ def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
     selected_munis_lc = [str(m).lower() for m in selected_municipalities]
     df = df[df["municipality"].str.lower().isin(selected_munis_lc)]
 
-  # 2. Interactive Crop Cycle Selector Dropdown
+  # 2. Interactive Crop Cycle Selector Dropdown — plain text (selectbox does not render :material: icons)
   selected_cycle = st.selectbox(
     "Select Crop Cycle to View:",
-    [":material/wb_sunny: Dry Season Crop Cycle", ":material/water_drop: Wet Season Crop Cycle"],
+    ["☀️ Dry Season Crop Cycle", "🌧️ Wet Season Crop Cycle"],
     key=f"crop_cycle_picker_{rice_type}_{classification}",
   )
 
@@ -310,20 +296,16 @@ def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
              for label in forecast_month_labels
              if str(label).split()[-1].isdigit()), 2026)
 
-  # 5. Narrative per crop cycle
+  # 5. Narrative per crop cycle — plain text to avoid :material: flash
   if "Dry" in selected_cycle:
-    st.subheader(
-      f":material/agriculture: Dry Season Forecast: Mid to Late Harvesting Phase ({forecast_year})"
-    )
+    st.subheader(f"🌱 Dry Season Forecast: Mid to Late Harvesting Phase ({forecast_year})")
     st.caption(
       f" This tracks the price trend for palay planted late {forecast_year - 1}. "
       f"Peak harvesting happens from January to March {forecast_year}, "
       f"winding down completely by May {forecast_year}."
     )
   else:
-    st.subheader(
-      f":material/agriculture: Wet Season Forecast: Overlapping Planting & Early Monsoon Harvest ({forecast_year})"
-    )
+    st.subheader(f"🌱 Wet Season Forecast: Overlapping Planting & Early Monsoon Harvest ({forecast_year})")
     st.caption(
       f" This tracks fields undergoing land preparation or planting from January to May {forecast_year}, "
       f"transitioning into wet season crop growth and heavy monsoon harvests "
@@ -347,35 +329,34 @@ def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
     st.info("No data available for the selected filters.")
     return
 
-  # 7. Altair clustered bar chart — zoomed Y-axis (zero=False) + tight
-  #  domain around the min/max prices in the active selection so that
-  #  changes in cents are visibly distinct.
-  price_min = plot_df["price"].min()
-  price_max = plot_df["price"].max()
-  price_pad = max((price_max - price_min) * 0.08, 0.05)
-  y_domain = [price_min - price_pad, price_max + price_pad]
-
-  chart = (
-    alt.Chart(plot_df)
-    .mark_bar()
-    .encode(
-      x=alt.X("forecast_month:N", title="Forecast Month",
-          sort=forecast_month_labels),
-      xOffset="municipality:N",
-      y=alt.Y("price:Q", title="Price (₱/kg)",
-          scale=alt.Scale(zero=False, domain=y_domain)),
-      color=alt.Color("municipality:N",
-              legend=alt.Legend(title="Municipality")),
-      tooltip=[
-        "forecast_month:N",
-        "municipality:N",
-        alt.Tooltip("price:Q", title="Price (₱/kg)", format=".2f"),
-      ],
-    )
-    .properties(height=400,
-          title=f"{rice_type} {classification} — {selected_cycle}")
+  # 7. Plotly grouped bar — compact, fits without scrolling
+  plot_df["price"] = pd.to_numeric(plot_df["price"], errors="coerce")
+  plot_df = plot_df.dropna(subset=["price"])
+  if plot_df.empty:
+    st.info("No price available for the selected filters.")
+    return
+  plot_df["municipality"] = plot_df["municipality"].astype(str).str.title()
+  fig = px.bar(
+    plot_df, x="forecast_month", y="price", color="municipality",
+    barmode="group", text=plot_df["price"].round(2),
+    category_orders={"forecast_month": forecast_month_labels},
+    color_discrete_sequence=px.colors.qualitative.Set3,
+    labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "municipality": "Municipality"},
+    title=f"{rice_type} {classification} — {selected_cycle}",
   )
-  st.altair_chart(chart, use_container_width=True)
+  fig.update_layout(
+    height=340, margin=dict(t=35, b=120, l=45, r=10),
+    plot_bgcolor="white", paper_bgcolor="white",
+    font=dict(family="Inter, sans-serif", size=11),
+    legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="center", x=0.5, font=dict(size=10), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1),
+    yaxis=dict(gridcolor="#F3F4F6", showgrid=True),
+    xaxis=dict(gridcolor="#F3F4F6", showgrid=False, automargin=True),
+    title=dict(font=dict(size=13)),
+    bargap=0.22, bargroupgap=0.10,
+    uniformtext_minsize=8, uniformtext_mode="hide",
+  )
+  fig.update_traces(texttemplate=None, hovertemplate="Bayan: %{fullData.name}<br>%{x}<br>₱%{y:.2f}/kg<extra></extra>", cliponaxis=False)
+  st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
 
 
 def _municipal_price_tab(dr):

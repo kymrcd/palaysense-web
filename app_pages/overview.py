@@ -861,40 +861,36 @@ def _yield_summary_card(yield_forecast):
 
 def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
                     classification: str,
-                    selected_municipalities: list):
+                    selected_municipalities: list,
+                    selected_cycle: str | None = None):
   """
-  Renders the actual 3-month municipal price forecast (Altair).
+  Renders the actual 3-month municipal price forecast (Plotly grouped bar).
 
-  Plots the real forecast values (Month 1-3 from ``df_municipal_forecasts``)
-  for the user's Rice Type / Classification / Crop Cycle selection as a
-  clustered bar chart: bars are grouped by forecast month on the X-axis,
-  with each municipality offset side-by-side via the ``xOffset`` channel.
-  The Y-axis uses ``alt.Scale(zero=False)`` with a tight domain (clamped
-  around the min/max prices in the current selection) so small price
-  changes in cents are visibly distinct. The X-axis is ordered by the
-  actual forecast month labels contained in the uploaded dataset.
+  If selected_cycle is None, renders its own Crop Cycle dropdown; otherwise
+  uses the passed value (allows compact one-line filter row).
   """
   if df is None or df.empty:
     st.error(" Municipal forecast dataset is empty or unreadable.")
     return
 
   df = df.copy()
-  # Standardize column headers to lowercase for safety
   df.columns = [str(col).lower() for col in df.columns]
 
-  # 1. Municipality multi-select filter (empty selection = all municipalities)
   if selected_municipalities:
     selected_munis_lc = [str(m).lower() for m in selected_municipalities]
     df = df[df["municipality"].str.lower().isin(selected_munis_lc)]
 
-  # 2. Interactive Crop Cycle Selector Dropdown
-  selected_cycle = st.selectbox(
-    "Piliin ang Agrikultural na Siklo (Crop Cycle) na Nais Tingnan:",
-    [":material/wb_sunny: Dry Season Crop Cycle", ":material/water_drop: Wet Season Crop Cycle"],
-    key=f"crop_cycle_picker_{rice_type}_{classification}",
-  )
-
-  st.write("---")
+  # Crop Cycle — use passed value if provided (one-line layout), else render own dropdown
+  if selected_cycle is None:
+    selected_cycle = st.selectbox(
+      "Piliin ang Agrikultural na Siklo (Crop Cycle) na Nais Tingnan:",
+      ["☀️ Dry Season Crop Cycle", "🌧️ Wet Season Crop Cycle"],
+      key=f"crop_cycle_picker_{rice_type}_{classification}",
+    )
+    st.write("---")
+  else:
+    # Already selected in compact top row — no extra widget
+    pass
 
   # 3. Match the user's filters to the forecast row (e.g. hybridpremium_dry)
   base_key = f"{rice_type.lower()}{classification.lower()}".replace(" ", "")
@@ -922,20 +918,16 @@ def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
              for label in forecast_month_labels
              if str(label).split()[-1].isdigit()), 2026)
 
-  # 5. Narrative per crop cycle
+  # 5. Narrative per crop cycle — plain text to avoid :material: flash
   if "Dry" in selected_cycle:
-    st.subheader(
-      f":material/agriculture: Dry Season Forecast: Mid to Late Harvesting Phase ({forecast_year})"
-    )
+    st.subheader(f"🌱 Dry Season Forecast: Mid to Late Harvesting Phase ({forecast_year})")
     st.caption(
       f" This tracks the price trend for palay planted late {forecast_year - 1}. "
       f"Peak harvesting happens from January to March {forecast_year}, "
       f"winding down completely by May {forecast_year}."
     )
   else:
-    st.subheader(
-      f":material/agriculture: Wet Season Forecast: Overlapping Planting & Early Monsoon Harvest ({forecast_year})"
-    )
+    st.subheader(f"🌱 Wet Season Forecast: Overlapping Planting & Early Monsoon Harvest ({forecast_year})")
     st.caption(
       f" This tracks fields undergoing land preparation or planting from January to May {forecast_year}, "
       f"transitioning into wet season crop growth and heavy monsoon harvests "
@@ -959,35 +951,36 @@ def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
     st.info("No data available for the selected filters.")
     return
 
-  # 7. Altair clustered bar chart — zoomed Y-axis (zero=False) + tight
-  #  domain around the min/max prices in the active selection so that
-  #  changes in cents are visibly distinct.
-  price_min = plot_df["price"].min()
-  price_max = plot_df["price"].max()
-  price_pad = max((price_max - price_min) * 0.08, 0.05)
-  y_domain = [price_min - price_pad, price_max + price_pad]
-
-  chart = (
-    alt.Chart(plot_df)
-    .mark_bar()
-    .encode(
-      x=alt.X("forecast_month:N", title="Forecast Month",
-          sort=forecast_month_labels),
-      xOffset="municipality:N",
-      y=alt.Y("price:Q", title="Price (₱/kg)",
-          scale=alt.Scale(zero=False, domain=y_domain)),
-      color=alt.Color("municipality:N",
-              legend=alt.Legend(title="Municipality")),
-      tooltip=[
-        "forecast_month:N",
-        "municipality:N",
-        alt.Tooltip("price:Q", title="Price (₱/kg)", format=".2f"),
-      ],
-    )
-    .properties(height=400,
-          title=f"{rice_type} {classification} — {selected_cycle}")
+  # 7. Plotly grouped bar — compact, fits without scrolling, no xOffset (more reliable than Altair)
+  plot_df["price"] = pd.to_numeric(plot_df["price"], errors="coerce")
+  plot_df = plot_df.dropna(subset=["price"])
+  if plot_df.empty:
+    st.info("Walang presyo para sa napiling filter.")
+    return
+  # Sort municipalities for stable colors, keep forecast month order
+  plot_df["municipality"] = plot_df["municipality"].astype(str).str.title()
+  fig = px.bar(
+    plot_df, x="forecast_month", y="price", color="municipality",
+    barmode="group", text=plot_df["price"].round(2),
+    category_orders={"forecast_month": forecast_month_labels},
+    color_discrete_sequence=px.colors.qualitative.Set3,
+    labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "municipality": "Bayan"},
+    title=f"{rice_type} {classification} — {selected_cycle}",
   )
-  st.altair_chart(chart, use_container_width=True)
+  fig.update_layout(
+    height=340, margin=dict(t=35, b=120, l=45, r=10),
+    plot_bgcolor="white", paper_bgcolor="white",
+    font=dict(family="Inter, sans-serif", size=11),
+    legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="center", x=0.5, font=dict(size=10), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1),
+    yaxis=dict(gridcolor="#F3F4F6", showgrid=True),
+    xaxis=dict(gridcolor="#F3F4F6", showgrid=False, automargin=True),
+    title=dict(font=dict(size=13)),
+    bargap=0.22, bargroupgap=0.10,
+    uniformtext_minsize=8, uniformtext_mode="hide",
+  )
+  # No outside text — avoid overlap on fullscreen exit; hover shows price
+  fig.update_traces(texttemplate=None, hovertemplate="Bayan: %{fullData.name}<br>%{x}<br>₱%{y:.2f}/kg<extra></extra>", cliponaxis=False)
+  st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
 
 
 def _insights_narrative(prov_year_df, quarterly_data, selected_muni_name,
@@ -1125,7 +1118,7 @@ def overview_page():
       st.stop()
   # Clean state (historical exists but forecasts not yet) → banner only, graphs stay visible
   if dr.has_provincial_data and not dr.has_forecasts:
-      st.info("ℹ️ Inihahanda pa ang hula sa presyo at ani — makikita pa rin ang dati mong datos. Sandali lang po habang ginagawa ng LGU ang bagong hula.")
+      st.info("ℹ️ Inihahanda pa ang prediksyon sa presyo at ani — makikita pa rin ang dati mong datos. Sandali lang po habang ginagawa ng LGU ang bagong prediksyon.")
   provincial_df = dr.provincial_df.copy()
   _prod_muni = getattr(dr, "municipal_production_df", None)
   municipality_df = (
@@ -2510,7 +2503,7 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
   * **Ani:** **4.50 MT/ha** *(target na ani bawat ektarya)*.
 
 * **:material/block: Wala:**
-  Walang guhit — makikita mo lang ang tunay na linya ng hula o nakaraang taon.
+  Walang guhit — makikita mo lang ang tunay na linya ng prediksyon o nakaraang taon.
 """)
   else:
     benchmark_option = st.session_state.get("benchmark_toggle", "Wala")
@@ -2521,65 +2514,101 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
     elif benchmark_option in ("None", "Hide (None)", "Itago (None)"):
       benchmark_option = "Wala"
 
-  # Plots Row 1
-  chart_row1_col1, chart_row1_col2 = st.columns(2, gap="medium")
+  # Helper: simple farmer insight box (plain Filipino, no jargon)
+  def _farmer_insight_box(text):
+    return f'<div style="background:#F0FDF4; border-left:4px solid #16A34A; padding:0.55rem 0.8rem; border-radius:8px; font-size:0.82rem; color:#14532D; margin-top:0.55rem; line-height:1.5;">💡 <b>Paliwanag:</b> {text}</div>'
 
-  with chart_row1_col1:
-    if show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Yield Insights"):
-      st.markdown(
-        '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:0px; color:#1B5E20;">trending_up</i></span>Provincial Yield Forecast</span></div><div class="component-desc">Historical harvest performance vs. AI-powered quarterly forecasts</div>',
-        unsafe_allow_html=True)
+  # Plots Row 1 — full-width when filtered (no white-space gap), 2-col only for Buong Dashboard
+  def _render_yield_card():
+    st.markdown(
+      '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:0px; color:#1B5E20;">trending_up</i></span>Provincial Yield Forecast</span></div><div class="component-desc">Prediksyon ng ani bawat ektarya — tingnan kung pataas o pababa ang linya</div>',
+      unsafe_allow_html=True)
+    try:
+      tab_yield_forecast, tab_yield_historical = st.tabs([":material/query_stats: Yield Forecast", ":material/show_chart: Historical Yield Trend"])
+      with tab_yield_forecast:
+        with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
+          _fig_yf = _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option=benchmark_option)
+        st.plotly_chart(_fig_yf, width="stretch", key=f"overview_yield_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}")
+      with tab_yield_historical:
+        with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
+          _fig_yh = _yield_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option)
+        st.plotly_chart(_fig_yh, width="stretch", key=f"overview_yield_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}")
+    except Exception as e:
+      st.warning(f" Yield forecast chart could not render: {str(e)}")
+    # Simple insight per chart — plain Filipino
+    try:
+      _hist_avg = float(provincial_df["quarterly_yield_mt_per_ha"].dropna().mean()) if "quarterly_yield_mt_per_ha" in provincial_df.columns else None
+      _next_y = float(forecast_quarterly_yield[0]) if forecast_quarterly_yield and len(forecast_quarterly_yield) > 0 else None
+      if _hist_avg is not None and _next_y is not None:
+        _diff = _next_y - _hist_avg
+        if _diff > 0.12:
+          _msg = f"Tataas ng {_diff:.2f} MT/ha ang prediksyon ng ani kumpara sa dati ({_hist_avg:.2f} → {_next_y:.2f}). Magandang magtanim ngayon."
+        elif _diff < -0.12:
+          _msg = f"Bababa ng {abs(_diff):.2f} MT/ha ang prediksyon ng ani ({_hist_avg:.2f} → {_next_y:.2f}). Mag-ingat sa gastos sa pataba."
+        else:
+          _msg = f"Halos pareho lang ang prediksyon ng ani ({_next_y:.2f} MT/ha) kumpara sa dati ({_hist_avg:.2f} MT/ha). Stable ang ani."
+      else:
+        _msg = "Kapag pataas ang linya, mas marami ang aanihin. Kapag pababa, mas kaunti."
+      st.markdown(_farmer_insight_box(_msg), unsafe_allow_html=True)
+    except Exception:
+      st.markdown(_farmer_insight_box("Kapag pataas ang linya, mas marami ang aanihin. Kapag pababa, mas kaunti."), unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-      try:
-        tab_yield_forecast, tab_yield_historical = st.tabs([":material/query_stats: Yield Forecast", ":material/show_chart: Historical Yield Trend"])
-        with tab_yield_forecast:
-          with st.skeleton(height=350):
-            _fig_yf = _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option=benchmark_option)
-          st.plotly_chart(
-            _fig_yf,
-            width="stretch",
-            key=f"overview_yield_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}",
-          )
-        with tab_yield_historical:
-          with st.skeleton(height=350):
-            _fig_yh = _yield_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option)
-          st.plotly_chart(
-            _fig_yh,
-            width="stretch",
-            key=f"overview_yield_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}",
-          )
-      except Exception as e:
-        st.warning(f" Yield forecast chart could not render: {str(e)}")
+  def _render_price_card():
+    st.markdown(
+      '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:0px; color:#1B5E20;">analytics</i></span>Provincial Price Forecast (6 Months)</span></div><div class="component-desc">Prediksyon ng presyo ng palay — tingnan kung kailan mataas ang presyo para kumita</div>',
+      unsafe_allow_html=True)
+    try:
+      tab_price_forecast, tab_price_historical = st.tabs([":material/query_stats: Price Forecast", ":material/show_chart: Historical Price Trend"])
+      with tab_price_forecast:
+        with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
+          _fig_pf = _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option=benchmark_option)
+        st.plotly_chart(_fig_pf, width="stretch", key=f"overview_price_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}")
+      with tab_price_historical:
+        with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
+          _fig_ph = _price_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option)
+        st.plotly_chart(_fig_ph, width="stretch", key=f"overview_price_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}")
+    except Exception as e:
+      st.warning(f" Price forecast chart could not render: {str(e)}")
+    try:
+      _f = float(forecast_3months_fancy[0]) if forecast_3months_fancy and len(forecast_3months_fancy) > 0 else None
+      _r = float(forecast_variety_3months[0]) if forecast_variety_3months and len(forecast_variety_3months) > 0 else None
+      if _f is not None and _r is not None:
+        if _f > _r + 1:
+          _msg = f"Prediksyon: Fancy ₱{_f:.2f}/kg, Regular ₱{_r:.2f}/kg. Mas mataas ang Fancy ngayon — mas malaki ang kita sa Fancy."
+        elif _r > _f:
+          _msg = f"Prediksyon: Regular ₱{_r:.2f}/kg, Fancy ₱{_f:.2f}/kg. Mas mataas ang Regular — pwede itago muna ang Fancy."
+        else:
+          _msg = f"Prediksyon: Fancy ₱{_f:.2f}/kg, Regular ₱{_r:.2f}/kg. Halos magkapareho ang presyo."
+      elif _f is not None:
+        _msg = f"Prediksyon ng Fancy: ₱{_f:.2f}/kg. Kapag pataas ang linya, mas mataas ang presyo sa susunod na buwan."
+      elif _r is not None:
+        _msg = f"Prediksyon ng Regular: ₱{_r:.2f}/kg. Kapag pataas ang linya, mas mataas ang presyo sa susunod na buwan."
+      else:
+        _msg = "Kapag pataas ang linya, tataas ang presyo. Kapag pababa, bababa ang presyo."
+      st.markdown(_farmer_insight_box(_msg), unsafe_allow_html=True)
+    except Exception:
+      st.markdown(_farmer_insight_box("Kapag pataas ang linya, tataas ang presyo. Kapag pababa, bababa ang presyo."), unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-      st.markdown("</div>", unsafe_allow_html=True)
-
-  with chart_row1_col2:
-    if show_all or section_choice in ("Buong Dashboard", "Price Forecast", "Price Insights"):
-      st.markdown(
-        '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:0px; color:#1B5E20;">analytics</i></span>Provincial Price Forecast (6 Months)</span></div><div class="component-desc">Strategic buying & selling windows for optimal returns</div>',
-        unsafe_allow_html=True)
-
-      try:
-        tab_price_forecast, tab_price_historical = st.tabs([":material/query_stats: Price Forecast", ":material/show_chart: Historical Price Trend"])
-        with tab_price_forecast:
-          with st.skeleton(height=350):
-            _fig_pf = _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option=benchmark_option)
-          st.plotly_chart(
-            _fig_pf,
-            width="stretch",
-            key=f"overview_price_fc_{selected_start_year}_{selected_end_year}_{benchmark_option}",
-          )
-        with tab_price_historical:
-          with st.skeleton(height=350):
-            _fig_ph = _price_historical_chart(provincial_year, selected_period, benchmark_option=benchmark_option)
-          st.plotly_chart(
-            _fig_ph,
-            width="stretch",
-            key=f"overview_price_hist_{selected_start_year}_{selected_end_year}_{selected_period}_{benchmark_option}",
-          )
-      except Exception as e:
-        st.warning(f" Price forecast chart could not render: {str(e)}")
-      st.markdown("</div>", unsafe_allow_html=True)
+  # Layout: full-width when single section selected, side-by-side only for Buong Dashboard
+  if show_all:
+    chart_row1_col1, chart_row1_col2 = st.columns(2, gap="medium")
+    with chart_row1_col1:
+      _render_yield_card()
+    with chart_row1_col2:
+      _render_price_card()
+  else:
+    if section_choice in ("Yield Forecast", "Yield Insights"):
+      _render_yield_card()
+    elif section_choice in ("Price Forecast", "Price Insights"):
+      _render_price_card()
+    elif section_choice == "Buong Dashboard":
+      chart_row1_col1, chart_row1_col2 = st.columns(2, gap="medium")
+      with chart_row1_col1:
+        _render_yield_card()
+      with chart_row1_col2:
+        _render_price_card()
 
   # --- End Section Divider: Forecast Graphs (visual close) ---
   if show_all or section_choice in ("Buong Dashboard", "Yield Forecast", "Price Forecast", "Yield Insights", "Price Insights"):
@@ -2592,44 +2621,48 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
     st.markdown("""<hr style="border:1px solid #ddd; margin-top: 1rem; margin-bottom: 1rem;">""",
           unsafe_allow_html=True)
 
-    st.subheader(":material/agriculture: Municipal Price Forecast")
+    st.subheader("🌾 Municipal Price Forecast")
     st.write(
-      "Projected palay price trends by crop cycle across Bataan municipalities. "
-      "Use the filters below to explore rice types, classifications, and municipalities."
+      "Sinasagot ng graph na ito: **Magkano ang prediksyon na presyo ng palay sa bawat bayan sa Bataan sa susunod na 3 buwan?** "
+      "Piliin sa filters ang uri at klase ng palay at bayan para makita agad kung saan pinakamataas ang presyo."
     )
 
     try:
       df_municipal_forecast = df_municipal_forecasts.copy()
       if df_municipal_forecast.empty:
-        st.info("Municipal forecast dataset not available yet. "
-            "Run the background pipeline to generate 3-month municipal forecasts.")
+        st.info("Wala pang prediksyon para sa bawat bayan. Pakihintay ang LGU na gumawa ng prediksyon.")
       else:
-        # Municipalities from the forecast file feed the chart's multi-select.
+        # Compact one-line filters — all 4 in a single row
         muni_label_col = _pick_column(df_municipal_forecast, ["Municipality"])
         muni_list = (
           list(df_municipal_forecast[muni_label_col].dropna().unique())
           if muni_label_col is not None
           else []
         )
-        selected_muni = st.multiselect("Filter Municipalities:", options=muni_list, default=[])
+        f_muni, f_rt, f_cls, f_cyc = st.columns([1.5, 0.9, 0.9, 1.2], gap="small")
+        with f_muni:
+          selected_muni = st.multiselect("Filter Municipalities:", options=muni_list, default=[], placeholder="Lahat ng bayan")
+        with f_rt:
+          ov_rice_type = st.selectbox("Rice Type", options=["Hybrid", "Inbred"], key="ov_muni_rt")
+        with f_cls:
+          ov_classification = st.selectbox("Rice Classification", options=["Premium", "Ordinary"], key="ov_muni_cls")
+        with f_cyc:
+          ov_cycle = st.selectbox("Crop Cycle", options=["☀️ Dry Season", "🌧️ Wet Season"], key="ov_muni_cycle")
 
-        col_rt, col_cls = st.columns(2)
-        with col_rt:
-          ov_rice_type = st.selectbox("Rice Type",
-                        options=["Hybrid", "Inbred"],
-                        key="ov_muni_rt")
-        with col_cls:
-          ov_classification = st.selectbox("Rice Classification",
-                           options=["Premium", "Ordinary"],
-                           key="ov_muni_cls")
-
-        # Actual 3-month forecast line chart (Altair, zoomed Y-axis).
+        # Normalized cycle for chart (expects Dry/Wet keyword)
+        _sel_cycle = "Dry Season Crop Cycle" if "Dry" in ov_cycle else "Wet Season Crop Cycle"
         _render_municipal_crop_cycle_chart(
           df_municipal_forecast,
           rice_type=ov_rice_type,
           classification=ov_classification,
           selected_municipalities=selected_muni,
+          selected_cycle=_sel_cycle,
         )
+        try:
+          # Plain Filipino insight for municipal forecast
+          st.markdown(_farmer_insight_box("Ito ang prediksyon ng presyo sa bawat bayan sa loob ng 3 buwan. Piliin ang Rice Type at bayan para makita kung saan pinakamataas ang presyo — doon mas malaki ang kita."), unsafe_allow_html=True)
+        except Exception:
+          pass
     except FileNotFoundError:
       st.warning(" Forecast dataset report not found. Please verify the background pipeline ran completely.")
     except Exception as e:
@@ -2638,13 +2671,23 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
     st.markdown("""<hr style="border:1px solid #ddd; margin-top: 1rem; margin-bottom: 2rem;">""",
           unsafe_allow_html=True)
 
-  # Data Row 2 (Ranking & Smart Cards)
-  chart_row2_col1, chart_row2_col2 = st.columns([2.90, 2])
+  # Data Row 2 (Ranking & Smart Cards) — full-width when single section selected
+  _show_rankings = show_all or section_choice in ("Buong Dashboard", "Production Rankings", "Municipal Analysis")
+  _show_advisory = show_all or section_choice in ("Buong Dashboard", "Mga Payo (Advisories)")
+  if _show_rankings and _show_advisory:
+    chart_row2_col1, chart_row2_col2 = st.columns([2.90, 2], gap="medium")
+  elif _show_rankings or _show_advisory:
+    # Single view → use full width to avoid white-space gap
+    chart_row2_col1 = st.container()
+    chart_row2_col2 = st.container() if _show_advisory else None
+  else:
+    chart_row2_col1 = None
+    chart_row2_col2 = None
 
-  with chart_row2_col1:
-    if show_all or section_choice in ("Buong Dashboard", "Production Rankings", "Municipal Analysis"):
+  if _show_rankings and chart_row2_col1 is not None:
+    with chart_row2_col1:
       st.markdown(
-        '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:0px; color:#1B5E20;">emoji_events</i></span>Top 5 Municipalities Ranking — Historical Production</span></div><div class="component-desc">Capacity comparison across the top-producing municipalities</div>',
+        '<div class="component-card"><div class="component-title-row"><span class="component-header"><span class="component-header-icon"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:0px; color:#1B5E20;">emoji_events</i></span>Top 5 Municipalities Ranking — Historical Production</span></div><div class="component-desc">Pinakamadaming ani bawat bayan — tingnan kung sino ang nangunguna</div>',
         unsafe_allow_html=True)
 
       try:
@@ -2694,12 +2737,22 @@ Nagsisilbi itong **pamantayan** para malaman mo kung mataas o mababa ang benta a
           st.info("No matching data found for your current filters.")
       except Exception as e:
         st.warning(f" Production rankings chart could not render: {str(e)}")
-
+      # Insight for rankings — plain Filipino
+      try:
+        if not top5_municipalities.empty:
+          _top = top5_municipalities.sort_values("palay_production", ascending=False).iloc[0]
+          _top_name = str(_top["municipality"])
+          _top_val = float(_top["palay_production"])
+          st.markdown(_farmer_insight_box(f"Nangunguna si {_top_name} na may {_top_val:,.0f} MT. Dito pinakamadami ang ani — pwede tularan ang paraan nila sa pagtatanim."), unsafe_allow_html=True)
+        else:
+          st.markdown(_farmer_insight_box("Ito ang listahan ng mga bayan na may pinakamadaming ani. Mas mataas ang bar, mas marami ang ani."), unsafe_allow_html=True)
+      except Exception:
+        st.markdown(_farmer_insight_box("Mas mataas ang bar, mas marami ang ani sa bayan na yan."), unsafe_allow_html=True)
       st.markdown("</div>", unsafe_allow_html=True)
 
     # SMART FARMER CARDS INTERACTION VIEW
-    with chart_row2_col2:
-      if show_all or section_choice in ("Buong Dashboard", "Mga Payo (Advisories)"):
+    if _show_advisory and chart_row2_col2 is not None:
+      with chart_row2_col2:
         st.markdown(f"""
         <div class="component-card">
           <div class="component-header">Smart Agricultural Advisories</div>

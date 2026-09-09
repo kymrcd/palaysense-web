@@ -1457,12 +1457,12 @@ def render(df, dr):
         st.caption("Historical or forecast price — dotted lines are benchmarks (dot 1.2, opacity 0.6).")
         price_subtab1, price_subtab2 = st.tabs([":material/show_chart: Historical Price Trend", ":material/query_stats: Price Forecast"])
         with price_subtab1:
-          with st.skeleton(height=370):
+          with (st.skeleton(height=370) if hasattr(st, "skeleton") else st.container()):
             _fig_price_hist = _price_historical_chart(filtered_df, None, period, _benchmark_opt)
           st.plotly_chart(_fig_price_hist,
                   width="stretch", key=f"price_hist_{start_year}_{end_year}_{period}_{_benchmark_opt}")
         with price_subtab2:
-          with st.skeleton(height=370):
+          with (st.skeleton(height=370) if hasattr(st, "skeleton") else st.container()):
             _fig_price_fc = _price_forecast_chart(df, dr, _benchmark_opt)
           st.plotly_chart(_fig_price_fc,
                   width="stretch", key=f"price_fc_{start_year}_{end_year}_{_benchmark_opt}")
@@ -1472,12 +1472,12 @@ def render(df, dr):
         st.caption("Historical or forecast yield — benchmarks help judge vs DA/10-yr average.")
         yield_subtab1, yield_subtab2 = st.tabs([":material/show_chart: Historical Yield Trend", ":material/query_stats: Yield Forecast"])
         with yield_subtab1:
-          with st.skeleton(height=350):
+          with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
             _fig_yield_hist = _yield_historical_chart(filtered_df, None, period, _benchmark_opt)
           st.plotly_chart(_fig_yield_hist,
                   width="stretch", key=f"yield_hist_{start_year}_{end_year}_{period}_{_benchmark_opt}")
         with yield_subtab2:
-          with st.skeleton(height=350):
+          with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
             _fig_yield_fc = _yield_forecast_chart(dr, df, _benchmark_opt)
           st.plotly_chart(_fig_yield_fc,
                   width="stretch", key=f"yield_fc_{start_year}_{end_year}_{_benchmark_opt}")
@@ -1485,21 +1485,21 @@ def render(df, dr):
 
   # ---- Provincial Quarterly Production + Insight Summary ----
   if show_all:
-    with st.skeleton(height=380):
+    with (st.skeleton(height=380) if hasattr(st, "skeleton") else st.container()):
       _production_quarterly(filtered_df, end_year)
 
     # ---- Top Municipalities + Seasonal Distribution ----
-    with st.skeleton(height=400):
+    with (st.skeleton(height=400) if hasattr(st, "skeleton") else st.container()):
       _top_municipalities_and_seasonal(dr, start_year, end_year)
 
   # ---- Yield Forecast Summary card ----
   if show_all:
-    with st.skeleton(height=180):
+    with (st.skeleton(height=180) if hasattr(st, "skeleton") else st.container()):
       _yield_summary_card(dr)
 
   # ---- Model Benchmark vs Baselines (defense-grade evaluation) ----
   if show_all:
-    with st.skeleton(height=420):
+    with (st.skeleton(height=420) if hasattr(st, "skeleton") else st.container()):
       _model_benchmark(dr)
 
   # ---- Insights Narrative ----
