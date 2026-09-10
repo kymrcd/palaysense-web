@@ -94,9 +94,10 @@ div[data-testid="stToolbar"], div[data-testid="stDecoration"], .stAppDeployButto
     background: transparent; border: none;
 }
 .ps-header-card .ps-topbar-title,
-.ps-page-header .ps-topbar-title { font-size: 2rem; font-weight: 800; color: var(--ps-dark); margin: 0; letter-spacing: -0.5px; line-height: 1.2; }
+.ps-page-header .ps-topbar-title { font-size: 1.25rem; font-weight: 700; color: var(--ps-dark); margin: 0; letter-spacing: -0.3px; line-height: 1.25; }
 .ps-header-card .ps-topbar-subtitle,
-.ps-page-header .ps-topbar-subtitle { font-size: 0.82rem; color: var(--ps-text-secondary); margin: 0.2rem 0 0 0; font-weight: 400; }
+.ps-page-header .ps-topbar-subtitle { font-size: 0.76rem; color: var(--ps-text-secondary); margin: 0.15rem 0 0 0; font-weight: 400; }
+.ps-page-header { border-top: 1px solid #F1F5F9; border-bottom: 1px solid #E5E7EB; padding: 0.45rem 0 !important; margin-bottom: 0.6rem !important; }
 .ps-header-right { display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem; }
 
 /* --- Filter card (Option C: subtle white card for filters, aligned to whitespace) --- */
@@ -300,8 +301,8 @@ def topbar(title, subtitle, as_of=""):
     st.markdown(f"""
     <div class="ps-page-header">
         <div>
-            <div class="ps-topbar-title" style="font-size:2rem;font-weight:800;color:#123524;letter-spacing:-0.5px;line-height:1.2;">{title}</div>
-            <div class="ps-topbar-subtitle">{subtitle}</div>
+            <div class="ps-topbar-title" style="font-size:1.25rem;font-weight:700;color:#123524;letter-spacing:-0.3px;line-height:1.25;">{title}</div>
+            <div class="ps-topbar-subtitle" style="font-size:0.76rem;color:#6B7280;">{subtitle}</div>
         </div>
         <div class="ps-header-right">
             {updated}
@@ -391,14 +392,13 @@ def section_card(title=None, desc=None, icon_name=""):
 
 
 def page_title(title, caption=""):
-    """Render a single, bold page title with an optional caption.
-
-    Standardized for all child pages so there is exactly ONE title header,
-    styled with `## **Title**` (bold) and a `st.caption` subtitle.
-    """
-    st.markdown(f"## **{title}**")
-    if caption:
-        st.caption(caption)
+    """Compact page title — matches Dashboard Overview guideline (small title, muted subtitle, thin dividers)."""
+    st.markdown(f"""
+    <div style="border-top:1px solid #F1F5F9; border-bottom:1px solid #E5E7EB; padding:0.45rem 0; margin:0 0 0.6rem 0;">
+        <div style="font-size:1.25rem; font-weight:700; color:#123524; letter-spacing:-0.3px; line-height:1.25;">{title}</div>
+        {f'<div style="font-size:0.76rem; color:#6B7280; margin-top:0.15rem; line-height:1.4;">{caption}</div>' if caption else ''}
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def year_filter(df, key="lgu_year_filter"):

@@ -15,6 +15,7 @@ from . import provincial_analytics
 from . import municipal_analytics
 from . import forecasting
 from . import historical_comparison
+from . import model_info
 from app_pages.upload_dataset import upload_dataset
 
 
@@ -50,6 +51,12 @@ NAV_GROUPS = [
     "label": "FORECAST",
     "items": [
       ("forecasting", "Forecast", "query_stats"),
+    ],
+  },
+  {
+    "label": "MODEL",
+    "items": [
+      ("model_info", "Model Info", "model_training"),
     ],
   },
   {
@@ -234,6 +241,8 @@ def lgu_dashboard():
     forecasting.render(df, dr)
   elif active_page == "historical":
     historical_comparison.render(df, dr)
+  elif active_page == "model_info":
+    model_info.render(df, dr)
   elif active_page == "settings":
     theme.page_title("Settings", "Application preferences.")
     with theme.section_card(title="Settings",

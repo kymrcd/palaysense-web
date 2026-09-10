@@ -429,16 +429,16 @@ def _group_by_period(df, period="ANNUAL", value_cols=None):
 
 
 def _base_layout(fig, yaxis_title="", xaxis_title="Date"):
-  """Apply the shared PalaySense plot styling to a figure."""
+  """Apply the shared PalaySense plot styling to a figure — compact (260px)."""
   fig.update_layout(
     yaxis_title=yaxis_title, xaxis_title=xaxis_title,
-    height=300, hovermode="x unified",
+    height=260, hovermode="x unified",
     plot_bgcolor="white", paper_bgcolor="white",
     font=dict(family=theme.FONT, size=11),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     yaxis=dict(gridcolor="rgba(0,0,0,0.05)"),
     xaxis=dict(gridcolor="rgba(0,0,0,0.05)"),
-    margin=dict(t=30, b=40, l=40, r=40),
+    margin=dict(t=20, b=30, l=40, r=20),
   )
   return fig
 
@@ -508,8 +508,8 @@ def _price_historical_chart(df, year=None, period="ANNUAL", benchmark_option="No
         bgcolor="rgba(255,255,255,0.9)", bordercolor="#6D28D9", borderwidth=1, borderpad=4,
       )
   fig = _apply_benchmarks_to_fig(fig, hist, "price", benchmark_option)
-  fig.update_layout(height=370, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=xaxis_title, yaxis_title="₱/kg",
-    legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=11, family=theme.FONT)),
+  fig.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=xaxis_title, yaxis_title="₱/kg",
+    legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=10, family=theme.FONT)),
     plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified",
     xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
   return fig
@@ -543,8 +543,8 @@ def _price_forecast_chart(df, dr, benchmark_option="None"):
       marker=dict(size=6, symbol="diamond"), connectgaps=False,
     ))
     fig = _apply_benchmarks_to_fig(fig, df, "price", benchmark_option)
-    fig.update_layout(height=370, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title="₱/kg",
-      legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=11, family=theme.FONT)),
+    fig.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title="₱/kg",
+      legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=10, family=theme.FONT)),
       plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified",
       xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
     return fig
@@ -616,8 +616,8 @@ def _yield_historical_chart(df, year=None, period="ANNUAL", benchmark_option="No
       bgcolor="rgba(255,255,255,0.9)", bordercolor="#F57C00", borderwidth=1, borderpad=4,
     )
   fig = _apply_benchmarks_to_fig(fig, hist, "yield", benchmark_option)
-  fig.update_layout(height=350, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=xaxis_title, yaxis_title="MT/ha",
-    legend=dict(orientation="h", yanchor="bottom", y=-0.30, xanchor="center", x=0.5, font=dict(size=11, family=theme.FONT)),
+  fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=xaxis_title, yaxis_title="MT/ha",
+    legend=dict(orientation="h", yanchor="bottom", y=-0.30, xanchor="center", x=0.5, font=dict(size=10, family=theme.FONT)),
     plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified",
     xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
   return fig
@@ -648,8 +648,8 @@ def _yield_forecast_chart(dr, df, benchmark_option="None"):
         bgcolor="rgba(255,255,255,0.9)", bordercolor="#F57C00", borderwidth=1, borderpad=4,
       )
     fig = _apply_benchmarks_to_fig(fig, dl.get_quarterly_yield(df), "yield", benchmark_option)
-    fig.update_layout(height=350, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title="MT/ha",
-      legend=dict(orientation="h", yanchor="bottom", y=-0.30, xanchor="center", x=0.5, font=dict(size=11, family=theme.FONT)),
+    fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title="MT/ha",
+      legend=dict(orientation="h", yanchor="bottom", y=-0.30, xanchor="center", x=0.5, font=dict(size=10, family=theme.FONT)),
       plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified",
       xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
     return fig
@@ -704,7 +704,7 @@ def _production_quarterly(df, year):
         yaxis_title="Production (MT)", xaxis_title="Quarter",
         showlegend=False, plot_bgcolor="white", paper_bgcolor="white",
         font=dict(family=theme.FONT, size=12),
-        margin=dict(t=30, b=40, l=40, r=40),
+        height=280, margin=dict(t=20, b=30, l=40, r=20),
         xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor="#F3F4F6"),
       )
       fig.update_traces(marker_line_width=0)
@@ -763,7 +763,7 @@ def _top_municipalities_and_seasonal(dr, start_year, end_year):
       title=f"Top 5 Municipalities by Total Production ({start_year} – {end_year})",
       xaxis_title="Production (MT)", yaxis_title="Municipality",
       showlegend=False, plot_bgcolor="white", paper_bgcolor="white",
-      height=380, margin=dict(t=30, b=40, l=40, r=40),
+      height=300, margin=dict(t=20, b=30, l=40, r=20),
       yaxis={"categoryorder": "total ascending"},
     )
     fig_top.update_traces(texttemplate='%{text:,}', textposition='outside')
@@ -778,7 +778,7 @@ def _top_municipalities_and_seasonal(dr, start_year, end_year):
       if not dry.empty:
         fig = px.pie(dry, names="municipality", values="production",
                color_discrete_sequence=px.colors.sequential.Greens[0:5][::-1])
-        fig.update_layout(height=340, margin=dict(t=30, b=40, l=40, r=40))
+        fig.update_layout(height=260, margin=dict(t=20, b=30, l=20, r=20))
         st.plotly_chart(fig, use_container_width=True,
                 key=f"overview_dry_{start_year}_{end_year}")
       else:
@@ -787,7 +787,7 @@ def _top_municipalities_and_seasonal(dr, start_year, end_year):
       if not wet.empty:
         fig = px.pie(wet, names="municipality", values="production",
                color_discrete_sequence=px.colors.sequential.Teal[0:5][::-1])
-        fig.update_layout(height=340, margin=dict(t=30, b=40, l=40, r=40))
+        fig.update_layout(height=260, margin=dict(t=20, b=30, l=20, r=20))
         st.plotly_chart(fig, use_container_width=True,
                 key=f"overview_wet_{start_year}_{end_year}")
       else:
@@ -1457,12 +1457,12 @@ def render(df, dr):
         st.caption("Historical or forecast price — dotted lines are benchmarks (dot 1.2, opacity 0.6).")
         price_subtab1, price_subtab2 = st.tabs([":material/show_chart: Historical Price Trend", ":material/query_stats: Price Forecast"])
         with price_subtab1:
-          with (st.skeleton(height=370) if hasattr(st, "skeleton") else st.container()):
+          with (st.skeleton(height=290) if hasattr(st, "skeleton") else st.container()):
             _fig_price_hist = _price_historical_chart(filtered_df, None, period, _benchmark_opt)
           st.plotly_chart(_fig_price_hist,
                   width="stretch", key=f"price_hist_{start_year}_{end_year}_{period}_{_benchmark_opt}")
         with price_subtab2:
-          with (st.skeleton(height=370) if hasattr(st, "skeleton") else st.container()):
+          with (st.skeleton(height=290) if hasattr(st, "skeleton") else st.container()):
             _fig_price_fc = _price_forecast_chart(df, dr, _benchmark_opt)
           st.plotly_chart(_fig_price_fc,
                   width="stretch", key=f"price_fc_{start_year}_{end_year}_{_benchmark_opt}")
@@ -1472,12 +1472,12 @@ def render(df, dr):
         st.caption("Historical or forecast yield — benchmarks help judge vs DA/10-yr average.")
         yield_subtab1, yield_subtab2 = st.tabs([":material/show_chart: Historical Yield Trend", ":material/query_stats: Yield Forecast"])
         with yield_subtab1:
-          with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
+          with (st.skeleton(height=280) if hasattr(st, "skeleton") else st.container()):
             _fig_yield_hist = _yield_historical_chart(filtered_df, None, period, _benchmark_opt)
           st.plotly_chart(_fig_yield_hist,
                   width="stretch", key=f"yield_hist_{start_year}_{end_year}_{period}_{_benchmark_opt}")
         with yield_subtab2:
-          with (st.skeleton(height=350) if hasattr(st, "skeleton") else st.container()):
+          with (st.skeleton(height=280) if hasattr(st, "skeleton") else st.container()):
             _fig_yield_fc = _yield_forecast_chart(dr, df, _benchmark_opt)
           st.plotly_chart(_fig_yield_fc,
                   width="stretch", key=f"yield_fc_{start_year}_{end_year}_{_benchmark_opt}")
@@ -1485,22 +1485,19 @@ def render(df, dr):
 
   # ---- Provincial Quarterly Production + Insight Summary ----
   if show_all:
-    with (st.skeleton(height=380) if hasattr(st, "skeleton") else st.container()):
+    with (st.skeleton(height=300) if hasattr(st, "skeleton") else st.container()):
       _production_quarterly(filtered_df, end_year)
 
     # ---- Top Municipalities + Seasonal Distribution ----
-    with (st.skeleton(height=400) if hasattr(st, "skeleton") else st.container()):
+    with (st.skeleton(height=320) if hasattr(st, "skeleton") else st.container()):
       _top_municipalities_and_seasonal(dr, start_year, end_year)
 
   # ---- Yield Forecast Summary card ----
   if show_all:
-    with (st.skeleton(height=180) if hasattr(st, "skeleton") else st.container()):
+    with (st.skeleton(height=160) if hasattr(st, "skeleton") else st.container()):
       _yield_summary_card(dr)
 
-  # ---- Model Benchmark vs Baselines (defense-grade evaluation) ----
-  if show_all:
-    with (st.skeleton(height=420) if hasattr(st, "skeleton") else st.container()):
-      _model_benchmark(dr)
+  # NOTE: Model Benchmark section moved to MODEL > Model Info — removed from LGU Overview per request
 
   # ---- Insights Narrative ----
   if show_all:
@@ -1515,67 +1512,4 @@ def render(df, dr):
   """, unsafe_allow_html=True)
 
 
-def _model_benchmark(dr):
-  """Model Benchmark vs Baselines (defense-grade evaluation section).
-
-  Shows the selected forecast model's held-out RMSE against the Naive and
-  Seasonal Naive baselines, plus the walk-forward (rolling-origin) mean ± std
-  as a robustness check. Data comes from the evaluation blocks the pipeline
-  writes into metrics.json.
-  """
-  ev = dr.model_evaluation
-  if ev is None or ev.empty:
-    return
-
-  st.markdown("### :material/science: Model Benchmark vs Baselines")
-  st.caption(
-    "Bars = held-out test RMSE for the selected model vs Naive / Seasonal Naive baselines. "
-    "Diamonds = walk-forward (rolling-origin) mean RMSE ± 1 std over multiple origins."
-  )
-
-  x = ev["Forecast"].tolist()
-  wf_rmse = [v if v is not None else 0.0 for v in ev["Walk-Forward RMSE"].tolist()]
-  wf_err = [v if v is not None else 0.0 for v in ev["Walk-Forward ±"].tolist()]
-
-  fig = go.Figure()
-  fig.add_trace(go.Bar(
-    x=x, y=[v if v is not None else 0.0 for v in ev["RMSE (test)"].tolist()],
-    name="Selected Model (test)", marker_color="#2D6A4F", width=0.22,
-  ))
-  fig.add_trace(go.Bar(
-    x=x, y=[v if v is not None else 0.0 for v in ev["Naive RMSE (test)"].tolist()],
-    name="Naive", marker_color="#D4A373", width=0.22,
-  ))
-  fig.add_trace(go.Bar(
-    x=x, y=[v if v is not None else 0.0 for v in ev["Seas. Naive RMSE (test)"].tolist()],
-    name="Seasonal Naive", marker_color="#8B9BAE", width=0.22,
-  ))
-  fig.add_trace(go.Scatter(
-    x=x, y=wf_rmse, mode="markers+lines", name="Walk-Forward (mean ± std)",
-    marker=dict(symbol="diamond", size=12, color="#1E3A8A"),
-    line=dict(color="#1E3A8A", width=1.5, dash="dot"),
-    error_y=dict(type="data", array=wf_err, thickness=1.5, color="#1E3A8A"),
-  ))
-  fig.update_layout(
-    barmode="group",
-    height=380,
-    margin=dict(l=10, r=10, t=30, b=10),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-    yaxis_title="RMSE",
-    xaxis_title="",
-    template="plotly_white",
-  )
-  st.plotly_chart(fig, use_container_width=True, key="model_benchmark")
-
-  # Compact detail table (defense-ready numbers)
-  detail = ev.copy()
-  for col in detail.columns:
-    if "Beats" in col:
-      detail[col] = detail[col].map(
-        lambda v: "Yes" if v is True else ("No" if v is False else "n/a")
-      )
-  st.markdown(
-    '<div class="ps-market-heading">Benchmark Summary</div>',
-    unsafe_allow_html=True,
-  )
-  st.dataframe(detail, use_container_width=True, hide_index=True)
+# _model_benchmark moved to app_pages/lgu_dashboard/model_info.py — removed from Overview per request (2026-09-09)
