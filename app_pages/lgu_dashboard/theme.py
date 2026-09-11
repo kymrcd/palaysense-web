@@ -64,7 +64,14 @@ _GLOBAL_CSS = """
 
 html, body, #root { font-family: var(--ps-font); background-color: var(--ps-bg); color: var(--ps-text); }
 .stApp { background-color: var(--ps-bg); }
-.block-container { padding-top: 0.6rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; padding-bottom: 2rem !important; max-width: 1400px !important; }
+.block-container { padding-top: 0.25rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; padding-bottom: 2rem !important; max-width: 1400px !important; }
+/* Kill dead space in MAIN content only — scoped to stMain so sidebar nav is untouched */
+section[data-testid="stMain"] div[data-testid="stVerticalBlock"] { gap: 0.35rem !important; }
+section[data-testid="stMain"] div[data-testid="stElementContainer"] { margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; }
+section[data-testid="stMain"] div[data-testid="stMarkdownContainer"] p { margin-bottom: 0 !important; }
+/* Restore sidebar spacing (in case global rules leaked before) */
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+section[data-testid="stSidebar"] div[data-testid="stElementContainer"] { margin-top: 0.15rem !important; margin-bottom: 0.15rem !important; }
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; display: none; }
 div[data-testid="stToolbar"], div[data-testid="stDecoration"], .stAppDeployButton { display: none; }
 
@@ -96,8 +103,8 @@ div[data-testid="stToolbar"], div[data-testid="stDecoration"], .stAppDeployButto
 .ps-header-card .ps-topbar-title,
 .ps-page-header .ps-topbar-title { font-size: 1.25rem; font-weight: 700; color: var(--ps-dark); margin: 0; letter-spacing: -0.3px; line-height: 1.25; }
 .ps-header-card .ps-topbar-subtitle,
-.ps-page-header .ps-topbar-subtitle { font-size: 0.76rem; color: var(--ps-text-secondary); margin: 0.15rem 0 0 0; font-weight: 400; }
-.ps-page-header { border-top: 1px solid #F1F5F9; border-bottom: 1px solid #E5E7EB; padding: 0.45rem 0 !important; margin-bottom: 0.6rem !important; }
+.ps-page-header .ps-topbar-subtitle { font-size: 0.76rem; color: var(--ps-text-secondary); margin: 0.05rem 0 0 0; font-weight: 400; }
+.ps-page-header { border-top: 1px solid #F1F5F9; border-bottom: 1px solid #E5E7EB; padding: 0.25rem 0 0.25rem 0 !important; margin-bottom: 0.15rem !important; }
 .ps-header-right { display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem; }
 
 /* --- Filter card (Option C: subtle white card for filters, aligned to whitespace) --- */
@@ -335,11 +342,12 @@ def kpi_card(label, value, sub="", icon_name="", icon_bg="rgba(30,92,58,0.1)", i
     """
 
 
-def market_price_card(title, price, pct_change, vs_label="vs previous period"):
+def market_price_card(title, price, pct_change, vs_label="vs previous period", range_text=""):
     """Return a compact Market Snapshot price card.
 
     Shows the forecasted price (₱/kg) and a green/red percentage change
-    versus the previous period.
+    versus the previous period. If range_text is provided, shows a small
+    muted range line below (e.g. Range ₱18.76 – ₱26.08).
     """
     if pct_change is None:
         change_html = '<span class="ps-market-change ps-flat">N/A</span>'
@@ -349,11 +357,14 @@ def market_price_card(title, price, pct_change, vs_label="vs previous period"):
         change_html = f'<span class="ps-market-change ps-down">↓ {abs(pct_change):.1f}%</span>'
     else:
         change_html = '<span class="ps-market-change ps-flat">→ 0.0%</span>'
+    # Visually appealing pill for range — light green tint, rounded, with icon
+    range_html = f'<div style="display:inline-flex; align-items:center; gap:0.30rem; margin-top:0.35rem; background:#F3F4F6; border:1px solid #E5E7EB; border-radius:999px; padding:0.22rem 0.55rem; font-size:0.66rem; color:#6B7280; font-weight:500; line-height:1;"><i class="material-symbols-outlined" style="font-size:12px; color:#6B7280; line-height:1;">unfold_more</i> {range_text}</div>' if range_text else ""
     return f"""
     <div class="ps-market-card">
         <span class="ps-market-title">{title}</span>
         <div class="ps-market-price">₱{price:.2f}<span style="font-size:0.7rem;color:var(--ps-text-muted);font-weight:600;"> /kg</span></div>
         <div>{change_html} <span style="font-size:0.68rem;color:var(--ps-text-muted);">{vs_label}</span></div>
+        {range_html}
     </div>
     """
 
