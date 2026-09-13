@@ -611,10 +611,9 @@ def _yield_historical_chart(df, year=None, period="ANNUAL", benchmark_option="No
     name="Historical Yield",
     marker=dict(color=[theme.PRIMARY if i == _peak_pos else c for i, c in enumerate(_hcolors)],
                 line=dict(width=0), cornerradius=8, opacity=0.92),
-    text=[f"{v:.2f}" for v in hist_grouped["quarterly_yield_mt_per_ha"]], textposition="outside",
-    textfont=dict(size=9, color="#5C4A2A"),
-    hovertemplate="<b>%{x}</b><br>Yield: <b>%{y:.2f} MT/ha</b><extra></extra>",
-  ))
+     text=[f"{v:.2f}" for v in hist_grouped["quarterly_yield_mt_per_ha"]], textposition="outside",
+     textfont=dict(size=9, color="#5C4A2A"),
+     hovertemplate="<b>%{x}</b><br>Yield: <b>%{y:.2f} MT/ha</b><extra></extra>"))
   peak_idx = hist_grouped["quarterly_yield_mt_per_ha"].idxmax()
   if pd.notna(peak_idx):
     peak_row = hist_grouped.loc[peak_idx]
@@ -666,8 +665,7 @@ def _yield_forecast_chart(dr, df, benchmark_option="None"):
       marker=dict(color=_colors, line=dict(width=0), cornerradius=8, opacity=0.95),
       text=[f"{v:.2f}" for v in yield_fc], textposition="outside",
       textfont=dict(size=10, color="#78350F"),
-      hovertemplate="<b>%{x}</b><br>Forecast: <b>%{y:.2f} MT/ha</b><extra></extra>",
-    ))
+      hovertemplate="<b>%{x}</b><br>Forecast: <b>%{y:.2f} MT/ha</b><extra></extra>"))
     peak_val = float(pd.Series(yield_fc).max())
     peak_idx = yield_fc.index(peak_val) if peak_val in yield_fc else -1
     if 0 <= peak_idx < len(fc_labels):
@@ -750,7 +748,7 @@ def _production_quarterly(df, year):
         height=280, margin=dict(t=20, b=30, l=40, r=20),
         xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor="#F3F4F6"),
       )
-      fig.update_traces(marker_line_width=0)
+      fig.update_traces(marker_line_width=0, marker_cornerradius=8)
       st.plotly_chart(fig, use_container_width=True, key=f"overview_prod_q_{year}")
 
     with col2:
@@ -809,7 +807,7 @@ def _top_municipalities_and_seasonal(dr, start_year, end_year):
       height=300, margin=dict(t=20, b=30, l=40, r=20),
       yaxis={"categoryorder": "total ascending"},
     )
-    fig_top.update_traces(texttemplate='%{text:,}', textposition='outside')
+    fig_top.update_traces(texttemplate='%{text:,}', textposition='outside', marker_cornerradius=8)
     st.plotly_chart(fig_top, use_container_width=True,
             key=f"overview_top5_{start_year}_{end_year}")
 
@@ -990,29 +988,14 @@ def _render_top_filter_bar(df):
       }
       .ps-icon-reset button { border:1px solid #E5E7EB !important; background:#FFFFFF !important; border-radius:8px !important; width:40px !important; height:40px !important; padding:0 !important; }
       .ps-icon-reset button:hover { border-color:#1B5E20 !important; background:#F0FDF4 !important; }
-      .ps-filter-label { font-size:11px !important; font-weight:700 !important; letter-spacing:0.3px !important; text-transform:uppercase !important; color:#1B5E20 !important; margin-bottom:6px !important; line-height:1 !important; }
+      .ps-filter-label { font-size:11px !important; font-weight:700 !important; letter-spacing:0.3px !important; text-transform:uppercase !important; color:#1B5E20 !important; margin-bottom:6px !important; line-height:1.5 !important; padding:2px 0 !important; overflow:visible !important; }
     </style>
     """,
     unsafe_allow_html=True,
   )
-  # 4 filters + icon Reset, one line, aligned — no box
-  st.markdown(
-    """
-    <style>
-      div[data-testid="stColumn"] { padding-top:0 !important; }
-      div[data-testid="stSelectbox"] > div { border:none !important; background:transparent !important; box-shadow:none !important; }
-      div[data-testid="stSelectbox"] div[role="combobox"] {
-        border:1px solid #E5E7EB !important; background:#F9FAFB !important;
-        border-radius:8px !important; height:38px !important; min-height:38px !important;
-      }
-      .ps-icon-reset button { border:1px solid #E5E7EB !important; background:#FFFFFF !important; border-radius:8px !important; height:38px !important; min-height:38px !important; width:100% !important; }
-      .ps-icon-reset button:hover { border-color:#1B5E20 !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-  )
-  # One straight line: YEAR RANGE | TO | PERIOD | icon — tight, no extra white
-  filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([1, 1, 1, 0.15], gap="small", vertical_alignment="bottom")
+  # 4 filters + icon Reset — wrapped in bordered card per theme
+  with st.container(border=True):
+    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([1, 1, 1, 0.15], gap="medium", vertical_alignment="bottom")
   with filter_col1:
     st.markdown('<div class="ps-filter-label">YEAR RANGE</div>', unsafe_allow_html=True)
     start_year = st.selectbox("Start Year", options=years, index=years.index(st.session_state["lgu_start_year"]), key="lgu_start_year", label_visibility="collapsed")
@@ -1378,29 +1361,40 @@ def render(df, dr):
       _fc_yield_display = f"{_fc_yield_avg:.2f} MT/ha" if _fc_yield_list else "No data"
     except Exception:
       _fc_yield_display = "No data"; _fc_yield_sub = "No forecast"
+    # compute yield period month for card (outside gray subcaption per request)
+    try:
+      _q_tmp = dl.get_quarterly_yield(df) if hasattr(dl, "get_quarterly_yield") else pd.DataFrame()
+      _latest_q = _q_tmp.iloc[-1] if not _q_tmp.empty else None
+      if _latest_q is not None and _fc_yield_list:
+        _fc_q = pd.period_range(start=pd.Period(_latest_q["date_q"], freq="Q") + 1, periods=len(_fc_yield_list), freq="Q")
+        _yield_period_for_card = f"Q{_fc_q[0].quarter} { _fc_q[0].year} – Q{_fc_q[-1].quarter} { _fc_q[-1].year}"
+      else:
+        _yield_period_for_card = _fc_yield_sub
+    except Exception:
+      _yield_period_for_card = _fc_yield_sub
 
     with theme.section_card(title="Forecast Snapshot — System-Generated",
                             desc="AI-generated 3-month price & 4-quarter yield projections. Separate from actual KPIs above.",
                             icon_name="auto_awesome"):
-      # Forecast period + yield as compact KPI cards inside the forecast card
+      # Forecast period + yield — month outside (no gray subcaption duplication), tighter spacing
       theme.kpi_row([
         theme.kpi_card(
           "Forecast Period",
           "No data" if not getattr(dr, "has_forecasts", False) else (f"{forecast_months[0].strftime('%b %Y')} – {forecast_months[-1].strftime('%b %Y')}" if len(forecast_months)>0 else f"{fc_start} – {fc_end}"),
-          _fc_sub if getattr(dr, "has_forecasts", False) else "No data — awaiting upload",
+          next_month_name if getattr(dr, "has_forecasts", False) else "No data — awaiting upload",
           icon_name="calendar_month", icon_bg=_fc_icon_bg, icon_color=_fc_icon_color, accent=_fc_accent,
           compact=True,
         ),
         theme.kpi_card(
           "Forecasted Yield",
           _fc_yield_display,
-          _fc_yield_sub,
+          _yield_period_for_card,
           icon_name="trending_up", icon_bg="rgba(16,185,129,0.1)", icon_color="#10B981", accent="#10B981",
           compact=True,
         ),
       ])
       st.markdown(
-        f'<div class="ps-market-heading" style="margin-top:0.9rem;">{theme.icon("storefront", "16px", "#1E5C3A")} Market Forecast — Predicted Prices</div>',
+        f'<div class="ps-market-heading" style="margin-top:0.5rem;">{theme.icon("storefront", "16px", "#1E5C3A")} Market Forecast — Predicted Prices</div>',
         unsafe_allow_html=True,
       )
       m1, m2 = st.columns(2, gap="medium")
@@ -1434,21 +1428,6 @@ def render(df, dr):
             ),
             unsafe_allow_html=True,
           )
-          with st.popover("Show chart", use_container_width=True):
-            st.caption(f"Supports ₱{_reg_fc:.2f} • Range {_range_txt(regular_forecast, _rmse_reg)}")
-            try:
-              hist_r = filtered_df.dropna(subset=["other_variety_price"]).tail(12) if "other_variety_price" in filtered_df.columns else pd.DataFrame()
-              if hist_r.empty:
-                st.info("No price history to show.")
-              else:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=hist_r["date"] if "date" in hist_r.columns else hist_r.index, y=hist_r["other_variety_price"], mode="lines+markers", name="Regular hist", line=dict(color="#6D28D9", width=1.8)))
-                if regular_forecast is not None:
-                  fig.add_trace(go.Scatter(x=[hist_r["date"].iloc[-1] if "date" in hist_r.columns else 0, next_month_name], y=[hist_r["other_variety_price"].iloc[-1], regular_forecast], mode="markers+lines", name="Forecast", line=dict(color="#6D28D9", dash="dot"), marker=dict(size=8, symbol="diamond")))
-                fig.update_layout(height=200, margin=dict(t=10, b=20, l=30, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(size=10), yaxis_title="PhP/kg", xaxis_title="")
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception:
-              st.info("No data for chart.")
         else:
           st.markdown(
             '<div class="ps-market-card"><span class="ps-market-title">Regular Palay Forecast Price</span>'
@@ -1474,27 +1453,19 @@ def render(df, dr):
             ),
             unsafe_allow_html=True,
           )
-          with st.popover("Show chart", use_container_width=True):
-            st.caption(f"Supports ₱{_fancy_fc:.2f} • Range {_range_txt(fancy_forecast, _rmse_fancy)}")
-            try:
-              hist_f = filtered_df.dropna(subset=["fancy_palay_price"]).tail(12) if "fancy_palay_price" in filtered_df.columns else pd.DataFrame()
-              if hist_f.empty:
-                st.info("No price history to show.")
-              else:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=hist_f["date"] if "date" in hist_f.columns else hist_f.index, y=hist_f["fancy_palay_price"], mode="lines+markers", name="Fancy hist", line=dict(color="#1B5E20", width=1.8)))
-                if fancy_forecast is not None:
-                  fig.add_trace(go.Scatter(x=[hist_f["date"].iloc[-1] if "date" in hist_f.columns else 0, next_month_name], y=[hist_f["fancy_palay_price"].iloc[-1], fancy_forecast], mode="markers+lines", name="Forecast", line=dict(color="#1B5E20", dash="dot"), marker=dict(size=8, symbol="diamond")))
-                fig.update_layout(height=200, margin=dict(t=10, b=20, l=30, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(size=10), yaxis_title="PhP/kg", xaxis_title="")
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception:
-              st.info("No data for chart.")
         else:
           st.markdown(
             '<div class="ps-market-card"><span class="ps-market-title">Fancy Palay Forecast Price</span>'
             '<div class="ps-market-price" style="font-size:1rem;">No Data Available</div></div>',
             unsafe_allow_html=True,
           )
+      # Compact link to full graph in Forecast page (replaces Show chart popover)
+      st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
+      _lc, _cc, _rc = st.columns([1, 1, 1])
+      with _cc:
+          if st.button("See the full graph →", key="see_full_graph_forecast", use_container_width=True):
+              st.session_state["lgu_page"] = "forecasting"
+              st.rerun()
       if is_awaiting_lgu:
         st.caption(f"Showing latest available forecast ({last_avail_month}). Status: Pending Next Cycle Data Input.")
 
@@ -1552,93 +1523,108 @@ def render(df, dr):
   # Historical note moved to top KPIs — empty box removed per cleanup request
     theme.divider()
 
-  # ---- Benchmark header control (like farmer) ----
+  # Provincial Yield & Price Forecast moved to FORECAST per request (2026-09-11) — now in app_pages/lgu_dashboard/forecasting.py
+  # Overview keeps only KPI + Decision Support + Market Forecast cards for a short, fast page
   if show_all:
-    st.markdown("""
-    <div style="margin: 1.2rem 0 0.6rem 0; border-top: 2px solid #C8E6C9; padding-top: 0.9rem; display:flex; align-items:center; gap:10px;">
-      <span style="display:flex; align-items:center; gap:6px; font-weight:700; color:#1B5E20; font-size:1.02rem; white-space:nowrap;">
-        <i class="material-symbols-outlined" style="font-size:19px; color:#1B5E20; vertical-align:middle;">show_chart</i>
-        Provincial Yield & Price Forecast
-      </span>
-      <span style="flex:1; height:1px; background:#E8F5E9; margin-left:4px;"></span>
-    </div>
-    """, unsafe_allow_html=True)
-    hdr_col1, hdr_col2 = st.columns([0.78, 0.22], vertical_alignment="center")
-    with hdr_col1:
-      try:
-        _benchmark_opt = st.segmented_control("Benchmark / Reference Line:", options=["Market Price", "Government Target", "None"], key="lgu_benchmark_toggle", default="None")
-        if _benchmark_opt is None:
-          _benchmark_opt = "None"
-      except Exception:
-        _benchmark_opt = st.radio("Benchmark / Reference Line:", options=["Market Price", "Government Target", "None"], horizontal=True, key="lgu_benchmark_toggle")
-      # Backwards compatibility: map legacy Tagalog values to English
-      if _benchmark_opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average", "Market Price (3-Year Average)", "Market Price (3-Yr Average)"):
-        _benchmark_opt = "Market Price"
-      elif _benchmark_opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
-        _benchmark_opt = "Government Target"
-      elif _benchmark_opt in ("Wala", "Itago (None)", "Hide (None)"):
-        _benchmark_opt = "None"
-    with hdr_col2:
-      with st.popover(":material/info: Benchmark Guide"):
-        st.markdown("""
-### **What do the benchmark lines mean?**
-* **Market Price (3-Yr Rolling Avg):** Average Bataan price over the last 12 quarters (tail 12) — inflation-aware. Yield: 10-year mean.
-* **Government Target:** Regular **₱19.00/kg** NFA floor, Fancy **₱23.75/kg** (19×1.25), Yield **4.50 MT/ha** DA target.
-* **None:** No reference line — forecast/historical line only.
-""")
-  else:
-    _benchmark_opt = st.session_state.get("lgu_benchmark_toggle", "None")
-    # Normalize legacy stored value
-    if _benchmark_opt in ("Presyo sa Merkado", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
-      _benchmark_opt = "Market Price"
-    elif _benchmark_opt in ("Target ng Gobyerno", "NFA / DA Policy Baseline"):
-      _benchmark_opt = "Government Target"
-    elif _benchmark_opt in ("Wala", "Itago (None)"):
-      _benchmark_opt = "None"
-
-  # ---- Charts (with PERIOD + benchmark) — skeleton while Plotly figures generate ----
-  if show_all:
-    c1, c2 = st.columns(2, gap="medium")
-    with c1:
-      with st.container(border=True):
-        st.markdown("### :material/show_chart: Provincial Price Trend")
-        st.caption("Historical or forecast price — dotted lines are benchmarks (dot 1.2, opacity 0.6).")
-        price_subtab1, price_subtab2 = st.tabs([":material/query_stats: Price Forecast", ":material/show_chart: Historical Price Trend"])
-        with price_subtab1:
-          with (st.skeleton(height=290) if hasattr(st, "skeleton") else st.container()):
-            _fig_price_fc = _price_forecast_chart(df, dr, _benchmark_opt)
-          st.plotly_chart(_fig_price_fc,
-                  width="stretch", key=f"price_fc_{start_year}_{end_year}_{_benchmark_opt}")
-        with price_subtab2:
-          with (st.skeleton(height=290) if hasattr(st, "skeleton") else st.container()):
-            _fig_price_hist = _price_historical_chart(filtered_df, None, period, _benchmark_opt)
-          st.plotly_chart(_fig_price_hist,
-                  width="stretch", key=f"price_hist_{start_year}_{end_year}_{period}_{_benchmark_opt}")
-    with c2:
-      with st.container(border=True):
-        st.markdown("### :material/eco: Provincial Yield Trend")
-        st.caption("Historical or forecast yield — benchmarks help judge vs DA/10-yr average.")
-        yield_subtab1, yield_subtab2 = st.tabs([":material/query_stats: Yield Forecast", ":material/show_chart: Historical Yield Trend"])
-        with yield_subtab1:
-          with (st.skeleton(height=280) if hasattr(st, "skeleton") else st.container()):
-            _fig_yield_fc = _yield_forecast_chart(dr, df, _benchmark_opt)
-          st.plotly_chart(_fig_yield_fc,
-                  width="stretch", key=f"yield_fc_{start_year}_{end_year}_{_benchmark_opt}")
-        with yield_subtab2:
-          with (st.skeleton(height=280) if hasattr(st, "skeleton") else st.container()):
-            _fig_yield_hist = _yield_historical_chart(filtered_df, None, period, _benchmark_opt)
-          st.plotly_chart(_fig_yield_hist,
-                  width="stretch", key=f"yield_hist_{start_year}_{end_year}_{period}_{_benchmark_opt}")
     theme.divider()
 
-  # ---- Provincial Quarterly Production + Insight Summary ----
-  if show_all:
-    with (st.skeleton(height=300) if hasattr(st, "skeleton") else st.container()):
-      _production_quarterly(filtered_df, end_year)
+  # Provincial Quarterly Production + Top Municipalities moved to analytics>provincial>yield per request (2026-09-11) — removed from Overview
+  # See app_pages/lgu_dashboard/provincial_analytics.py:_provincial_yield_tab
 
-    # ---- Top Municipalities + Seasonal Distribution ----
-    with (st.skeleton(height=320) if hasattr(st, "skeleton") else st.container()):
-      _top_municipalities_and_seasonal(dr, start_year, end_year)
+  # NOTE: Forecast vs Actual moved to MODEL > Model Info (backtest) — removed from Overview for defense (short page).
+  if False:
+    with st.container(border=True):
+      st.markdown("### :material/compare: Forecast vs Actual — Last Horizon (Jan–Jun 2026)")
+      st.caption("Forecast from archive (Dec 2025) vs actual prices/yields Jan–Jun 2026. Solid = Actual, dashed = Forecast.")
+      # extra padding between the two charts
+      st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+      try:
+        import pathlib, math
+        prev_path = pathlib.Path("data/forecasts/archive/provincial_forecasts.parquet")
+        hist_path = pathlib.Path("data/forecasts/provincial_history.parquet")
+        if prev_path.exists() and hist_path.exists():
+          prev = pd.read_parquet(prev_path)
+          hist = pd.read_parquet(hist_path)
+          hist["date"] = pd.to_datetime(hist["date"])
+          price_labels = ["January 2026","February 2026","March 2026","April 2026","May 2026","June 2026"]
+          def _get_fc(prev_df, typ):
+            m = {r["period_label"]: float(r["forecast_value"]) for _,r in prev_df[prev_df["forecast_type"]==typ].iterrows()}
+            return [m.get(lbl, None) for lbl in price_labels]
+          fancy_fc = _get_fc(prev, "fancy")
+          regular_fc = _get_fc(prev, "regular")
+          mask = (hist["date"].dt.year==2026) & (hist["date"].dt.month.between(1,6))
+          act = hist[mask].sort_values("date")
+          act_map_f = {d.strftime("%B %Y"): float(v) for d,v in zip(act["date"], act["fancy_palay_price"])}
+          act_map_r = {d.strftime("%B %Y"): float(v) for d,v in zip(act["date"], act["other_variety_price"])}
+          fancy_ac = [act_map_f.get(lbl) for lbl in price_labels]
+          regular_ac = [act_map_r.get(lbl) for lbl in price_labels]
+          # --- Top Chart: Monthly Price Trends: Forecast vs Actual (₱/kg) ---
+          st.markdown('<div style="font-family:Inter, sans-serif; font-size:0.92rem; font-weight:700; color:#1F2937; margin: 8px 0 8px 0; padding:2px 0; line-height:1.5;">Monthly Price Trends: Forecast vs. Actual (₱/kg)</div>', unsafe_allow_html=True)
+          figp = go.Figure()
+          # High-contrast distinct colors: Fancy Emerald #10B981, Regular Deep Indigo #6366F1 — solid Actual, dashed Forecast
+          figp.add_trace(go.Scatter(x=price_labels, y=fancy_fc, mode="lines+markers", name="Fancy Forecast", line=dict(color="#10B981", width=2.2, dash="dash"), marker=dict(size=7, symbol="diamond", color="#10B981"), connectgaps=True, hovertemplate="%{x}<br>Fancy Forecast: ₱%{y:.2f}<extra></extra>"))
+          figp.add_trace(go.Scatter(x=price_labels, y=fancy_ac, mode="lines+markers", name="Fancy Actual", line=dict(color="#10B981", width=3), marker=dict(size=8, symbol="circle", color="#059669", line=dict(width=1, color="white")), connectgaps=True, hovertemplate="%{x}<br>Fancy Actual: ₱%{y:.2f}<extra></extra>"))
+          figp.add_trace(go.Scatter(x=price_labels, y=regular_fc, mode="lines+markers", name="Regular Forecast", line=dict(color="#6366F1", width=2.2, dash="dash"), marker=dict(size=7, symbol="diamond", color="#6366F1"), connectgaps=True, hovertemplate="%{x}<br>Regular Forecast: ₱%{y:.2f}<extra></extra>"))
+          figp.add_trace(go.Scatter(x=price_labels, y=regular_ac, mode="lines+markers", name="Regular Actual", line=dict(color="#6366F1", width=3), marker=dict(size=8, symbol="circle", color="#4F46E5", line=dict(width=1, color="white")), connectgaps=True, hovertemplate="%{x}<br>Regular Actual: ₱%{y:.2f}<extra></extra>"))
+          # Peak annotation — offset to avoid overlapping markers
+          try:
+            iv = pd.Series(fancy_fc).idxmax()
+            if pd.notna(iv):
+              figp.add_annotation(x=price_labels[int(iv)], y=float(pd.Series(fancy_fc).max()), text=f"▲ Peak Forecast ₱{float(pd.Series(fancy_fc).max()):.2f}", showarrow=True, arrowhead=2, arrowcolor="#10B981", ax=0, ay=-36, font=dict(size=9, color="#065F46", family="Inter, sans-serif"), bgcolor="rgba(255,255,255,0.97)", bordercolor="#10B981", borderwidth=1, borderpad=4)
+          except: pass
+          try:
+            iv2 = pd.Series(regular_fc).idxmax()
+            if pd.notna(iv2) and int(iv2)!=int(iv):
+              figp.add_annotation(x=price_labels[int(iv2)], y=float(pd.Series(regular_fc).max()), text=f"▲ Peak Forecast ₱{float(pd.Series(regular_fc).max()):.2f}", showarrow=True, arrowhead=2, arrowcolor="#6366F1", ax=0, ay=-36, font=dict(size=9, color="#4338CA", family="Inter, sans-serif"), bgcolor="rgba(255,255,255,0.97)", bordercolor="#6366F1", borderwidth=1, borderpad=4)
+          except: pass
+          figp.update_layout(height=340, margin=dict(l=14,r=14,t=10,b=68), yaxis_title="₱/kg", xaxis_title=None,
+                             font=dict(family="Inter, sans-serif", size=11, color="#374151"),
+                             legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5, font=dict(size=10, family="Inter, sans-serif"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1),
+                             plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified",
+                             xaxis=dict(gridcolor="#F1F5F9", showgrid=True, tickfont=dict(family="Inter, sans-serif", size=10), showline=False),
+                             yaxis=dict(gridcolor="#F1F5F9", showgrid=True, range=[15,30], dtick=5, tickformat=".0f", title=dict(font=dict(family="Inter, sans-serif", size=11)), tickfont=dict(family="Inter, sans-serif", size=10)))
+          st.plotly_chart(figp, use_container_width=True, key="fc_vs_act_price", config={"displayModeBar": False})
+
+          st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+          # --- Bottom Chart: Quarterly Agricultural Yield: Forecast vs Actual (MT/ha) ---
+          try:
+            tmp = hist.copy(); tmp["year"]=tmp["date"].dt.year; tmp["quarter"]=tmp["date"].dt.quarter
+            qact = tmp[tmp["year"]==2026].groupby(["year","quarter"])["quarterly_yield_mt_per_ha"].mean().reset_index()
+            qact["label"]=[f"Q{int(r['quarter'])} {int(r['year'])}" for _,r in qact.iterrows()]
+            y_prev = {r["period_label"]: float(r["forecast_value"]) for _,r in prev[prev["forecast_type"]=="yield"].iterrows()}
+            qlabels = ["Q1 2026","Q2 2026","Q3 2026","Q4 2026"]
+            y_fc = [y_prev.get(lbl) for lbl in qlabels]
+            act_y_map = {r["label"]: float(r["quarterly_yield_mt_per_ha"]) for _,r in qact.iterrows()}
+            y_ac = [act_y_map.get(lbl) for lbl in qlabels]
+            st.markdown('<div style="font-family:Inter, sans-serif; font-size:0.92rem; font-weight:700; color:#1F2937; margin: 10px 0 8px 0; padding:2px 0; line-height:1.5;">Quarterly Agricultural Yield: Forecast vs. Actual (MT/ha)</div>', unsafe_allow_html=True)
+            figy = go.Figure()
+            # Side-by-side grouped vertical bars — Forecast Amber #F59E0B next to Actual Green #10B981
+            figy.add_trace(go.Bar(x=qlabels, y=y_fc, name="Forecast", marker_color="#F59E0B", marker_line_width=0, marker_cornerradius=8, text=[f"{v:.2f}" if v is not None else "—" for v in y_fc], textposition="outside", textfont=dict(family="Inter, sans-serif", size=11, color="#92400E"), hovertemplate="%{x}<br>Forecast: %{y:.2f} MT/ha<extra></extra>"))
+            figy.add_trace(go.Bar(x=qlabels, y=y_ac, name="Actual", marker_color="#10B981", marker_line_width=0, marker_cornerradius=8, text=[f"{v:.2f}" if v is not None else "—" for v in y_ac], textposition="outside", textfont=dict(family="Inter, sans-serif", size=11, color="#065F46"), hovertemplate="%{x}<br>Actual: %{y:.2f} MT/ha<extra></extra>"))
+            figy.update_layout(height=340, margin=dict(l=14,r=14,t=10,b=68), barmode="group", bargap=0.28, bargroupgap=0.12,
+                               font=dict(family="Inter, sans-serif", size=11, color="#374151"),
+                               yaxis=dict(title="MT/ha", title_font=dict(family="Inter, sans-serif", size=11), tickfont=dict(family="Inter, sans-serif", size=10), range=[0,6], dtick=1, gridcolor="#F1F5F9", showgrid=True, zeroline=True, zerolinecolor="#E5E7EB"),
+                               xaxis=dict(tickfont=dict(family="Inter, sans-serif", size=11), showgrid=False),
+                               legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5, font=dict(size=10, family="Inter, sans-serif"), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1),
+                               plot_bgcolor="white", paper_bgcolor="white", uniformtext_minsize=10)
+            # remove dense grid behind labels — keep only light y grid
+            figy.update_yaxes(showgrid=True, gridwidth=1)
+            st.plotly_chart(figy, use_container_width=True, key="fc_vs_act_yield", config={"displayModeBar": False})
+            try:
+              import numpy as np
+              pf = pd.Series(fancy_fc, dtype=float); pa = pd.Series(fancy_ac, dtype=float)
+              pr = pd.Series(regular_fc, dtype=float); ra = pd.Series(regular_ac, dtype=float)
+              mae_f = float((pf-pa).abs().mean()); mae_r = float((pr-ra).abs().mean())
+              mae_y = float((pd.Series(y_fc, dtype=float)-pd.Series(y_ac, dtype=float)).abs().mean())
+              st.caption(f"MAE last horizon — Fancy ₱{mae_f:.2f} · Regular ₱{mae_r:.2f} · Yield {mae_y:.2f} MT/ha — lower is better.")
+            except: pass
+          except Exception as e:
+            st.info(f"No yield compare data. {e}")
+        else:
+          st.info("Archive not found — put previous forecast parquet in data/forecasts/archive/provincial_forecasts.parquet to enable this chart.")
+      except Exception as e:
+        st.info(f"Forecast vs Actual not available. {e}")
 
   # NOTE: Model Benchmark moved to MODEL > Model Info. Yield Forecast Summary + Insights Narrative removed — replaced by Decision Support Panel above (2026-09-11)
 

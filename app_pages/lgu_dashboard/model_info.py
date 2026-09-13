@@ -190,16 +190,17 @@ def _render_metadata():
 def _render_summary_cards(metrics: dict):
     """Three extra-compact sections: Regular -> Fancy -> divider -> Yield."""
 
-    # Extra-compact override — tighter than theme.py compact
+    # Compact but not clipped — maintain theme spacing via padding 0.90rem (was 0.45rem causing cutoff)
     st.markdown(
         """
         <style>
-        .ps-kpi--compact { padding:0.45rem 0.55rem !important; gap:0.08rem !important; border-radius:10px !important; }
-        .ps-kpi--compact .ps-kpi-label { font-size:0.58rem !important; letter-spacing:0.25px !important; }
-        .ps-kpi--compact .ps-kpi-value { font-size:0.96rem !important; line-height:1.1 !important; }
-        .ps-kpi--compact .ps-kpi-sub { font-size:0.60rem !important; line-height:1.15 !important; }
-        .ps-kpi--compact .ps-kpi-icon { width:26px !important; height:26px !important; border-radius:7px !important; margin-top:0.1rem !important; }
-        .ps-kpi--compact .ps-kpi-icon i { font-size:14px !important; }
+        .ps-kpi--compact { padding:0.85rem 0.90rem !important; gap:0.22rem !important; border-radius:12px !important; }
+        .ps-kpi--compact .ps-kpi-label { font-size:0.62rem !important; letter-spacing:0.3px !important; }
+        .ps-kpi--compact .ps-kpi-value { font-size:1.10rem !important; line-height:1.2 !important; }
+        .ps-kpi--compact .ps-kpi-sub { font-size:0.66rem !important; line-height:1.3 !important; }
+        .ps-kpi--compact .ps-kpi-icon { width:30px !important; height:30px !important; border-radius:8px !important; margin-top:0.25rem !important; }
+        .ps-kpi--compact .ps-kpi-icon i { font-size:15px !important; }
+        div[data-testid="stVerticalBlockBorderWrapper"] { margin-top:0.4rem !important; margin-bottom:0.6rem !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -275,23 +276,23 @@ def _render_summary_cards(metrics: dict):
     has_any = any(metrics.get(k) for k in ["regular", "fancy", "yield"])
     for title, key, unit, icon_name in price_sections:
         st.markdown(
-            f'<div style="font-size:0.76rem; font-weight:700; color:{theme.DARK_GREEN}; margin:0.55rem 0 0.25rem 0; display:flex; align-items:center; gap:0.35rem;">'
+            f'<div style="font-size:0.78rem; font-weight:700; color:{theme.DARK_GREEN}; margin:1.0rem 0 0.4rem 0; padding:2px 0; line-height:1.5; display:flex; align-items:center; gap:0.35rem;">'
             f'{theme.icon(icon_name, "14px", theme.PRIMARY)} {title}'
-            f'<span style="font-size:0.66rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.25rem;">— Random Forest Regression</span></div>',
+            f'<span style="font-size:0.68rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.25rem;">— Random Forest Regression</span></div>',
             unsafe_allow_html=True,
         )
         theme.kpi_row(_cards_for(key, unit))
 
     # Divider between prices and yield
     st.markdown(
-        f'<div style="height:1px; background:{theme.BORDER}; margin:0.65rem 0 0.25rem 0;"></div>',
+        f'<div style="height:1px; background:{theme.BORDER}; margin:1.0rem 0 0.6rem 0;"></div>',
         unsafe_allow_html=True,
     )
     title, key, unit, icon_name = yield_section
     st.markdown(
-        f'<div style="font-size:0.76rem; font-weight:700; color:{theme.DARK_GREEN}; margin:0.25rem 0 0.25rem 0; display:flex; align-items:center; gap:0.35rem;">'
+        f'<div style="font-size:0.78rem; font-weight:700; color:{theme.DARK_GREEN}; margin:0.6rem 0 0.4rem 0; padding:2px 0; line-height:1.5; display:flex; align-items:center; gap:0.35rem;">'
         f'{theme.icon(icon_name, "14px", theme.PRIMARY)} {title}'
-        f'<span style="font-size:0.66rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.25rem;">— Random Forest Regression</span></div>',
+        f'<span style="font-size:0.68rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.25rem;">— Random Forest Regression</span></div>',
         unsafe_allow_html=True,
     )
     theme.kpi_row(_cards_for(key, unit))
@@ -330,8 +331,8 @@ def _render_comparison_bar(metrics: dict):
                 unsafe_allow_html=True,
             )
             fig1 = go.Figure()
-            fig1.add_trace(go.Bar(x=["Regular", "Fancy"], y=[vals["regular"]["mae"], vals["fancy"]["mae"]], name="MAE", marker_color=theme.PRIMARY, text=[f"{v:.2f}" for v in [vals["regular"]["mae"], vals["fancy"]["mae"]]], textposition="outside"))
-            fig1.add_trace(go.Bar(x=["Regular", "Fancy"], y=[vals["regular"]["rmse"], vals["fancy"]["rmse"]], name="RMSE", marker_color="#4CAF50", text=[f"{v:.2f}" for v in [vals["regular"]["rmse"], vals["fancy"]["rmse"]]], textposition="outside"))
+            fig1.add_trace(go.Bar(x=["Regular", "Fancy"], y=[vals["regular"]["mae"], vals["fancy"]["mae"]], name="MAE", marker_color=theme.PRIMARY, text=[f"{v:.2f}" for v in [vals["regular"]["mae"], vals["fancy"]["mae"]]], textposition="outside", marker_cornerradius=8))
+            fig1.add_trace(go.Bar(x=["Regular", "Fancy"], y=[vals["regular"]["rmse"], vals["fancy"]["rmse"]], name="RMSE", marker_color="#4CAF50", text=[f"{v:.2f}" for v in [vals["regular"]["rmse"], vals["fancy"]["rmse"]]], textposition="outside", marker_cornerradius=8))
             fig1.update_layout(barmode="group", height=220, margin=dict(t=10, b=25, l=35, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=11), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)), yaxis=dict(gridcolor="rgba(0,0,0,0.06)"), bargap=0.35, bargroupgap=0.15)
             st.plotly_chart(fig1, use_container_width=True, key="model_cmp_price")
             if not has_data:
@@ -342,8 +343,8 @@ def _render_comparison_bar(metrics: dict):
                 unsafe_allow_html=True,
             )
             fig2 = go.Figure()
-            fig2.add_trace(go.Bar(x=["Yield"], y=[vals["yield"]["mae"]], name="MAE", marker_color=theme.PRIMARY, text=[f"{vals['yield']['mae']:.3f}"], textposition="outside", width=0.5))
-            fig2.add_trace(go.Bar(x=["Yield"], y=[vals["yield"]["rmse"]], name="RMSE", marker_color="#4CAF50", text=[f"{vals['yield']['rmse']:.3f}"], textposition="outside", width=0.5))
+            fig2.add_trace(go.Bar(x=["Yield"], y=[vals["yield"]["mae"]], name="MAE", marker_color=theme.PRIMARY, text=[f"{vals['yield']['mae']:.3f}"], textposition="outside", width=0.5, marker_cornerradius=8))
+            fig2.add_trace(go.Bar(x=["Yield"], y=[vals["yield"]["rmse"]], name="RMSE", marker_color="#4CAF50", text=[f"{vals['yield']['rmse']:.3f}"], textposition="outside", width=0.5, marker_cornerradius=8))
             fig2.update_layout(barmode="group", height=220, margin=dict(t=10, b=25, l=35, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=11), showlegend=False, yaxis=dict(gridcolor="rgba(0,0,0,0.06)"), bargap=0.4)
             st.plotly_chart(fig2, use_container_width=True, key="model_cmp_yield")
 
@@ -423,6 +424,79 @@ def _render_callout():
 
 
 # ------------------------------------------------------------------
+# F. Backtest: Forecast vs Actual — Last Horizon (side-by-side)
+# ------------------------------------------------------------------
+def _render_backtest():
+    with theme.section_card(
+        title="Backtest — Forecast vs Actual (Jan–Jun 2026)",
+        desc="Archive Dec 2025 vs actuals. Solid = Actual, dashed = Forecast. Honest validation for defense.",
+        icon_name="compare",
+    ):
+        try:
+            import pathlib
+            prev_path = pathlib.Path("data/forecasts/archive/provincial_forecasts.parquet")
+            hist_path = pathlib.Path("data/forecasts/provincial_history.parquet")
+            if not (prev_path.exists() and hist_path.exists()):
+                st.caption("Archive not found — backtest hidden.")
+                return
+            prev = pd.read_parquet(prev_path)
+            hist = pd.read_parquet(hist_path)
+            hist["date"] = pd.to_datetime(hist["date"])
+            price_labels = ["January 2026", "February 2026", "March 2026", "April 2026", "May 2026", "June 2026"]
+
+            def _get_fc(typ):
+                m = {r["period_label"]: float(r["forecast_value"]) for _, r in prev[prev["forecast_type"] == typ].iterrows()}
+                return [m.get(lbl) for lbl in price_labels]
+
+            fancy_fc, regular_fc = _get_fc("fancy"), _get_fc("regular")
+            mask = (hist["date"].dt.year == 2026) & (hist["date"].dt.month.between(1, 6))
+            act = hist[mask].sort_values("date")
+            act_f = {d.strftime("%B %Y"): float(v) for d, v in zip(act["date"], act["fancy_palay_price"])}
+            act_r = {d.strftime("%B %Y"): float(v) for d, v in zip(act["date"], act["other_variety_price"])}
+            fancy_ac = [act_f.get(lbl) for lbl in price_labels]
+            regular_ac = [act_r.get(lbl) for lbl in price_labels]
+
+            tmp = hist.copy()
+            tmp["year"] = tmp["date"].dt.year
+            tmp["quarter"] = tmp["date"].dt.quarter
+            qact = tmp[tmp["year"] == 2026].groupby(["year", "quarter"])["quarterly_yield_mt_per_ha"].mean().reset_index()
+            qact["label"] = ["Q" + str(int(r["quarter"])) + " " + str(int(r["year"])) for _, r in qact.iterrows()]
+            y_prev = {r["period_label"]: float(r["forecast_value"]) for _, r in prev[prev["forecast_type"] == "yield"].iterrows()}
+            qlabels = ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"]
+            y_fc = [y_prev.get(lbl) for lbl in qlabels]
+            act_y_map = {r["label"]: float(r["quarterly_yield_mt_per_ha"]) for _, r in qact.iterrows()}
+            y_ac = [act_y_map.get(lbl) for lbl in qlabels]
+
+            c_price, c_yield = st.columns(2)
+            with c_price:
+                st.markdown(f'<div style="font-size:0.72rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.25rem;">PRICE — FORECAST VS ACTUAL (₱/kg)</div>', unsafe_allow_html=True)
+                figp = go.Figure()
+                figp.add_trace(go.Scatter(x=price_labels, y=fancy_fc, mode="lines+markers", name="Fancy Fcst", line=dict(color="#10B981", width=2, dash="dash"), marker=dict(size=6, symbol="diamond")))
+                figp.add_trace(go.Scatter(x=price_labels, y=fancy_ac, mode="lines+markers", name="Fancy Act", line=dict(color="#059669", width=2.5), marker=dict(size=6, symbol="circle")))
+                figp.add_trace(go.Scatter(x=price_labels, y=regular_fc, mode="lines+markers", name="Reg Fcst", line=dict(color="#6366F1", width=2, dash="dash"), marker=dict(size=6, symbol="diamond")))
+                figp.add_trace(go.Scatter(x=price_labels, y=regular_ac, mode="lines+markers", name="Reg Act", line=dict(color="#4F46E5", width=2.5), marker=dict(size=6, symbol="circle")))
+                figp.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=10), legend=dict(orientation="h", y=-0.3, font=dict(size=9)), yaxis=dict(gridcolor="rgba(0,0,0,0.06)"), xaxis=dict(tickangle=-30, tickfont=dict(size=8)))
+                st.plotly_chart(figp, use_container_width=True, key="mi_backtest_price", config={"displayModeBar": False})
+            with c_yield:
+                st.markdown(f'<div style="font-size:0.72rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.25rem;">YIELD — FORECAST VS ACTUAL (MT/ha)</div>', unsafe_allow_html=True)
+                figy = go.Figure()
+                figy.add_trace(go.Bar(x=qlabels, y=y_fc, name="Forecast", marker_color="#F59E0B", text=[f"{v:.2f}" if v is not None else "—" for v in y_fc], textposition="outside", marker_cornerradius=6))
+                figy.add_trace(go.Bar(x=qlabels, y=y_ac, name="Actual", marker_color="#10B981", text=[f"{v:.2f}" if v is not None else "—" for v in y_ac], textposition="outside", marker_cornerradius=6))
+                figy.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), barmode="group", bargap=0.3, plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=10), legend=dict(orientation="h", y=-0.3, font=dict(size=9)), yaxis=dict(range=[0, 6], gridcolor="rgba(0,0,0,0.06)"))
+                st.plotly_chart(figy, use_container_width=True, key="mi_backtest_yield", config={"displayModeBar": False})
+
+            try:
+                mae_f = float((pd.Series(fancy_fc, dtype=float) - pd.Series(fancy_ac, dtype=float)).abs().mean())
+                mae_r = float((pd.Series(regular_fc, dtype=float) - pd.Series(regular_ac, dtype=float)).abs().mean())
+                mae_y = float((pd.Series(y_fc, dtype=float) - pd.Series(y_ac, dtype=float)).abs().mean())
+                st.caption(f"MAE last horizon — Fancy ₱{mae_f:.2f} · Regular ₱{mae_r:.2f} · Yield {mae_y:.2f} MT/ha. April price drop = exogenous shock (harvest supply) not in training — next: add rainfall/season/import as exogenous + retrain.")
+            except Exception:
+                pass
+        except Exception as e:
+            st.caption(f"Backtest unavailable. {e}")
+
+
+# ------------------------------------------------------------------
 # Public entry point (same signature as other LGU pages)
 # ------------------------------------------------------------------
 def render(df, dr):
@@ -442,6 +516,9 @@ def render(df, dr):
 
     # C2. Comparison bar (Option 1 micro-visual)
     _render_comparison_bar(metrics)
+
+    # F. Backtest side-by-side (defense validation)
+    _render_backtest()
 
     # D. Breakdown table
     _render_breakdown_table(metrics)
