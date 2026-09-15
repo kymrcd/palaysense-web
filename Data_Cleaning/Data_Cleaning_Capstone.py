@@ -118,6 +118,9 @@ def run_cleaning(file_path,
         # 1. CLEAN COLUMN NAMES
         # -----------------------------
         df_cleaned.columns = clean_column_names(df_cleaned.columns)
+        # Handle duplicate columns after cleaning (same as municipality fix line 248)
+        # Duplicate columns cause df[col] to return DataFrame -> 'DataFrame' has no attribute 'str'
+        df_cleaned = df_cleaned.loc[:, ~df_cleaned.columns.duplicated()]
 
         # -----------------------------
         # 2. CONVERT NUMERIC COLUMNS

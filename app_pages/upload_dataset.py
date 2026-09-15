@@ -14,6 +14,7 @@ from utils.upload_datasets import (
     CLEAN_FOLDER,
     TEMP_FOLDER,
     create_originals_backup,
+    restore_original_data,
 )
 from utils.firebase_storage import (
     upload_raw_file,
@@ -417,3 +418,21 @@ def upload_dataset():
         except Exception as e:
             st.error(f"Pipeline failed: {e}")
             st.exception(e)
+
+    st.divider()
+    with st.container(border=True):
+        st.markdown("**Restore Original Dataset**")
+        st.caption("Ibalik ang sistema sa orihinal na datos (baseline) kasama ang forecast files.")
+        confirm = st.checkbox("Kumpirmahin na nais ibalik sa orihinal na dataset", key="restore_confirm")
+        if st.button("↩️ Restore Original Data", type="primary", use_container_width=True, key="restore_btn", disabled=not confirm):
+            with st.spinner("Restoring original dataset..."):
+                try:
+                    restore_original_data()
+                    try:
+                        st.cache_data.clear()
+                        st.cache_resource.clear()
+                    except Exception:
+                        pass
+                    st.success("Original dataset restored successfully.")
+                except Exception as e:
+                    st.error(f"Restore failed: {e}")

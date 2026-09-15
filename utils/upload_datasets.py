@@ -362,9 +362,8 @@ def create_originals_backup():
 
 def restore_original_data():
     """
-    Restores the original master files from backup and cleans
-    up all generated files (cleaned, forecasts, models).
-    Returns a list of actions performed.
+    Restores the original master, cleaned, and forecast parquet files from backup
+    (current live baseline). Returns a list of actions performed.
     """
     actions = []
 
@@ -383,14 +382,34 @@ def restore_original_data():
             shutil.copy2(src, dst)
             actions.append(f"Restored {filename}")
 
-    # 2. Delete cleaned files (they will be regenerated on next load)
+    # 2. Restore cleaned files (overwrite with backup)
     for filename in ["provincial_cleaned.xlsx", "municipality_cleaned.xlsx"]:
-        path = os.path.join(CLEAN_FOLDER, filename)
-        if os.path.exists(path):
-            os.remove(path)
-            actions.append(f"Removed cleaned/{filename}")
+        src = os.path.join(BACKUP_FOLDER, filename)
+        dst = os.path.join(CLEAN_FOLDER, filename)
+        if os.path.exists(src):
+            os.makedirs(CLEAN_FOLDER, exist_ok=True)
+            shutil.copy2(src, dst)
+            actions.append(f"Restored cleaned/{filename}")
 
-    # 3. Delete Dashboard_Ready files (forecasts, metrics)
+    # 3. Restore forecast parquets (professional: with parquet files)
+    FORECAST_FOLDER = os.path.join(BASE_DIR, "data", "forecasts")
+    FORECAST_BACKUP = os.path.join(BACKUP_FOLDER, "forecasts")
+    if os.path.exists(FORECAST_BACKUP):
+        os.makedirs(FORECAST_FOLDER, exist_ok=True)
+        for f in os.listdir(FORECAST_BACKUP):
+            src = os.path.join(FORECAST_BACKUP, f)
+            dst = os.path.join(FORECAST_FOLDER, f)
+            try:
+                if os.path.isfile(src):
+                    shutil.copy2(src, dst)
+                    actions.append(f"Restored forecasts/{f}")
+            except Exception:
+                pass
+    elif os.path.exists(FORECAST_FOLDER):
+        # fallback: keep existing forecasts if no backup yet
+        pass
+
+    # 4. Restore Dashboard_Ready files if backup exists there
     if os.path.exists(DASHBOARD_READY_FOLDER):
         for f in os.listdir(DASHBOARD_READY_FOLDER):
             file_path = os.path.join(DASHBOARD_READY_FOLDER, f)
@@ -401,16 +420,8 @@ def restore_original_data():
             except Exception:
                 pass
 
-    # 4. Delete model files
-    if os.path.exists(MODELS_FOLDER):
-        for f in os.listdir(MODELS_FOLDER):
-            file_path = os.path.join(MODELS_FOLDER, f)
-            try:
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-                    actions.append(f"Removed models/{f}")
-            except Exception:
-                pass
+    # 5. Keep models (do not delete) — they will be regenerated on next pipeline if needed
+    # Note: models are kept/restored via forecasts backup, no deletion to avoid breaking dashboard
 
     if not actions:
         actions.append("No backup found. Please upload data first.")
