@@ -374,14 +374,10 @@ def upload_dataset():
             if prov_exists:
                 if upload_cleaned_file(PROVINCIAL_CLEANED, "Provincial"):
                     st.success("Provincial cleaned file backed up to Firebase Storage.")
-                else:
-                    st.caption("Provincial cleaned file saved locally (Firebase backup skipped).")
 
             if muni_exists:
                 if upload_cleaned_file(MUNICIPALITY_CLEANED, "Municipality"):
                     st.success("Municipal cleaned file backed up to Firebase Storage.")
-                else:
-                    st.caption("Municipal cleaned file saved locally (Firebase backup skipped).")
 
             # ---------- RUN FORECASTING PIPELINE (only for uploaded types — provincial alone won't trigger 30-min municipal) ----------
             pipeline_success = run_forecasting_pipeline(
