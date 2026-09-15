@@ -541,14 +541,20 @@ def _forecast_visual_chart(dr, selected_class, selected_munis):
                 st.plotly_chart(fig, use_container_width=True, key=f"fc_priceF_{_benchmark_opt}")
             else:
                 st.info("Price forecast data not available.")
-            # Insight INSIDE price graph
-            st.markdown(f"""
-            <div style="background:#FFFBEB; border:1px solid #FDE68A; border-left:4px solid #F59E0B; border-radius:8px; padding:8px 10px; margin-top:8px;">
-              <div style="font-size:0.80rem; color:#92400E; font-weight:700;">Price · {price_month}</div>
-              <div style="font-size:0.80rem; color:#444;">Fancy {fancy_pct:+.1f}% · Regular {regular_pct:+.1f}% → {price_outlook:+.1f}% overall</div>
-              <div style="font-size:0.78rem; color:#92400E; font-weight:600;">Reading: {"Stable vs hist avg" if price_outlook>=-1 else "Softer than hist avg"}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Insight INSIDE price graph — safe when no data (demo empty)
+            fancy_txt = f"{fancy_pct:+.1f}%" if fancy_pct is not None else "—"
+            regular_txt = f"{regular_pct:+.1f}%" if regular_pct is not None else "—"
+            outlook_txt = f"{price_outlook:+.1f}%" if price_outlook is not None else "—"
+            if fancy_pct is None and regular_pct is None:
+                st.info("Price outlook not available — no historical or forecast data.")
+            else:
+                st.markdown(f"""
+                <div style="background:#FFFBEB; border:1px solid #FDE68A; border-left:4px solid #F59E0B; border-radius:8px; padding:8px 10px; margin-top:8px;">
+                  <div style="font-size:0.80rem; color:#92400E; font-weight:700;">Price · {price_month}</div>
+                  <div style="font-size:0.80rem; color:#444;">Fancy {fancy_txt} · Regular {regular_txt} → {outlook_txt} overall</div>
+                  <div style="font-size:0.78rem; color:#92400E; font-weight:600;">Reading: {"Stable vs hist avg" if (price_outlook is not None and price_outlook>=-1) else "Softer than hist avg" if price_outlook is not None else "No data"}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
     with col_yield:
         with st.container(border=True):
