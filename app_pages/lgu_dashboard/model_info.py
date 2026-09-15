@@ -2,8 +2,10 @@
 PalaySense LGU Dashboard — Model Information (Paper-Aligned)
 =============================================================
 Clean, professional view for LGU / DA decision-makers.
-STRICTLY 4 metrics only: MAE, RMSE, R², Bias — no baselines, no MAPE, no walk-forward.
-Theme-aligned via app_pages/lgu_dashboard/theme.py (PRIMARY #1E5C3A, light cards, Inter font).
+Grouped 4-card view: Fancy / Regular / Yield / Municipality — 3 metrics per card
+(MAE, RMSE, R²). Bias demoted to detail table only. Municipality uses Option A:
+mean across 96 municipal series (12 muni × 8 variety-season).
+Theme-aligned via app_pages/lgu_dashboard/theme.py (PRIMARY #1E5C3A).
 """
 
 import pandas as pd
@@ -185,120 +187,216 @@ def _render_metadata():
 
 
 # ------------------------------------------------------------------
-# C. High-Level Metric Summary — hiwa-hiwalay per target, compact cards
+# C. High-Level Metric Summary — 4 grouped cards (Fancy / Regular / Yield / Municipality)
 # ------------------------------------------------------------------
-def _render_summary_cards(metrics: dict):
-    """Three extra-compact sections: Regular -> Fancy -> divider -> Yield."""
+def _municipal_avg(metrics: dict):
+    """Option A: mean across 96 municipal series (12 muni x 8 variety-season)."""
+    muni = metrics.get("municipal", {}) or {}
+    if not muni:
+        return {"mae": None, "rmse": None, "r2": None, "bias": None, "n": 0}
+    vals_mae, vals_rmse, vals_r2, vals_bias = [], [], [], []
+    for _muni_name, varieties in muni.items():
+        if not isinstance(varieties, dict):
+            continue
+        for _var, m in varieties.items():
+            if not isinstance(m, dict):
+                continue
+            mae = _safe_float(m.get("mae"))
+            rmse = _safe_float(m.get("rmse"))
+            r2 = _safe_float(m.get("r2"))
+            bias = _safe_float(m.get("bias"))
+            if mae is not None:
+                vals_mae.append(mae)
+            if rmse is not None:
+                vals_rmse.append(rmse)
+            if r2 is not None:
+                vals_r2.append(r2)
+            if bias is not None:
+                vals_bias.append(bias)
+    def _mean(v):
+        return sum(v) / len(v) if v else None
+    return {"mae": _mean(vals_mae), "rmse": _mean(vals_rmse), "r2": _mean(vals_r2), "bias": _mean(vals_bias), "n": len(vals_mae)}
 
-    # Compact but not clipped — maintain theme spacing via padding 0.90rem (was 0.45rem causing cutoff)
+
+def _render_summary_cards(metrics: dict):
+    """4 grouped cards — matches Fig.1 mock. Bias removed from primary view (kept in detail table)."""
+
     st.markdown(
         """
         <style>
-        .ps-kpi--compact { padding:0.85rem 0.90rem !important; gap:0.22rem !important; border-radius:12px !important; }
-        .ps-kpi--compact .ps-kpi-label { font-size:0.62rem !important; letter-spacing:0.3px !important; }
-        .ps-kpi--compact .ps-kpi-value { font-size:1.10rem !important; line-height:1.2 !important; }
-        .ps-kpi--compact .ps-kpi-sub { font-size:0.66rem !important; line-height:1.3 !important; }
-        .ps-kpi--compact .ps-kpi-icon { width:30px !important; height:30px !important; border-radius:8px !important; margin-top:0.25rem !important; }
-        .ps-kpi--compact .ps-kpi-icon i { font-size:15px !important; }
-        div[data-testid="stVerticalBlockBorderWrapper"] { margin-top:0.4rem !important; margin-bottom:0.6rem !important; }
+        .ps-group-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0.9rem; margin:0.6rem 0 0.4rem 0; }
+        @media (max-width: 1100px){ .ps-group-grid{ grid-template-columns:repeat(2,1fr); } }
+        @media (max-width: 600px){ .ps-group-grid{ grid-template-columns:1fr; } }
+        /* Aligned to system design tokens — was lime #C5E063 / #2E5C1C, now CARD_BG/PRIMARY/BORDER */
+        .ps-group-card { background:var(--ps-card); border:1px solid var(--ps-border); border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.04); display:flex; flex-direction:column; }
+        .ps-group-head { background:var(--ps-primary); color:#FFFFFF; text-align:center; padding:0.60rem 0.4rem; font-family:var(--ps-font); font-weight:600; font-size:0.85rem; letter-spacing:0.2px; line-height:1.2; text-transform:none; }
+        .ps-group-body { padding:0.85rem 0.75rem 0.90rem 0.75rem; display:flex; flex-direction:column; gap:0.45rem; flex:1; background:#F9FBF9; }
+        .ps-group-pill { background:var(--ps-primary); color:#FFFFFF; border-radius:999px; padding:0.45rem 0.80rem; display:flex; align-items:center; justify-content:space-between; font-family:var(--ps-font); font-size:0.80rem; font-weight:600; line-height:1; }
+        .ps-group-pill span:first-child{ font-weight:600; letter-spacing:0.15px; opacity:0.95; }
+        .ps-group-pill span:last-child{ font-weight:700; }
+        .ps-group-foot { text-align:center; font-family:var(--ps-font); font-size:0.62rem; color:var(--ps-text-secondary); font-weight:500; padding:0.45rem 0.5rem 0.65rem 0.5rem; line-height:1.3; }
+        /* caption spacing fix — avoid overlap with next expander/section */
+        .ps-group-caption { margin-top:0.85rem !important; padding-top:0.15rem; line-height:1.4; display:block; }
+        .ps-group-caption p { margin-top:0.85rem !important; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    def _cards_for(key: str, unit: str):
-        m = metrics.get(key, {}) or {}
-        mae = _safe_float(m.get("mae"))
-        rmse = _safe_float(m.get("rmse"))
-        r2 = _safe_float(m.get("r2"))
-        bias = _safe_float(m.get("bias"))
+    # Real values — no more 0.00 placeholders
+    fancy = metrics.get("fancy", {}) or {}
+    regular = metrics.get("regular", {}) or {}
+    yld = metrics.get("yield", {}) or {}
+    muni_avg = _municipal_avg(metrics)
 
-        def _fmt(v, suffix=""):
-            if v is None:
-                if key == "yield" and suffix:
-                    return f"0.000{suffix}"
-                return f"0.00{suffix}" if suffix else "0.000"
-            if key == "yield" and suffix:
-                return f"{v:.3f}{suffix}"
-            return f"{v:.2f}{suffix}" if suffix else f"{v:.3f}" if key == "yield" and v < 1 else f"{v:.2f}"
+    def _val(m, k, fmt="{:.2f}"):
+        v = _safe_float(m.get(k))
+        if v is None:
+            return "—"
+        try:
+            return fmt.format(v)
+        except Exception:
+            return str(v)
 
-        # Neutral — all PRIMARY green so panels don't fixate on red (defense-safe)
-        return [
-            theme.kpi_card(
-                "MAE",
-                _fmt(mae, f" {unit}"),
-                "Average Error (Lower is better)",
-                icon_name="straighten",
-                icon_bg="rgba(30,92,58,0.08)",
-                icon_color=theme.PRIMARY,
-                accent=theme.PRIMARY,
-                compact=True,
-            ),
-            theme.kpi_card(
-                "RMSE",
-                _fmt(rmse, f" {unit}"),
-                "Sensitivity (Lower is better)",
-                icon_name="show_chart",
-                icon_bg="rgba(30,92,58,0.08)",
-                icon_color=theme.PRIMARY,
-                accent=theme.PRIMARY,
-                compact=True,
-            ),
-            theme.kpi_card(
-                "R²",
-                f"{r2:.3f}" if r2 is not None else "0.000",
-                "Accuracy (Close to 1.0)",
-                icon_name="verified",
-                icon_bg="rgba(30,92,58,0.08)",
-                icon_color=theme.PRIMARY,
-                accent=theme.PRIMARY,
-                compact=True,
-            ),
-            theme.kpi_card(
-                "Bias",
-                f"{bias:.3f}" if bias is not None else "0.000",
-                "Trend (Near 0)",
-                icon_name="balance",
-                icon_bg="rgba(30,92,58,0.08)",
-                icon_color=theme.PRIMARY,
-                accent=theme.PRIMARY,
-                compact=True,
-            ),
-        ]
-
-    # Order: Regular first, Fancy second (ibaba ang Fancy), Yield last with divider
-    price_sections = [
-        ("Regular Palay Price", "regular", "PhP/kg", "receipt_long"),
-        ("Fancy Palay Price", "fancy", "PhP/kg", "payments"),
+    # Build 4 cards spec: Sentence case, system font — was FANCY/ caps
+    cards = [
+        {
+            "title": "Fancy",
+            "mae": _val(fancy, "mae", "{:.2f}"),
+            "rmse": _val(fancy, "rmse", "{:.2f}"),
+            "r2": _val(fancy, "r2", "{:.3f}"),
+            "foot": f"PhP/kg · n=1 model",
+        },
+        {
+            "title": "Regular",
+            "mae": _val(regular, "mae", "{:.2f}"),
+            "rmse": _val(regular, "rmse", "{:.2f}"),
+            "r2": _val(regular, "r2", "{:.3f}"),
+            "foot": f"PhP/kg · n=1 model",
+        },
+        {
+            "title": "Municipality prices",
+            "mae": _val(muni_avg, "mae", "{:.2f}"),
+            "rmse": _val(muni_avg, "rmse", "{:.2f}"),
+            "r2": _val(muni_avg, "r2", "{:.3f}"),
+            "foot": f"PhP/kg · avg of {muni_avg['n']} series" if muni_avg["n"] else "PhP/kg · avg",
+        },
+        {
+            "title": "Yield",
+            "mae": _val(yld, "mae", "{:.3f}"),
+            "rmse": _val(yld, "rmse", "{:.3f}"),
+            "r2": _val(yld, "r2", "{:.3f}"),
+            "foot": f"MT/ha · n=1 model",
+        },
     ]
-    yield_section = ("Yield (MT/HA)", "yield", "MT/HA", "eco")
 
-    has_any = any(metrics.get(k) for k in ["regular", "fancy", "yield"])
-    for title, key, unit, icon_name in price_sections:
+    # Single bordered container like Fig.1 — then 4 cards inside grid
+    with st.container(border=True):
         st.markdown(
-            f'<div style="font-size:0.78rem; font-weight:700; color:{theme.DARK_GREEN}; margin:1.0rem 0 0.4rem 0; padding:2px 0; line-height:1.5; display:flex; align-items:center; gap:0.35rem;">'
-            f'{theme.icon(icon_name, "14px", theme.PRIMARY)} {title}'
-            f'<span style="font-size:0.68rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.25rem;">— Random Forest Regression</span></div>',
+            f'<div style="font-size:0.74rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.35rem;">'
+            f'{theme.icon("analytics", "16px", theme.PRIMARY)} Model Accuracy Summary'
+            f'<span style="font-size:0.66rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.35rem;">— Random Forest Regression · MAE/RMSE/R² only · Bias in detail table</span></div>',
             unsafe_allow_html=True,
         )
-        theme.kpi_row(_cards_for(key, unit))
+        cols = st.columns(4, gap="small")
+        for col, c in zip(cols, cards):
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="ps-group-card">
+                        <div class="ps-group-head">{c['title']}</div>
+                        <div class="ps-group-body">
+                            <div class="ps-group-pill"><span>MAE</span><span>{c['mae']}</span></div>
+                            <div class="ps-group-pill"><span>RMSE</span><span>{c['rmse']}</span></div>
+                            <div class="ps-group-pill"><span>R²</span><span>{c['r2']}</span></div>
+                        </div>
+                        <div class="ps-group-foot">{c['foot']}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+    # --- Municipality per-muni breakdown (st.expander) — outside the 4-card container for clean nesting ---
+    muni_dict = metrics.get("municipal", {}) or {}
+    if muni_dict:
+        # Build per-municipality averages
+        per_muni_rows = []
+        # For stable display, sort municipalities alphabetically
+        for muni_name in sorted(muni_dict.keys(), key=lambda x: str(x).lower()):
+            varieties = muni_dict.get(muni_name, {}) or {}
+            vals_mae, vals_rmse, vals_r2, vals_bias = [], [], [], []
+            for _var, m in varieties.items():
+                if not isinstance(m, dict):
+                    continue
+                mae = _safe_float(m.get("mae"))
+                rmse = _safe_float(m.get("rmse"))
+                r2 = _safe_float(m.get("r2"))
+                bias = _safe_float(m.get("bias"))
+                if mae is not None:
+                    vals_mae.append(mae)
+                if rmse is not None:
+                    vals_rmse.append(rmse)
+                if r2 is not None:
+                    vals_r2.append(r2)
+                if bias is not None:
+                    vals_bias.append(bias)
+            def _m(v):
+                return sum(v) / len(v) if v else None
+            per_muni_rows.append({
+                "Municipality": str(muni_name).title(),
+                "_key": str(muni_name),
+                "MAE": round(_m(vals_mae), 2) if _m(vals_mae) is not None else 0,
+                "RMSE": round(_m(vals_rmse), 2) if _m(vals_rmse) is not None else 0,
+                "R²": round(_m(vals_r2), 3) if _m(vals_r2) is not None else 0,
+                "Bias": round(_m(vals_bias), 3) if _m(vals_bias) is not None else 0,
+                "n_series": len(vals_mae),
+            })
 
-    # Divider between prices and yield
-    st.markdown(
-        f'<div style="height:1px; background:{theme.BORDER}; margin:1.0rem 0 0.6rem 0;"></div>',
-        unsafe_allow_html=True,
-    )
-    title, key, unit, icon_name = yield_section
-    st.markdown(
-        f'<div style="font-size:0.78rem; font-weight:700; color:{theme.DARK_GREEN}; margin:0.6rem 0 0.4rem 0; padding:2px 0; line-height:1.5; display:flex; align-items:center; gap:0.35rem;">'
-        f'{theme.icon(icon_name, "14px", theme.PRIMARY)} {title}'
-        f'<span style="font-size:0.68rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.25rem;">— Random Forest Regression</span></div>',
-        unsafe_allow_html=True,
-    )
-    theme.kpi_row(_cards_for(key, unit))
+        with st.expander(f"Municipality breakdown — per municipality ({len(per_muni_rows)} municipalities × 8 series) · click to expand", expanded=False):
+            st.markdown(
+                f'<div style="font-size:0.72rem; color:{theme.TEXT_SECONDARY}; margin-bottom:0.4rem;">'
+                f'Average per municipality (mean of its 8 variety-season models). Expand a municipality below to see its 8 variety-season details.</div>',
+                unsafe_allow_html=True,
+            )
+            # Summary table — 12 rows
+            df_muni = pd.DataFrame(
+                [{k: v for k, v in r.items() if k != "_key"} for r in per_muni_rows],
+                columns=["Municipality", "MAE", "RMSE", "R²", "Bias", "n_series"],
+            )
+            st.dataframe(df_muni, use_container_width=True, hide_index=True)
 
-    if not has_any:
-        st.caption("No metrics yet — values will appear after training.")
+            st.markdown(
+                f'<div style="height:1px; background:{theme.BORDER}; margin:0.7rem 0 0.6rem 0;"></div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<div style="font-size:0.73rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.35rem;">Per-municipality details (8 variety-season each)</div>',
+                unsafe_allow_html=True,
+            )
+            # Per-municipality inner expanders — collapsed by default to avoid clutter
+            for row in per_muni_rows:
+                key = row["_key"]
+                muni_label = row["Municipality"]
+                varieties = muni_dict.get(key, {}) or {}
+                # Build detail rows for this municipality
+                detail_rows = []
+                for var_name in sorted(varieties.keys()):
+                    m = varieties.get(var_name, {}) or {}
+                    mae = _safe_float(m.get("mae"))
+                    rmse = _safe_float(m.get("rmse"))
+                    r2 = _safe_float(m.get("r2"))
+                    bias = _safe_float(m.get("bias"))
+                    # Pretty label: hybridpremium_dry -> Hybrid Premium (Dry)
+                    pretty = str(var_name).replace("_", " ").title().replace("Hybridpremium", "Hybrid Premium").replace("Inbredpremium", "Inbred Premium").replace("Inbredordinary", "Inbred Ordinary").replace("Hybridordinary", "Hybrid Ordinary")
+                    detail_rows.append({
+                        "Variety-Season": pretty,
+                        "MAE": round(mae, 2) if mae is not None else 0,
+                        "RMSE": round(rmse, 2) if rmse is not None else 0,
+                        "R²": round(r2, 3) if r2 is not None else 0,
+                        "Bias": round(bias, 3) if bias is not None else 0,
+                    })
+                df_detail = pd.DataFrame(detail_rows, columns=["Variety-Season", "MAE", "RMSE", "R²", "Bias"])
+                with st.expander(f"{muni_label} — MAE {row['MAE']:.2f} · RMSE {row['RMSE']:.2f} · R² {row['R²']:.3f} ({row['n_series']} series)", expanded=False):
+                    st.dataframe(df_detail, use_container_width=True, hide_index=True)
 
 
 def _render_comparison_bar(metrics: dict):
@@ -373,7 +471,7 @@ def _render_comparison_bar(metrics: dict):
 def _render_breakdown_table(metrics: dict):
     with theme.section_card(
         title="Detailed Performance Breakdown",
-        desc="Plain numbers by forecast target — Random Forest Regression. Lower MAE/RMSE is better • R² near 1.0 is best • Bias near 0 is best.",
+        desc="Plain numbers by forecast target — Random Forest Regression. Lower MAE/RMSE is better • R² near 1.0 is best • Bias near 0 is best (Bias retained here for audit).",
         icon_name="table_view",
     ):
         rows = []
@@ -396,11 +494,23 @@ def _render_breakdown_table(metrics: dict):
                     "Bias": round(bias, 3) if bias is not None else 0,
                 }
             )
+        # Municipality Option A — avg of 96 series
+        m_avg = _municipal_avg(metrics)
+        rows.append(
+            {
+                "Forecast Target": f"Municipality (avg of {m_avg['n']} series)" if m_avg["n"] else "Municipality (avg)",
+                "MAE": round(m_avg["mae"], 2) if m_avg["mae"] is not None else 0,
+                "RMSE": round(m_avg["rmse"], 2) if m_avg["rmse"] is not None else 0,
+                "R²": round(m_avg["r2"], 3) if m_avg["r2"] is not None else 0,
+                "Bias": round(m_avg["bias"], 3) if m_avg["bias"] is not None else 0,
+            }
+        )
 
         df = pd.DataFrame(rows, columns=["Forecast Target", "MAE", "RMSE", "R²", "Bias"])
         # Collapsible — collapsed by default to keep page clean for LGU/DA
         with st.expander("Show detailed table (Forecast Target • MAE • RMSE • R² • Bias)", expanded=False):
             st.dataframe(df, use_container_width=True, hide_index=True)
+            st.caption("Municipality row = mean across 12 municipalities × 8 variety-season combinations (96 series). See Municipal Analytics for per-municipality drilldown.")
 
 
 # ------------------------------------------------------------------
