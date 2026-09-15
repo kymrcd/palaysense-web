@@ -32,10 +32,14 @@ def login_page():
     # Render popup overlay if active (Option B - CSS-only auto-hide, no JS removeChild to avoid React mismatch)
     if st.session_state.get("show_login_error_popup"):
         popup_msg = st.session_state.get("login_error_msg", GENERIC_LOGIN_ERROR)
-        st.markdown(
-            get_error_popup_html(message=popup_msg, duration_ms=4500),
-            unsafe_allow_html=True,
-        )
+        _popup_html = get_error_popup_html(message=popup_msg, duration_ms=4500)
+        # Prefer st.html (raw HTML, no Markdown parsing) — avoids 4-space indented HTML becoming code blocks.
+        # Fallback to st.markdown with unsafe_allow_html for older Streamlit.
+        try:
+            # st.html available since Streamlit 1.51
+            st.html(_popup_html)  # type: ignore[attr-defined]
+        except Exception:
+            st.markdown(_popup_html, unsafe_allow_html=True)
 
     # 1. Fetch logo
     logo_base64 = get_base64("assets/logo.png")

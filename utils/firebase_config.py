@@ -126,6 +126,8 @@ def pyrebase_sign_in(email: str, password: str) -> dict:
             return {"error": "No account found with this email."}
         if "INVALID_PASSWORD" in error_msg:
             return {"error": "Incorrect password."}
+        if "INVALID_LOGIN_CREDENTIALS" in error_msg:
+            return {"error": "Invalid login credentials."}
         if "USER_DISABLED" in error_msg:
             return {"error": "Account disabled."}
         if "INVALID_EMAIL" in error_msg:
