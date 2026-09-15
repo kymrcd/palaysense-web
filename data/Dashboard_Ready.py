@@ -164,6 +164,8 @@ def _safe_read_json(path: Path) -> dict:
 
 def _safe_load_pickle(path: Path) -> Any:
     """Load pickle with graceful fallback."""
+    if _is_demo_empty():
+        return None
     if not path.exists():
         return None
     try:
@@ -179,10 +181,14 @@ def _safe_load_pickle(path: Path) -> Any:
 @st.cache_data(show_spinner=False, max_entries=1)
 def load_provincial_history() -> pd.DataFrame:
     """Load cleaned provincial historical data."""
+    if _is_demo_empty():
+        return pd.DataFrame()
     df = _safe_read_parquet(PROVINCIAL_HISTORY, date_cols=["date"])
     if not df.empty:
         return df
-    # Fallback to legacy Excel if Parquet not found
+    # Fallback to legacy Excel if Parquet not found — skip when demo empty
+    if _is_demo_empty():
+        return pd.DataFrame()
     legacy_path = BASE_DIR / "cleaned" / "provincial_cleaned.xlsx"
     if legacy_path.exists():
         try:
@@ -198,9 +204,13 @@ def load_provincial_history() -> pd.DataFrame:
 @st.cache_data(show_spinner=False, max_entries=1)
 def load_municipal_history() -> pd.DataFrame:
     """Load cleaned municipal historical data."""
+    if _is_demo_empty():
+        return pd.DataFrame()
     df = _safe_read_parquet(MUNICIPAL_HISTORY, date_cols=["date"])
     if not df.empty:
         return df
+    if _is_demo_empty():
+        return pd.DataFrame()
     # Fallback
     legacy_path = BASE_DIR / "cleaned" / "municipality_cleaned.xlsx"
     if legacy_path.exists():
@@ -217,6 +227,8 @@ def load_municipal_history() -> pd.DataFrame:
 @st.cache_data(show_spinner=False, max_entries=1)
 def load_supply_data() -> pd.DataFrame:
     """Load supply/demand data."""
+    if _is_demo_empty():
+        return pd.DataFrame()
     df = _safe_read_parquet(SUPPLY_DATA, date_cols=["date"])
     if not df.empty:
         return df
