@@ -64,7 +64,7 @@ _GLOBAL_CSS = """
 
 html, body, #root { font-family: var(--ps-font); background-color: var(--ps-bg); color: var(--ps-text); }
 .stApp { background-color: var(--ps-bg); }
-.block-container { padding-top: 0.25rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; padding-bottom: 2rem !important; max-width: 1400px !important; }
+.block-container { padding-top: 1.0rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; padding-bottom: 2rem !important; max-width: 1400px !important; }
 /* Kill dead space in MAIN content only — scoped to stMain so sidebar nav is untouched */
 section[data-testid="stMain"] div[data-testid="stVerticalBlock"] { gap: 0.35rem !important; }
 section[data-testid="stMain"] div[data-testid="stElementContainer"] { margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; }
@@ -275,6 +275,16 @@ section[data-testid="stSidebar"] .ps-filter-label { display: block; font-size: 0
 
 /* --- Plotly container --- */
 .ps-plot { border-radius: var(--ps-radius); }
+
+/* Fix cut-off titles & compact spacing globally — ensures all bordered cards have breathing room */
+div[data-testid="stVerticalBlockBorderWrapper"] { padding: 14px 16px !important; overflow: visible !important; }
+div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stMarkdownContainer"] { overflow: visible !important; }
+div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stVerticalBlockBorderWrapper"] h1,
+div[data-testid="stVerticalBlockBorderWrapper"] h2,
+div[data-testid="stVerticalBlockBorderWrapper"] h3,
+div[data-testid="stVerticalBlockBorderWrapper"] h4 { line-height: 1.5 !important; padding: 2px 0 !important; margin: 6px 0 !important; overflow: visible !important; }
+div[data-testid="stVerticalBlockBorderWrapper"] .stMarkdown { margin: 4px 0 !important; }
 
 @media (max-width: 1200px) { .ps-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 768px) { .ps-kpi-grid { grid-template-columns: 1fr; } .ps-topbar { flex-direction: column; align-items: flex-start; gap: 0.6rem; } }

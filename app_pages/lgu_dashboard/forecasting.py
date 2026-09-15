@@ -546,7 +546,7 @@ def _forecast_visual_chart(dr, selected_class, selected_munis):
             <div style="background:#FFFBEB; border:1px solid #FDE68A; border-left:4px solid #F59E0B; border-radius:8px; padding:8px 10px; margin-top:8px;">
               <div style="font-size:0.80rem; color:#92400E; font-weight:700;">Price · {price_month}</div>
               <div style="font-size:0.80rem; color:#444;">Fancy {fancy_pct:+.1f}% · Regular {regular_pct:+.1f}% → {price_outlook:+.1f}% overall</div>
-              <div style="font-size:0.78rem; color:#92400E; font-weight:600;">Action: {"Monitor weekly" if price_outlook>=-1 else "Activate floor price + PCIC"}</div>
+              <div style="font-size:0.78rem; color:#92400E; font-weight:600;">Reading: {"Stable vs hist avg" if price_outlook>=-1 else "Softer than hist avg"}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -564,7 +564,7 @@ def _forecast_visual_chart(dr, selected_class, selected_munis):
             <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-left:4px solid #16A34A; border-radius:8px; padding:8px 10px; margin-top:8px;">
               <div style="font-size:0.80rem; color:#166534; font-weight:700;">Yield · {yield_period}</div>
               <div style="font-size:0.80rem; color:#444;">Avg {avg_yield:.2f} MT/ha · Gap {supply_shortfall:+.1f}% vs 4.50 · Low {low_yield:.2f}</div>
-              <div style="font-size:0.78rem; color:#166534; font-weight:600;">Action: {"Maintain buffer" if supply_shortfall>=0 else "Pre-book silos · FIFO"}</div>
+              <div style="font-size:0.78rem; color:#166534; font-weight:600;">Reading: {"At/above DA 4.50" if supply_shortfall>=0 else "Below DA 4.50 — early warning"}</div>
             </div>
             """, unsafe_allow_html=True)
 

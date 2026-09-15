@@ -442,7 +442,7 @@ def _top_municipalities_bar(dr):
       height=380, margin=dict(t=30, b=40, l=40, r=40),
       yaxis={"categoryorder": "total ascending"},
     )
-    fig.update_traces(texttemplate='%{text:,}', textposition='outside')
+    fig.update_traces(texttemplate='%{text:,}', textposition='outside', marker_cornerradius=8)
     st.plotly_chart(fig, use_container_width=True, key="muni_top5_bar")
 
 
@@ -648,7 +648,7 @@ def _municipal_yield_tab(dr):
           },
           text="Production (MT)",
         )
-        fig.update_traces(texttemplate='%{text:,.0f}', textposition="outside")
+        fig.update_traces(texttemplate='%{text:,.0f}', textposition="outside", marker_cornerradius=8)
         fig = _bar_layout(fig, "Municipality", "Production (MT)")
         fig.update_layout(showlegend=True, margin=LAYOUT_MARGINS)
         st.plotly_chart(fig, use_container_width=True, key="muni_yield_both")
@@ -664,7 +664,7 @@ def _municipal_yield_tab(dr):
           color_discrete_sequence=[DRY_COLOR],
           text=summary["dry_season"],
         )
-        fig.update_traces(texttemplate='%{text:,.0f}', textposition="outside")
+        fig.update_traces(texttemplate='%{text:,.0f}', textposition="outside", marker_cornerradius=8)
         fig = _bar_layout(fig, "Municipality", "Dry Season Production (MT)")
         st.plotly_chart(fig, use_container_width=True, key="muni_yield_dry")
       else:
@@ -679,7 +679,7 @@ def _municipal_yield_tab(dr):
           color_discrete_sequence=[WET_COLOR],
           text=summary["wet_season"],
         )
-        fig.update_traces(texttemplate='%{text:,.0f}', textposition="outside")
+        fig.update_traces(texttemplate='%{text:,.0f}', textposition="outside", marker_cornerradius=8)
         fig = _bar_layout(fig, "Municipality", "Wet Season Production (MT)")
         st.plotly_chart(fig, use_container_width=True, key="muni_yield_wet")
       else:

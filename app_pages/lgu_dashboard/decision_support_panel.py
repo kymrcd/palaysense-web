@@ -49,10 +49,51 @@ def render_decision_support_panel(
     price_month: e.g. "Sep 2026" for price outlook
     yield_period: e.g. "Q4 2026 – Q3 2027" for yield horizon
     When clean state (no dataset), pass 0 for all numbers — panel auto-shows
-    "No recommendation" instead of actions.
+    "No reading" instead of interpretations.
     """
     _inject_css()
     is_clean = (avg_yield == 0 and low_yield == 0 and supply_shortfall == 0 and price_outlook == 0)
+
+    # Municipal price spread — computed from existing municipal forecast output
+    # (in-scope: same model output, disaggregated per bayan; no new operation).
+    _muni_line = ""
+    _muni_count = 0
+    try:
+        from data.Dashboard_Ready import load_municipal_forward_forecasts
+        _mdf = load_municipal_forward_forecasts()
+        if _mdf is not None and not getattr(_mdf, "empty", True) and "Municipality" in _mdf.columns:
+            _price_cols = [c for c in ("Month 1", "Month 2", "Month 3") if c in _mdf.columns]
+            if _price_cols:
+                _tmp = _mdf.copy()
+                for _c in _price_cols:
+                    _tmp[_c] = pd.to_numeric(_tmp[_c], errors="coerce")
+                _tmp["_muni_avg"] = _tmp[_price_cols].mean(axis=1, skipna=True)
+                _per_muni = _tmp.groupby("Municipality")["_muni_avg"].mean().dropna()
+                if not _per_muni.empty:
+                    _muni_count = int(_per_muni.shape[0])
+                    _hi_m = _per_muni.idxmax(); _hi_v = float(_per_muni.max())
+                    _lo_m = _per_muni.idxmin(); _lo_v = float(_per_muni.min())
+                    _spread = _hi_v - _lo_v
+                    _muni_line = (
+                        f"Across {_muni_count} municipalities: "
+                        f"highest {str(_hi_m).title()} (₱{_hi_v:.2f}/kg), "
+                        f"lowest {str(_lo_m).title()} (₱{_lo_v:.2f}/kg), "
+                        f"spread ₱{_spread:.2f}/kg."
+                    )
+    except Exception:
+        _muni_line = ""
+
+    # Magnitude words — still pure forecast description, no prescription.
+    try:
+        _gap_mag = abs(float(supply_shortfall))
+        _gap_word = "narrow" if _gap_mag < 5 else ("moderate" if _gap_mag < 10 else "wide")
+    except Exception:
+        _gap_word = "moderate"
+    try:
+        _p_mag = abs(float(price_outlook))
+        _p_word = "mild" if _p_mag < 3 else ("moderate" if _p_mag < 5 else "sharp")
+    except Exception:
+        _p_word = "mild"
 
     # Header — executive — now shows both horizons to avoid confusion
     st.markdown(
@@ -78,13 +119,14 @@ def render_decision_support_panel(
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         col = PRIMARY if is_good_supply and not is_clean else AMBER
-        label = "Yield Gap" if not is_good_supply or is_clean else "Yield Surplus"
+        label = "Production vs Target"
+        _dir1 = "above" if supply_shortfall >= 0 else "below"
         st.markdown(
-            f'<div class="ps-dsp-kpi" style="border-left:3px solid {col}"><div class="ps-dsp-kpi-label">{label} • {yield_period}</div><div class="ps-dsp-kpi-val" style="color:{col}">{supply_shortfall:+.1f}%</div><div style="font-size:0.70rem; color:{MUTED};">vs DA Target 4.50 MT/ha (yield, not volume)</div></div>',
+            f'<div class="ps-dsp-kpi" style="border-left:3px solid {col}"><div class="ps-dsp-kpi-label">{label} • {yield_period}</div><div class="ps-dsp-kpi-val" style="color:{col}">{supply_shortfall:+.1f}%</div><div style="font-size:0.70rem; color:{MUTED};">Rice harvest volume is {abs(supply_shortfall):.1f}% {_dir1} the Department of Agriculture target.</div></div>',
             unsafe_allow_html=True,
         )
         with st.popover("Show chart", use_container_width=True):
-            st.caption(f"Supports {supply_shortfall:+.1f}% — yield vs DA target 4.50")
+            st.caption(f"Rice harvest volume is {abs(supply_shortfall):.1f}% {_dir1} the DA target (4.50 MT/ha).")
             try:
                 hist = load_provincial_history()
                 if hist.empty or "quarterly_yield_mt_per_ha" not in hist.columns:
@@ -101,12 +143,13 @@ def render_decision_support_panel(
                 st.info("No data for chart.")
     with c2:
         col = PRIMARY if is_good_price and not is_clean else AMBER
+        _pdir = "increase" if price_outlook >= 0 else "decrease"
         st.markdown(
-            f'<div class="ps-dsp-kpi" style="border-left:3px solid {col}"><div class="ps-dsp-kpi-label">Price Outlook • {price_month}</div><div class="ps-dsp-kpi-val" style="color:{col}">{price_outlook:+.1f}%</div><div style="font-size:0.70rem; color:{MUTED};">farmgate — farmer income vs hist</div></div>',
+            f'<div class="ps-dsp-kpi" style="border-left:3px solid {col}"><div class="ps-dsp-kpi-label">Market Farmgate Price • {price_month}</div><div class="ps-dsp-kpi-val" style="color:{col}">{price_outlook:+.1f}%</div><div style="font-size:0.70rem; color:{MUTED};">Buying prices at the farmgate are projected to {_pdir} by {abs(price_outlook):.1f}%.</div></div>',
             unsafe_allow_html=True,
         )
         with st.popover("Show chart", use_container_width=True):
-            st.caption(f"Supports {price_outlook:+.1f}% — farmgate price vs hist avg")
+            st.caption(f"Buying prices at the farmgate are projected to {_pdir} by {abs(price_outlook):.1f}% vs historical average.")
             try:
                 hist = load_provincial_history()
                 if hist.empty or "fancy_palay_price" not in hist.columns:
@@ -123,13 +166,13 @@ def render_decision_support_panel(
                 st.info("No data for chart.")
     with c3:
         st.markdown(
-            f'<div class="ps-dsp-kpi" style="border-left:3px solid {PRIMARY}"><div class="ps-dsp-kpi-label">Avg Yield Forecast • {yield_period}</div><div class="ps-dsp-kpi-val">{avg_yield:.2f} MT/ha</div><div style="font-size:0.70rem; color:{MUTED};">{yield_period}</div></div>',
+            f'<div class="ps-dsp-kpi" style="border-left:3px solid {PRIMARY}"><div class="ps-dsp-kpi-label">Expected Average Harvest • {yield_period}</div><div class="ps-dsp-kpi-val">{avg_yield:.2f} MT/ha</div><div style="font-size:0.70rem; color:{MUTED};">Estimated total harvest is {avg_yield:.2f} metric tons per hectare.</div></div>',
             unsafe_allow_html=True,
         )
         with st.popover("Show chart", use_container_width=True):
-            st.caption(f"Avg {avg_yield:.2f} of 4 quarters — {yield_period}")
+            st.caption(f"Estimated total harvest is {avg_yield:.2f} metric tons per hectare ({yield_period}).")
             try:
-                fig = go.Figure(go.Bar(x=["Avg", "Low"], y=[avg_yield, low_yield], marker_color=[PRIMARY, "#9CA3AF"], text=[f"{avg_yield:.2f}", f"{low_yield:.2f}"], textposition="outside"))
+                fig = go.Figure(go.Bar(x=["Avg", "Low"], y=[avg_yield, low_yield], marker_color=[PRIMARY, "#9CA3AF"], text=[f"{avg_yield:.2f}", f"{low_yield:.2f}"], textposition="outside", marker_cornerradius=8))
                 fig.add_hline(y=4.50, line_dash="dash", line_color=AMBER)
                 fig.update_layout(height=180, margin=dict(t=10, b=20, l=30, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(size=10), yaxis_title="MT/ha", showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
@@ -137,13 +180,13 @@ def render_decision_support_panel(
                 st.info("No forecast to show.")
     with c4:
         st.markdown(
-            f'<div class="ps-dsp-kpi" style="border-left:3px solid #6B7280"><div class="ps-dsp-kpi-label">Low Yield Limit • {yield_period}</div><div class="ps-dsp-kpi-val">{low_yield:.2f} MT/ha</div><div style="font-size:0.70rem; color:{MUTED};">lowest of 4 quarters</div></div>',
+            f'<div class="ps-dsp-kpi" style="border-left:3px solid #6B7280"><div class="ps-dsp-kpi-label">Worst-Case Estimate • {yield_period}</div><div class="ps-dsp-kpi-val">{low_yield:.2f} MT/ha</div><div style="font-size:0.70rem; color:{MUTED};">Lowest expected harvest for the period is {low_yield:.2f} metric tons per hectare.</div></div>',
             unsafe_allow_html=True,
         )
         with st.popover("Show chart", use_container_width=True):
-            st.caption(f"Low {low_yield:.2f} is minimum of next 4 quarters")
+            st.caption(f"Lowest expected harvest for the period is {low_yield:.2f} metric tons per hectare.")
             try:
-                fig = go.Figure(go.Bar(x=["Low", "Target"], y=[low_yield, 4.50], marker_color=["#DC2626", AMBER], text=[f"{low_yield:.2f}", "4.50"], textposition="outside"))
+                fig = go.Figure(go.Bar(x=["Low", "Target"], y=[low_yield, 4.50], marker_color=["#DC2626", AMBER], text=[f"{low_yield:.2f}", "4.50"], textposition="outside", marker_cornerradius=8))
                 fig.update_layout(height=180, margin=dict(t=10, b=20, l=30, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(size=10), yaxis_title="MT/ha", showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
             except Exception:
@@ -163,7 +206,7 @@ def render_decision_support_panel(
                 """,
                 unsafe_allow_html=True,
             )
-            st.info("No recommendation — no dataset. Upload historical price & yield data via Import Data to generate the decision brief.", icon="ℹ️")
+            st.info("No reading — no dataset. Upload historical price & yield data via Import Data to generate the forecast summary.", icon="ℹ️")
         elif is_good_supply and is_good_price:
             st.markdown(
                 f"""
@@ -176,7 +219,10 @@ def render_decision_support_panel(
                 unsafe_allow_html=True,
             )
             st.success(
-                f"**Stable:** Bataan shows **{supply_shortfall:+.1f}% surplus** (avg **{avg_yield:.2f} MT/ha** vs 4.50, low **{low_yield:.2f} MT/ha**) and **{price_outlook:+.1f}% price movement** — supply buffer is adequate and farmer margins are stable. Maintain monitoring and prepare market expansion.",
+                f"**Governor's Summary — Province is On Track:**\n"
+                f"- **Problem:** None at this time. Harvest is **{supply_shortfall:+.1f}% vs the DA target** (avg **{avg_yield:.2f}**, worst-case **{low_yield:.2f} MT/ha**) and farmgate prices are **{price_outlook:+.1f}%**.\n"
+                f"- **Impact:** Supply for {yield_period} is sufficient and farmer income for {price_month} is holding.\n"
+                f"- **Next step:** Continue routine monitoring and confirm with the next forecast cycle.",
                 icon="✅",
             )
         else:
@@ -191,13 +237,16 @@ def render_decision_support_panel(
                 unsafe_allow_html=True,
             )
             # Fixed: yield gap (not volume), price direction and logic match sign
-            price_word = "drop" if price_outlook < 0 else "rise"
+            price_word = "decrease" if price_outlook < 0 else "increase"
             if price_outlook < 0:
-                pressure = "lower yield + lower farmgate price = double pressure on farmer margins"
+                pressure = "double strain on farmer income"
             else:
-                pressure = "lower yield but higher farmgate price = single pressure — price rise partially offsets yield loss"
+                pressure = "single strain — the price increase partly cushions the harvest shortfall"
             st.warning(
-                f"**Risk:** Bataan shows a **{abs(supply_shortfall):.1f}% yield gap** (avg **{avg_yield:.2f} MT/ha** vs DA target 4.50, low **{low_yield:.2f} MT/ha**; volume gap depends on harvested area) combined with a **{price_outlook:+.1f}% farmgate price {price_word}** — {pressure}. Use yield gap as early warning, confirm volume with area data.",
+                f"**Governor's Brief — {yield_period} / {price_month}:**\n"
+                f"- **Problem:** Rice harvest volume is **{abs(supply_shortfall):.1f}% below** the DA target (avg **{avg_yield:.2f}**, worst-case **{low_yield:.2f} MT/ha**), while farmgate prices are projected to **{price_word} by {abs(price_outlook):.1f}%**.\n"
+                f"- **Impact:** {pressure} for our farmers this period.\n"
+                f"- **Next step:** Treat the harvest gap as an early warning and validate total volume against actual harvested area before any planning decision.",
                 icon="⚠️",
             )
 
@@ -209,29 +258,31 @@ def render_decision_support_panel(
             st.markdown(
                 f"""
                 <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.45rem;">
-                    <i class="material-symbols-outlined" style="font-size:16px; color:{PRIMARY};">local_shipping</i>
-                    <span style="font-size:0.80rem; font-weight:800; color:{DARK};">2 &nbsp; Logistics & Supply Action</span>
+                    <i class="material-symbols-outlined" style="font-size:16px; color:{PRIMARY};">inventory_2</i>
+                    <span style="font-size:0.80rem; font-weight:800; color:{DARK};">2 &nbsp; Supply Reading</span>
                 </div>
-                <div style="font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; display:inline-block; padding:0.15rem 0.4rem; border-radius:999px; margin-bottom:0.6rem;">Bataan Food Security Protocol</div>
+                <div style="font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; display:inline-block; padding:0.15rem 0.4rem; border-radius:999px; margin-bottom:0.6rem;">Yield vs DA Target 4.50</div>
                 """,
                 unsafe_allow_html=True,
             )
             if is_clean:
-                st.info("No recommendation — no dataset.", icon="ℹ️")
+                st.info("No reading — no dataset.", icon="ℹ️")
             elif is_good_supply:
+                _low_gap = (avg_yield - low_yield) if avg_yield and low_yield else 0
                 st.markdown(
                     f"""
-                    - **Maintain buffer and plan inter-municipal sale** — surplus vs 4.50 allows market expansion.
-                    - **Optimize warehouse use** — keep FIFO but prioritize quality preservation for surplus.
-                    - **Coordinate surplus distribution** — high yield ({avg_yield:.2f} MT/ha, low {low_yield:.2f}) supports stable supply.
+                    - **Problem:** None. Expected harvest is **{avg_yield:.2f} MT/ha**, **{supply_shortfall:+.1f}% vs target** ({_gap_word} gap).
+                    - **Impact:** Supply for {yield_period} is sufficient; worst-case quarter holds at **{low_yield:.2f} MT/ha** (only {max(0, _low_gap):.2f} below average).
+                    - **Next step:** Keep the provincial forecast on watch; municipal yield split is not modeled — provincial figure only.
                     """
                 )
             else:
+                _low_gap = (avg_yield - low_yield) if avg_yield and low_yield else 0
                 st.markdown(
                     f"""
-                    - **Calculate net volume gap** for Bataan municipalities (target 4.50 vs forecast {avg_yield:.2f} MT/ha × harvested area) to size the buffer needed.
-                    - **FIFO warehouse rotation** for local palay buffers — release oldest stock first to keep quality and free space.
-                    - **Emergency silo coordination** — pre-book provincial silos and schedule inter-municipal transfer for the low-yield quarter approaching {low_yield:.2f} MT/ha.
+                    - **Problem:** Expected harvest is **{avg_yield:.2f} MT/ha**, **{abs(supply_shortfall):.1f}% below target** ({_gap_word} gap); weakest quarter drops to **{low_yield:.2f} MT/ha**.
+                    - **Impact:** Tighter provincial supply in {yield_period} — shortfall of {max(0, _low_gap):.2f} MT/ha between average and worst quarter.
+                    - **Next step:** Flag the worst quarter for review and confirm total volume with harvested-area records.
                     """
                 )
 
@@ -241,28 +292,28 @@ def render_decision_support_panel(
                 f"""
                 <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.45rem;">
                     <i class="material-symbols-outlined" style="font-size:16px; color:{PRIMARY};">payments</i>
-                    <span style="font-size:0.80rem; font-weight:800; color:{DARK};">3 &nbsp; Economic Intervention</span>
+                    <span style="font-size:0.80rem; font-weight:800; color:{DARK};">3 &nbsp; Price Reading</span>
                 </div>
-                <div style="font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; display:inline-block; padding:0.15rem 0.4rem; border-radius:999px; margin-bottom:0.6rem;">Sagip Saka Act / R.A. 11321 Compliance</div>
+                <div style="font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; display:inline-block; padding:0.15rem 0.4rem; border-radius:999px; margin-bottom:0.6rem;">Forecast vs Historical Average</div>
                 """,
                 unsafe_allow_html=True,
             )
             if is_clean:
-                st.info("No recommendation — no dataset.", icon="ℹ️")
+                st.info("No reading — no dataset.", icon="ℹ️")
             elif is_good_price:
                 st.markdown(
-                    """
-                    - **Maintain current support** — price stable, continue voucher monitoring.
-                    - **Advise timing for sales** — help farmers capture favorable prices.
-                    - **Keep PCIC desk on standby** — no immediate surge needed.
+                    f"""
+                    - **Problem:** None. Buying prices at the farmgate are projected to **increase by {price_outlook:+.1f}%** in {price_month} ({_p_word} movement).
+                    - **Impact:** Firmer income outlook for farmers this month. {_muni_line if _muni_line else "Municipal split unavailable for this cycle."}
+                    - **Next step:** Track whether the gain holds in the next monthly update.
                     """
                 )
             else:
                 st.markdown(
                     f"""
-                    - **Localized fertilizer/seed vouchers** — prioritize cooperatives near the {low_yield:.2f} MT/ha low-yield limit.
-                    - **Direct LGU procurement** at a **minimum floor price** to shield farmers from the {price_outlook:+.1f}% dip.
-                    - **Fast-track PCIC claims** for affected cooperatives — use forecast as early proof.
+                    - **Problem:** Buying prices at the farmgate are projected to **decrease by {abs(price_outlook):.1f}%** in {price_month} ({_p_word} movement).
+                    - **Impact:** Softer income outlook for farmers this month. {_muni_line if _muni_line else "Municipal split unavailable for this cycle."}
+                    - **Next step:** Monitor the next price update to confirm if the softness persists.
                     """
                 )
 
@@ -271,29 +322,29 @@ def render_decision_support_panel(
             st.markdown(
                 f"""
                 <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.45rem;">
-                    <i class="material-symbols-outlined" style="font-size:16px; color:{PRIMARY};">water_drop</i>
-                    <span style="font-size:0.80rem; font-weight:800; color:{DARK};">4 &nbsp; Infrastructure & Resource Mitigation</span>
+                    <i class="material-symbols-outlined" style="font-size:16px; color:{PRIMARY};">visibility</i>
+                    <span style="font-size:0.80rem; font-weight:800; color:{DARK};">4 &nbsp; Combined Outlook</span>
                 </div>
-                <div style="font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; display:inline-block; padding:0.15rem 0.4rem; border-radius:999px; margin-bottom:0.6rem;">PalaySense Extension Framework</div>
+                <div style="font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; display:inline-block; padding:0.15rem 0.4rem; border-radius:999px; margin-bottom:0.6rem;">Yield + Price Together</div>
                 """,
                 unsafe_allow_html=True,
             )
             if is_clean:
-                st.info("No recommendation — no dataset.", icon="ℹ️")
-            elif is_good_supply:
+                st.info("No reading — no dataset.", icon="ℹ️")
+            elif is_good_supply and is_good_price:
                 st.markdown(
-                    """
-                    - **Standard irrigation schedule** — maintain current water allocation.
-                    - **Maintain solar pump readiness** — keep for peak demand.
-                    - **Monthly soil-moisture checks** — routine monitoring while yield is stable.
+                    f"""
+                    - **Problem:** None. Harvest is **{supply_shortfall:+.1f}% vs target** ({_gap_word}) and farmgate prices are **{price_outlook:+.1f}%** ({_p_word}).
+                    - **Impact:** No added strain on provincial supply or farmer income.
+                    - **Next step:** {_muni_line + " Continue routine monitoring." if _muni_line else "Continue routine monitoring into the next forecast cycle."}
                     """
                 )
             else:
                 st.markdown(
                     f"""
-                    - **Rotational irrigation** across Bataan sectors — stagger water for the 4-quarter low window.
-                    - **Deploy solar-powered pumps** in priority low-yield zones to cut fuel cost.
-                    - **Weekly soil-moisture monitoring** — trigger alerts before {low_yield:.2f} MT/ha threshold.
+                    - **Problem:** Harvest is **{abs(supply_shortfall):.1f}% below target** ({_gap_word} gap) with prices **{price_outlook:+.1f}%** ({_p_word}).
+                    - **Impact:** {"Single strain — the price increase partly cushions the harvest shortfall." if price_outlook >= 0 else "Double strain — softer harvest plus softer prices squeeze farmer income."}
+                    - **Next step:** {_muni_line + " " if _muni_line else ""}Prioritize review of the worst-case quarter ({low_yield:.2f} MT/ha) and the {price_month} price update.
                     """
                 )
 
@@ -302,7 +353,7 @@ def render_decision_support_panel(
         """
         <div style="text-align:center; margin-top:0.9rem; padding:0.6rem 0.8rem; border-top:1px solid #E5E7EB;">
             <span style="font-size:0.72rem; color:#6B7280; font-style:italic; line-height:1.4;">
-            ⚠️ <em>Disclaimer: PalaySense insights are decision support recommendations aligned with Department of Agriculture (DA), PCIC, and R.A. 11321 frameworks for the Province of Bataan. Final execution requires localized LGU council approval and budget appropriation.</em>
+            ⚠️ <em>Disclaimer: Figures above are forecast interpretations (price + yield models vs DA 4.50 MT/ha and historical average) for the Province of Bataan. This panel does not prescribe LGU operations, procurement, or infrastructure actions.</em>
             </span>
         </div>
         """,
