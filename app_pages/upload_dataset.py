@@ -30,7 +30,13 @@ PROVINCIAL_CLEANED = os.path.join(CLEAN_FOLDER, "provincial_cleaned.xlsx")
 MUNICIPALITY_CLEANED = os.path.join(CLEAN_FOLDER, "municipality_cleaned.xlsx")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PIPELINE_SCRIPT = PROJECT_ROOT / "scripts" / "run_pipeline.py"
+# Case-sensitive on Linux (Railway) — folder is `Scripts` capital S
+for _cand in (PROJECT_ROOT / "Scripts" / "run_pipeline.py", PROJECT_ROOT / "scripts" / "run_pipeline.py"):
+    if _cand.exists():
+        PIPELINE_SCRIPT = _cand
+        break
+else:
+    PIPELINE_SCRIPT = PROJECT_ROOT / "Scripts" / "run_pipeline.py"
 
 
 def process_municipality(muni_temp_path):
