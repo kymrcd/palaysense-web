@@ -524,19 +524,44 @@ def _municipal_yield_tab(dr):
     # -------
     _seasonal_info_tooltip()
 
-    # 2. COMPACT YEAR FILTER (inside the card, single column).
-    selected_year = _year_only_filter(dr, key="muni_year_yield")
-    irrig = _irrigation_chip(key="muni_irrig_yield")
-    st.caption("Historical only — Irrigated: Balanga, Dinalupihan, Hermosa, Orani | Rainfed: Bagac, Morong, Mariveles")
-
-    muni = getattr(dr, "municipality_df", None)
+    # Prefer authoritative production dataset (dry_season/wet_season), fallback to price history with derived totals
+    muni = getattr(dr, "municipal_production_df", None)
+    if muni is None or getattr(muni, "empty", True):
+      muni = getattr(dr, "municipality_df", None)
     if muni is None or getattr(muni, "empty", True):
       st.info("Municipality yield dataset not available.")
       return
 
-    m = muni.copy()
-    m["date"] = pd.to_datetime(m["date"])
-    m["_year"] = m["date"].dt.year
+    # 2. COMPACT YEAR FILTER (inside the card, single column) — year list from actual muni source
+    # Build year list from muni itself (production 2019-2025, not history 2015-2025) so dropdown only shows valid years
+    _yl = []
+    try:
+      _tmp = muni.copy()
+      if "date" in _tmp.columns:
+        _tmp["date"] = pd.to_datetime(_tmp["date"], errors="coerce")
+        _yl = sorted(_tmp["date"].dt.year.dropna().astype(int).unique().tolist())
+      elif "year" in _tmp.columns:
+        _yl = sorted(pd.to_numeric(_tmp["year"], errors="coerce").dropna().astype(int).unique().tolist())
+    except Exception:
+      _yl = []
+    if _yl:
+      col_year, _ = st.columns([1, 4])
+      with col_year:
+        selected_year = st.selectbox("Year", options=_yl, index=len(_yl)-1, key="muni_year_yield", label_visibility="visible")
+    else:
+      selected_year = _year_only_filter(dr, key="muni_year_yield")
+    irrig = _irrigation_chip(key="muni_irrig_yield")
+    st.caption("Historical only — Irrigated: Balanga, Dinalupihan, Hermosa, Orani | Rainfed: Bagac, Morong, Mariveles")
+
+    m = _derive_municipal_columns(muni)
+    # Normalize date/year for filtering (production df has year col + date; history has monthly date)
+    if "date" in m.columns:
+      m["date"] = pd.to_datetime(m["date"], errors="coerce")
+      m["_year"] = m["date"].dt.year
+    elif "year" in m.columns:
+      m["_year"] = pd.to_numeric(m["year"], errors="coerce").astype("Int64")
+    else:
+      m["_year"] = pd.NA
 
     # Optional year filter + irrigation chip
     if selected_year is not None:
