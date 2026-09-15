@@ -240,6 +240,15 @@ def forecast_next_3_months(model, df, df_features, bias, model_name):
                     (month - 1) // 3
                 ) + 1
 
+            # -------------------------------------------------
+            # UPDATE TREND INDEX (one row per month) — guarded, no-op if not used (hybrid keeps orig features)
+            # -------------------------------------------------
+
+            if "year_index" in current_features.columns:
+                current_features["year_index"] = (
+                    current_features["year_index"] + 1
+                )
+
     # =========================================================
     # CREATE FORECAST MONTHS
     # =========================================================

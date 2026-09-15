@@ -194,10 +194,16 @@ def train_variety_price(df, rmse_threshold=2.0, max_attempts=3):
         lambda: clone(regressor_rf), X_train, y_train, n_splits=5
     )
 
+    # Hybrid: honest bias-corrected metrics (like fancy)
+    rf_pred_corrected = np.asarray(rf_pred) + rf_bias
+    rf_mae_c = mean_absolute_error(y_test, rf_pred_corrected)
+    rf_rmse_c = np.sqrt(mean_squared_error(y_test, rf_pred_corrected))
+    rf_r2_c = r2_score(y_test, rf_pred_corrected)
+
     print("\nRandom Forest Evaluation:")
-    print(f"MAE: {rf_mae:.3f}")
-    print(f"RMSE: {rf_rmse:.3f}")
-    print(f"R²: {rf_r2:.3f}")
+    print(f"MAE: {rf_mae_c:.3f} (raw: {rf_mae:.3f})")
+    print(f"RMSE: {rf_rmse_c:.3f} (raw: {rf_rmse:.3f})")
+    print(f"R²: {rf_r2_c:.3f} (raw: {rf_r2:.3f})")
     print(f"Bias: {rf_bias:.3f}")
 
     # =========================================================
@@ -330,10 +336,15 @@ def train_variety_price(df, rmse_threshold=2.0, max_attempts=3):
             n_splits=3,
         )
 
+        sarima_pred_corrected = np.asarray(sarima_pred) + sarima_bias
+        sarima_mae_c = mean_absolute_error(y_test, sarima_pred_corrected)
+        sarima_rmse_c = np.sqrt(mean_squared_error(y_test, sarima_pred_corrected))
+        sarima_r2_c = r2_score(y_test, sarima_pred_corrected)
+
         print("\nSARIMA Model Evaluation:")
-        print(f"MAE: {sarima_mae:.3f}")
-        print(f"RMSE: {sarima_rmse:.3f}")
-        print(f"R²: {sarima_r2:.3f}")
+        print(f"MAE: {sarima_mae_c:.3f} (raw: {sarima_mae:.3f})")
+        print(f"RMSE: {sarima_rmse_c:.3f} (raw: {sarima_rmse:.3f})")
+        print(f"R²: {sarima_r2_c:.3f} (raw: {sarima_r2:.3f})")
         print(f"Bias: {sarima_bias:.3f}")
 
     except Exception as e:
@@ -370,17 +381,19 @@ def train_variety_price(df, rmse_threshold=2.0, max_attempts=3):
     # SELECT BEST MODEL
     # =========================================================
 
-    if avg_sarima_rmse < best_rmse_rf:
+    # Hybrid: SARIMA needs 5% margin to beat RF
+    sarima_margin = 0.95
+    if avg_sarima_rmse < best_rmse_rf * sarima_margin:
 
         print("\nSelected Model: SARIMA")
 
         regressor_regular = sarima_fit
         model_name_regular = "SARIMA"
 
-        y_pred_regular = sarima_pred
-        mae_regular = sarima_mae
-        rmse_regular = sarima_rmse
-        r2_regular = sarima_r2
+        y_pred_regular = sarima_pred_corrected
+        mae_regular = sarima_mae_c
+        rmse_regular = sarima_rmse_c
+        r2_regular = sarima_r2_c
         bias_regular = sarima_bias
 
     else:
@@ -393,10 +406,10 @@ def train_variety_price(df, rmse_threshold=2.0, max_attempts=3):
         regressor_regular = regressor_rf
         model_name_regular = "Random Forest Regression"
 
-        y_pred_regular = rf_pred
-        mae_regular = rf_mae
-        rmse_regular = rf_rmse
-        r2_regular = rf_r2
+        y_pred_regular = rf_pred_corrected
+        mae_regular = rf_mae_c
+        rmse_regular = rf_rmse_c
+        r2_regular = rf_r2_c
         bias_regular = rf_bias
 
     # =========================================================

@@ -201,10 +201,31 @@ def train_price_fancy(df, rmse_threshold=2.0, max_attempts=3):
         lambda: clone(best_model_rf), X_train, y_train, n_splits=5
     )
 
+    # -----------------------------------------------------
+    # Bias-corrected test metrics (hybrid: honest reporting like check, keep orig features)
+    # The production forecast adds `bias` to every prediction, so evaluate the
+    # SAME corrected predictions we actually ship to the dashboard.
+    # -----------------------------------------------------
+    rf_pred_corrected = np.asarray(rf_pred) + rf_bias
+
+    rf_mae_c = mean_absolute_error(
+        y_test,
+        rf_pred_corrected
+    )
+
+    rf_rmse_c = np.sqrt(
+        mean_squared_error(y_test, rf_pred_corrected)
+    )
+
+    rf_r2_c = r2_score(
+        y_test,
+        rf_pred_corrected
+    )
+
     print("\nRandom Forest Evaluation:")
-    print(f"MAE: {rf_mae:.3f}")
-    print(f"RMSE: {rf_rmse:.3f}")
-    print(f"R²: {rf_r2:.3f}")
+    print(f"MAE: {rf_mae_c:.3f} (raw: {rf_mae:.3f})")
+    print(f"RMSE: {rf_rmse_c:.3f} (raw: {rf_rmse:.3f})")
+    print(f"R²: {rf_r2_c:.3f} (raw: {rf_r2:.3f})")
     print(f"Bias: {rf_bias:.3f}")
 
     # =========================================================
@@ -335,10 +356,30 @@ def train_price_fancy(df, rmse_threshold=2.0, max_attempts=3):
             n_splits=3,
         )
 
+        # Bias-corrected test predictions (same ones shipped to the dashboard).
+        sarima_pred_corrected = np.asarray(sarima_pred) + sarima_bias
+
+        sarima_mae_c = mean_absolute_error(
+            y_test,
+            sarima_pred_corrected
+        )
+
+        sarima_rmse_c = np.sqrt(
+            mean_squared_error(
+                y_test,
+                sarima_pred_corrected
+            )
+        )
+
+        sarima_r2_c = r2_score(
+            y_test,
+            sarima_pred_corrected
+        )
+
         print("\nSARIMA Evaluation:")
-        print(f"MAE: {sarima_mae:.3f}")
-        print(f"RMSE: {sarima_rmse:.3f}")
-        print(f"R²: {sarima_r2:.3f}")
+        print(f"MAE: {sarima_mae_c:.3f} (raw: {sarima_mae:.3f})")
+        print(f"RMSE: {sarima_rmse_c:.3f} (raw: {sarima_rmse:.3f})")
+        print(f"R²: {sarima_r2_c:.3f} (raw: {sarima_r2:.3f})")
         print(f"Bias: {sarima_bias:.3f}")
 
     except Exception as e:
@@ -371,18 +412,22 @@ def train_price_fancy(df, rmse_threshold=2.0, max_attempts=3):
     # =========================================================
     # SELECT MODEL USING VALIDATION RMSE
     # =========================================================
+    # Hybrid: SARIMA (mean-reverting) must beat RF's validation RMSE by a clear margin
+    # before it is selected. A near-tie stays with RF, which carries the price
+    # level through its lag features — the safer choice on a trending series.
+    sarima_margin = 0.95
 
-    if avg_sarima_rmse < best_rmse_rf:
+    if avg_sarima_rmse < best_rmse_rf * sarima_margin:
 
         print("\nSelected Model: SARIMA")
 
         best_model = sarima_fit
         model_name = "SARIMA"
 
-        y_pred = sarima_pred
-        mae = sarima_mae
-        rmse = sarima_rmse
-        r2 = sarima_r2
+        y_pred = sarima_pred_corrected
+        mae = sarima_mae_c
+        rmse = sarima_rmse_c
+        r2 = sarima_r2_c
         bias = sarima_bias
 
     else:
@@ -395,10 +440,10 @@ def train_price_fancy(df, rmse_threshold=2.0, max_attempts=3):
         best_model = best_model_rf
         model_name = "Random Forest Regression"
 
-        y_pred = rf_pred
-        mae = rf_mae
-        rmse = rf_rmse
-        r2 = rf_r2
+        y_pred = rf_pred_corrected
+        mae = rf_mae_c
+        rmse = rf_rmse_c
+        r2 = rf_r2_c
         bias = rf_bias
 
     # =========================================================
