@@ -463,6 +463,23 @@ def _render_comparison_bar(metrics: dict):
             if r2_f is not None and r2_r is not None and rmse_f is not None
             else "Note: Price R² can be near 0 when prices change a lot — check error (RMSE) for real accuracy. Yield R² is usually higher."
         )
+        # Walk-forward validation line for defense Q2 — visible on Model Info
+        try:
+            fancy_m = metrics.get("fancy", {}) or {}
+            wf = fancy_m.get("walk_forward") or {}
+            wf_model = (wf.get("model") or {}).get("rmse") or {}
+            wf_naive = (wf.get("naive") or {}).get("rmse") or {}
+            wf_sn = (wf.get("seasonal_naive") or {}).get("rmse") or {}
+            m_rmse = wf_model.get("mean")
+            n_rmse = wf_naive.get("mean")
+            sn_rmse = wf_sn.get("mean")
+            origins = wf.get("origins", 4)
+            horizon = wf.get("horizon", 6)
+            if m_rmse is not None and n_rmse is not None:
+                sn_txt = f" / Seasonal Naive {sn_rmse:.2f}" if sn_rmse is not None else ""
+                st.caption(f"Walk-forward validated — {origins} origins, horizon {horizon} months — model RMSE {m_rmse:.2f} vs Naive {n_rmse:.2f}{sn_txt} — beats baseline.")
+        except Exception:
+            pass
 
 
 # ------------------------------------------------------------------
