@@ -626,6 +626,16 @@ def run_pipeline(
   # ------------------------------------------------------------------
   _validate_outputs(output_dir)
 
+  # ------------------------------------------------------------------
+  # 9. Persist forecasts to Firebase Storage (survive live restarts)
+  # ------------------------------------------------------------------
+  try:
+      from utils.firebase_storage import upload_forecasts_to_storage
+      print("[Pipeline] Uploading forecasts to Firebase Storage for live persistence...")
+      upload_forecasts_to_storage()
+  except Exception as e:
+      print(f"[Pipeline] Forecast Storage sync skipped (no Firebase creds or offline): {e}")
+
   print("\n[Pipeline] Pipeline completed successfully!")
   return {
     "provincial_history": str(output_dir / "provincial_history.parquet"),

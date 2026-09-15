@@ -33,6 +33,20 @@ CLOUD_CLEANED_PROVINCIAL = "cleaned/provincial_cleaned.xlsx"
 CLOUD_CLEANED_MUNICIPALITY = "cleaned/municipality_cleaned.xlsx"
 CLOUD_ARCHIVE_DIR = "archives"
 
+# Forecast parquet/json — NEW: persistent storage so live uploads survive restarts
+CLOUD_FORECASTS_PREFIX = "forecasts"
+FORECAST_FILES = [
+    "provincial_history.parquet",
+    "municipal_history.parquet",
+    "supply_data.parquet",
+    "provincial_forecasts.parquet",
+    "municipal_forecasts.parquet",
+    "municipal_forecasts_forward.parquet",
+    "municipal_forecasts_test.parquet",
+    "metrics.json",
+    "forecast_metadata.json",
+]
+
 # Temporary local paths (only temporary files stored locally)
 TEMP_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -345,3 +359,77 @@ def ensure_cleaned_files_synced():
     muni_path = muni_local if muni_ok else ""
 
     return prov_path, muni_path
+
+
+# =============================================================
+# FORECAST PERSISTENCE — survive live restarts (Railway/Streamlit)
+# =============================================================
+
+def _get_forecasts_dir() -> str:
+    """Local forecasts directory (data/forecasts)."""
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data", "forecasts"
+    )
+
+
+def upload_forecasts_to_storage() -> dict:
+    """
+    Upload all local forecast parquet/json files to Firebase Storage.
+
+    Call after Scripts/run_pipeline.py succeeds. Each file goes to
+    forecasts/<filename> in the bucket (overwrites previous).
+
+    Returns:
+        dict {filename: bool} — per-file success
+    """
+    forecasts_dir = _get_forecasts_dir()
+    results: dict[str, bool] = {}
+    for fname in FORECAST_FILES:
+        local_path = os.path.join(forecasts_dir, fname)
+        cloud_path = f"{CLOUD_FORECASTS_PREFIX}/{fname}"
+        if not os.path.exists(local_path):
+            print(f"[Forecasts Sync] Skip (missing locally): {fname}")
+            results[fname] = False
+            continue
+        ok = upload_file(local_path, cloud_path)
+        results[fname] = ok
+        if ok:
+            print(f"[Forecasts Sync] Uploaded {fname} -> {cloud_path}")
+        else:
+            print(f"[Forecasts Sync] FAILED to upload {fname}")
+    succeeded = sum(1 for v in results.values() if v)
+    print(f"[Forecasts Sync] Upload done: {succeeded}/{len(results)} succeeded")
+    return results
+
+
+def ensure_forecasts_synced(force: bool = False) -> dict:
+    """
+    Ensure local forecast files exist by downloading from Firebase Storage.
+
+    Called on dashboard startup (and on live after cold start). If local
+    file is missing OR force=True, download from forecasts/<filename>.
+
+    Returns:
+        dict {filename: bool} — True if file now exists locally
+    """
+    forecasts_dir = _get_forecasts_dir()
+    os.makedirs(forecasts_dir, exist_ok=True)
+    results: dict[str, bool] = {}
+    for fname in FORECAST_FILES:
+        local_path = os.path.join(forecasts_dir, fname)
+        cloud_path = f"{CLOUD_FORECASTS_PREFIX}/{fname}"
+        # Skip download if local already exists and not forced (ephemeral restart = missing)
+        if os.path.exists(local_path) and not force:
+            results[fname] = True
+            continue
+        ok = download_file(cloud_path, local_path)
+        results[fname] = ok
+        if ok:
+            print(f"[Forecasts Sync] Restored {fname} from Storage")
+        else:
+            # Not an error on first deploy — cloud may not have it yet
+            print(f"[Forecasts Sync] No cloud copy for {fname} (using local/git fallback)")
+            # If download failed but local existed before, keep it
+            results[fname] = os.path.exists(local_path)
+    return results

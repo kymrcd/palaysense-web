@@ -50,6 +50,31 @@ _MUNICIPAL_PRODUCTION_SHEET = "Palay_Production_per_Municipali"
 
 
 # =========================
+# LIVE RESTORE — download forecasts from Firebase Storage if missing
+# =========================
+_forecasts_synced = False
+
+def _ensure_forecasts_from_storage_once():
+    """On first load (live cold start), restore missing parquet/json from Firebase Storage."""
+    global _forecasts_synced
+    if _forecasts_synced:
+        return
+    _forecasts_synced = True
+    # Only attempt if any expected file is missing — avoids extra bucket calls on warm local dev
+    any_missing = any(not p.exists() for p in [
+        PROVINCIAL_HISTORY, MUNICIPAL_HISTORY, SUPPLY_DATA,
+        PROVINCIAL_FORECASTS, MUNICIPAL_FORECASTS, METRICS_JSON,
+    ])
+    if not any_missing:
+        return
+    try:
+        from utils.firebase_storage import ensure_forecasts_synced
+        ensure_forecasts_synced()
+    except Exception as e:
+        print(f"[Dashboard_Ready] Forecast restore skipped: {e}")
+
+
+# =========================
 # CACHE KEY GENERATION
 # =========================
 def _get_cache_version_key() -> tuple:
@@ -57,6 +82,7 @@ def _get_cache_version_key() -> tuple:
     Generate a cache invalidation key based on file modification times.
     The cache invalidates when any Parquet/JSON output file changes.
     """
+    _ensure_forecasts_from_storage_once()
     files_to_watch = [
         PROVINCIAL_HISTORY,
         MUNICIPAL_HISTORY,
@@ -87,7 +113,9 @@ def _get_cache_version_key() -> tuple:
 def _safe_read_parquet(path: Path, date_cols: list[str] | None = None) -> pd.DataFrame:
     """Read parquet with graceful fallback to empty DataFrame."""
     if not path.exists():
-        return pd.DataFrame()
+        _ensure_forecasts_from_storage_once()
+        if not path.exists():
+            return pd.DataFrame()
     try:
         df = pd.read_parquet(path)
         if date_cols:
@@ -102,7 +130,9 @@ def _safe_read_parquet(path: Path, date_cols: list[str] | None = None) -> pd.Dat
 def _safe_read_json(path: Path) -> dict:
     """Read JSON with graceful fallback to empty dict."""
     if not path.exists():
-        return {}
+        _ensure_forecasts_from_storage_once()
+        if not path.exists():
+            return {}
     try:
         with open(path, "r") as f:
             return json.load(f)

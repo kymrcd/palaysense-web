@@ -19,6 +19,7 @@ from utils.upload_datasets import (
 from utils.firebase_storage import (
     upload_raw_file,
     upload_cleaned_file,
+    upload_forecasts_to_storage,
     cleanup_temp_file,
 )
 from Data_Cleaning.Data_Cleaning_Capstone import run_cleaning
@@ -385,6 +386,18 @@ def upload_dataset():
             if not pipeline_success:
                 st.error("Forecasting did not complete. Please review the pipeline output above.")
                 return
+
+            # ---- Persist forecasts to Firebase Storage (so live survives restarts) ----
+            try:
+                with st.spinner("Syncing forecasts to cloud storage (para di mawala pag nag-restart)..."):
+                    res = upload_forecasts_to_storage()
+                    ok = sum(1 for v in res.values() if v)
+                    if ok > 0:
+                        st.success(f"☁️ Forecasts synced to Firebase Storage ({ok}/{len(res)} files) — safe kahit mag-restart ang live.")
+                    else:
+                        st.caption("Forecasts saved locally; cloud sync skipped (no Firebase creds on this env) — will still load this session.")
+            except Exception as e:
+                st.caption(f"Cloud sync skipped: {e} — forecasts still available this session.")
 
             # ---- Success: visible inside AND after the pipeline ----
             try:
