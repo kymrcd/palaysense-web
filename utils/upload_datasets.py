@@ -409,6 +409,36 @@ def restore_original_data():
         # fallback: keep existing forecasts if no backup yet
         pass
 
+    # 3b. Live fallback: if no local backup (gitignored on Railway), restore forecasts from Firebase Storage
+    if not any("forecasts/" in a for a in actions):
+        try:
+            from utils.firebase_storage import ensure_forecasts_synced
+            # Force re-download of the baseline forecasts that we synced to Storage
+            res = ensure_forecasts_synced(force=True)
+            if any(res.values()):
+                actions.append("Restored forecasts from Firebase Storage")
+        except Exception as e:
+            print(f"[Restore] Storage fallback failed: {e}")
+
+    # 3c. Snapshot fallback: if Master backup missing on live, restore from latest snapshot
+    if not any("provincial_raw" in a for a in actions) or not any("municipality_raw" in a for a in actions):
+        try:
+            SNAPSHOT_FOLDER = os.path.join(BASE_DIR, "data", "uploads", "snapshots")
+            if os.path.exists(SNAPSHOT_FOLDER):
+                snaps = sorted(os.listdir(SNAPSHOT_FOLDER))
+                # Find latest provincial/municipality snapshot
+                for prefix, master_file in [("provincial_raw", "provincial_raw.xlsx"), ("municipality_raw", "municipality_raw.xlsx")]:
+                    candidates = [f for f in snaps if f.startswith(prefix)]
+                    if candidates:
+                        latest = sorted(candidates)[-1]
+                        src = os.path.join(SNAPSHOT_FOLDER, latest)
+                        dst = os.path.join(MASTER_FOLDER, master_file)
+                        if os.path.exists(src):
+                            shutil.copy2(src, dst)
+                            actions.append(f"Restored {master_file} from snapshot {latest}")
+        except Exception as e:
+            print(f"[Restore] Snapshot fallback failed: {e}")
+
     # 4. Restore Dashboard_Ready files if backup exists there
     if os.path.exists(DASHBOARD_READY_FOLDER):
         for f in os.listdir(DASHBOARD_READY_FOLDER):
