@@ -247,7 +247,42 @@ def lgu_dashboard():
     theme.page_title("Settings", "Application preferences.")
     with theme.section_card(title="Settings",
                 desc="Application preferences.", icon_name="settings"):
-      st.info("Dashboard settings coming soon.")
+      is_empty = st.session_state.get("demo_empty_state", False)
+      # Also check URL param
+      try:
+          if st.query_params.get("demo_empty") == "1":
+              is_empty = True
+      except Exception:
+          pass
+      if is_empty:
+          st.warning("🔍 Demo Empty State is ON — dashboard shows 0 / No Data (files hidden, not deleted).")
+          st.caption("Backup & forecasts are hidden via session flag — nothing is deleted from disk/Storage.")
+          if st.button("↩️ Show Data Again (Exit Empty Demo)", type="primary", use_container_width=True):
+              st.session_state["demo_empty_state"] = False
+              try:
+                  if "demo_empty" in st.query_params:
+                      del st.query_params["demo_empty"]
+              except Exception:
+                  pass
+              try:
+                  st.cache_data.clear()
+                  st.cache_resource.clear()
+              except Exception:
+                  pass
+              st.rerun()
+      else:
+          st.info("For defense: show empty dashboard without deleting files.")
+          st.caption("Hides backup_originals & forecasts/ via flag — shows 0 MT / No Data handling.")
+          if st.button("👁️ Preview Empty State (Hide Data)", use_container_width=True):
+              st.session_state["demo_empty_state"] = True
+              try:
+                  st.cache_data.clear()
+                  st.cache_resource.clear()
+              except Exception:
+                  pass
+              st.rerun()
+      st.divider()
+      st.caption("Tip: Share link with ?demo_empty=1 to show empty directly.")
 
   # Footer
   st.markdown("""

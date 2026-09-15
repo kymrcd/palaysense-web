@@ -50,6 +50,22 @@ _MUNICIPAL_PRODUCTION_SHEET = "Palay_Production_per_Municipali"
 
 
 # =========================
+# DEMO EMPTY STATE — hide backup/forecasts for defense (no files deleted)
+# =========================
+def _is_demo_empty() -> bool:
+    """True when defense demo wants to show empty dashboard. Toggle via button or URL."""
+    try:
+        if st.session_state.get("demo_empty_state"):
+            return True
+        # URL param ?demo_empty=1 also works (shareable link)
+        if st.query_params.get("demo_empty") == "1":
+            return True
+    except Exception:
+        pass
+    return False
+
+
+# =========================
 # LIVE RESTORE — download forecasts from Firebase Storage if missing
 # =========================
 _forecasts_synced = False
@@ -60,6 +76,8 @@ def _ensure_forecasts_from_storage_once():
     if _forecasts_synced:
         return
     _forecasts_synced = True
+    if _is_demo_empty():
+        return  # demo empty — don't restore
     # Only attempt if any expected file is missing — avoids extra bucket calls on warm local dev
     any_missing = any(not p.exists() for p in [
         PROVINCIAL_HISTORY, MUNICIPAL_HISTORY, SUPPLY_DATA,
@@ -112,6 +130,8 @@ def _get_cache_version_key() -> tuple:
 # =========================
 def _safe_read_parquet(path: Path, date_cols: list[str] | None = None) -> pd.DataFrame:
     """Read parquet with graceful fallback to empty DataFrame."""
+    if _is_demo_empty():
+        return pd.DataFrame()
     if not path.exists():
         _ensure_forecasts_from_storage_once()
         if not path.exists():
@@ -129,6 +149,8 @@ def _safe_read_parquet(path: Path, date_cols: list[str] | None = None) -> pd.Dat
 
 def _safe_read_json(path: Path) -> dict:
     """Read JSON with graceful fallback to empty dict."""
+    if _is_demo_empty():
+        return {}
     if not path.exists():
         _ensure_forecasts_from_storage_once()
         if not path.exists():
@@ -208,6 +230,8 @@ def load_municipal_production() -> pd.DataFrame:
     ``municipality_history`` stores palay PRICES; the Top-5 / production
     rankings must use this authoritative production source instead.
     """
+    if _is_demo_empty():
+        return pd.DataFrame()
     for path in (MUNICIPAL_PRODUCTION_ML, MUNICIPAL_PRODUCTION_RAW):
         if not path.exists():
             continue
