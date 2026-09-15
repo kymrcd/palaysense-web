@@ -595,13 +595,7 @@ def _render_backtest():
                 figy.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), barmode="group", bargap=0.3, plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=10), legend=dict(orientation="h", y=-0.3, font=dict(size=9)), yaxis=dict(range=[0, 6], gridcolor="rgba(0,0,0,0.06)"))
                 st.plotly_chart(figy, use_container_width=True, key="mi_backtest_yield", config={"displayModeBar": False})
 
-            try:
-                mae_f = float((pd.Series(fancy_fc, dtype=float) - pd.Series(fancy_ac, dtype=float)).abs().mean())
-                mae_r = float((pd.Series(regular_fc, dtype=float) - pd.Series(regular_ac, dtype=float)).abs().mean())
-                mae_y = float((pd.Series(y_fc, dtype=float) - pd.Series(y_ac, dtype=float)).abs().mean())
-                st.caption(f"MAE last horizon — Fancy ₱{mae_f:.2f} · Regular ₱{mae_r:.2f} · Yield {mae_y:.2f} MT/ha. April price drop = exogenous shock (harvest supply) not in training — next: add rainfall/season/import as exogenous + retrain.")
-            except Exception:
-                pass
+            pass
         except Exception as e:
             st.caption(f"Backtest unavailable. {e}")
 
