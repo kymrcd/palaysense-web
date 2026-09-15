@@ -47,8 +47,6 @@ def process_municipality(muni_temp_path):
         cloud_path = upload_raw_file(muni_temp_path, "Municipality")
         if cloud_path:
             st.success("Municipality raw file backed up to Firebase Storage — secure.")
-        else:
-            st.warning("Firebase backup skipped for municipality (local save still succeeded).")
         st.success("Municipality dataset validated — ready for cleaning.")
     except Exception as e:
         st.error(f"[process_municipality ERROR] {e}")
@@ -64,8 +62,6 @@ def process_provincial(prov_temp_path):
         cloud_path = upload_raw_file(prov_temp_path, "Provincial")
         if cloud_path:
             st.success("Provincial raw file backed up to Firebase Storage — secure.")
-        else:
-            st.warning("Firebase backup skipped for provincial (local save still succeeded).")
         st.success("Provincial dataset validated — ready for cleaning.")
     except Exception as e:
         st.error(f"[process_provincial ERROR] {e}")
