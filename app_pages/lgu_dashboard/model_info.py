@@ -603,19 +603,37 @@ def _render_backtest():
 # ------------------------------------------------------------------
 # Public entry point (same signature as other LGU pages)
 # ------------------------------------------------------------------
+def _is_demo_empty() -> bool:
+    try:
+        if st.session_state.get("demo_empty_state"):
+            return True
+        if st.query_params.get("demo_empty") == "1":
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def render(df, dr):
     """Entry point called by lgu_dashboard router."""
-    # A. Header — exact title/subtitle from spec
     theme.page_title(
         "Model Information",
         "Key accuracy metrics and data updates for LGU policy and planning decisions.",
     )
 
+    # Demo empty — show professional empty state instead of dashes/0.00
+    metrics = load_metrics() or {}
+    has_metrics = bool(metrics and any(metrics.get(k) for k in ("fancy", "regular", "yield", "municipal")))
+    if _is_demo_empty() or not has_metrics:
+        _render_metadata()
+        st.info("No model metrics available — no forecast data to evaluate. Upload data or disable empty-state preview to view accuracy.")
+        st.caption("When data is available, this page shows MAE, RMSE, R², backtest and comparison charts.")
+        return
+
     # B. Pipeline metadata
     _render_metadata()
 
     # C. Summary cards (per-target compact)
-    metrics = load_metrics() or {}
     _render_summary_cards(metrics)
 
     # C2. Comparison bar (Option 1 micro-visual)
