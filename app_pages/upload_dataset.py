@@ -8,7 +8,6 @@ from pathlib import Path
 from utils.upload_datasets import (
     save_temp_file,
     validate_template,
-    archive_upload,
     append_to_raw_master,
     MASTER_FOLDER,
     CLEAN_FOLDER,
@@ -17,7 +16,6 @@ from utils.upload_datasets import (
     restore_original_data,
 )
 from utils.firebase_storage import (
-    upload_raw_file,
     upload_cleaned_file,
     upload_forecasts_to_storage,
     cleanup_temp_file,
@@ -40,13 +38,10 @@ else:
 
 
 def process_municipality(muni_temp_path):
-    """Process municipality upload: validate and upload to Firebase Storage."""
+    """Process municipality upload: validate only (processed file will be saved after cleaning)."""
     try:
         df = pd.read_excel(muni_temp_path, engine='openpyxl')
         validate_template(df, "Municipality")
-        cloud_path = upload_raw_file(muni_temp_path, "Municipality")
-        if cloud_path:
-            st.success("Municipality raw file backed up to Firebase Storage — secure.")
         st.success("Municipality dataset validated — ready for cleaning.")
     except Exception as e:
         st.error(f"[process_municipality ERROR] {e}")
@@ -55,13 +50,10 @@ def process_municipality(muni_temp_path):
 
 
 def process_provincial(prov_temp_path):
-    """Process provincial upload: validate and upload to Firebase Storage."""
+    """Process provincial upload: validate only (processed file will be saved after cleaning)."""
     try:
         df = pd.read_excel(prov_temp_path, engine='openpyxl')
         validate_template(df, "Provincial")
-        cloud_path = upload_raw_file(prov_temp_path, "Provincial")
-        if cloud_path:
-            st.success("Provincial raw file backed up to Firebase Storage — secure.")
         st.success("Provincial dataset validated — ready for cleaning.")
     except Exception as e:
         st.error(f"[process_provincial ERROR] {e}")
