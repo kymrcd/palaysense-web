@@ -29,80 +29,146 @@ MUNICIPALITY_CLEANED = os.path.join(CLEAN_FOLDER, "municipality_cleaned.xlsx")
 
 
 def _summarize_uploaded_file(temp_path: str) -> dict:
-    """Build layman summary: rows, year(s), months covered for dialog."""
+    """Build summary: rows, coverage period as clean date range for enterprise dialog."""
     try:
         df = pd.read_excel(temp_path, engine="openpyxl")
         n = len(df)
         years = sorted(pd.to_numeric(df.get("Year", []), errors="coerce").dropna().astype(int).unique().tolist())
-        # Normalize months to Title Case and keep calendar order
         order = ["January","February","March","April","May","June","July","August","September","October","November","December"]
         months_raw = df.get("Month", pd.Series(dtype=str)).astype(str).str.strip().str.title()
         months = [m for m in order if m in months_raw.unique().tolist()]
-        year_str = f"{years[0]}" if len(years)==1 else f"{years[0]}-{years[-1]}" if years else "—"
-        month_str = ", ".join(months) if months else "—"
-        if len(months) > 4:
-            month_str = ", ".join(months[:4]) + f" +{len(months)-4} more"
-        return {"rows": n, "years": year_str, "months": month_str, "months_full": months}
+        # Build coverage period as range e.g. July – November 2026 or July 2025 – February 2026
+        if months and years:
+            if len(years) == 1:
+                if len(months) == 1:
+                    coverage = f"{months[0]} {years[0]}"
+                else:
+                    coverage = f"{months[0]} – {months[-1]} {years[0]}"
+            else:
+                coverage = f"{months[0]} {years[0]} – {months[-1]} {years[-1]}"
+        elif years:
+            coverage = f"{years[0]}" if len(years)==1 else f"{years[0]}–{years[-1]}"
+        else:
+            coverage = "—"
+        return {"rows": n, "coverage": coverage, "months_full": months, "years": years}
     except Exception:
-        return {"rows": 0, "years": "—", "months": "—", "months_full": []}
+        return {"rows": 0, "coverage": "—", "months_full": [], "years": []}
 
 
-# Professional LGU success dialog — PalaySense themed, with upload summary
-@st.dialog("Upload Successful", width="large")
+# Authoritative LGU modal — clean, minimalist, enterprise (Inter, 6px, sage banner, navy actions)
+@st.dialog("Data Sync Complete", width="large")
 def _show_upload_success_dialog(refresh_key: int, timestamp: str, prov_summary: dict | None, muni_summary: dict | None):
-    # PalaySense theme: dark green + gold, aligned with sidebar
+    # Inter / Public Sans stack, generous whitespace, crisp white card with subtle borders
     st.markdown(
         """
-        <div style="background: linear-gradient(135deg, #0B2E1F 0%, #14532D 55%, #1B6B3A 100%);
-                    padding: 18px 20px; border-radius: 14px; border-left: 6px solid #C9A86A;
-                    color: white; margin-bottom: 14px;">
-          <div style="font-size: 1.15rem; font-weight: 800; letter-spacing: 0.2px; display:flex; align-items:center; gap:10px;">
-            <span style="background:#C9A86A; color:#0B2E1F; border-radius:8px; padding:4px 8px; font-size:1rem;">✓</span>
-            Data Import Completed Successfully
-          </div>
-          <div style="opacity:0.92; margin-top:6px; font-size:0.92rem; line-height:1.4;">
-            The dataset has been processed and forecasts are now live in the LGU Dashboard. Record is official for planning and reporting.
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Public+Sans:wght@500;600&display=swap');
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    # Sage green success banner — official, not red
+    st.markdown(
+        """
+        <div style="background:#E6EFE8; border:1px solid #CBD9CE; border-left:4px solid #1F5B3A;
+                    border-radius:6px; padding:16px 18px; margin-bottom:18px;">
+          <div style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="background:#1F5B3A; color:white; width:28px; height:28px; border-radius:999px;
+                        display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">✓</div>
+            <div>
+              <div style="font-family:Inter, Public Sans, sans-serif; font-weight:700; font-size:15px;
+                          color:#0F2A1D; letter-spacing:0.15px; line-height:1.2;">Dataset Successfully Cataloged</div>
+              <div style="font-family:Inter, sans-serif; font-weight:400; font-size:13.5px; color:#2E3B33;
+                          margin-top:6px; line-height:1.55;">
+                The submitted dataset has been verified and integrated. Predictive analytics and forecasts are now live on the LGU Dashboard. This record is authorized for official planning, budget allocation, and reporting.
+              </div>
+            </div>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    # Summary cards — what months were actually uploaded
-    cols = st.columns(2) if (prov_summary and muni_summary) else [st.container()]
+    # Administrative metadata — structured blocks with thin light gray dividers
+    has_both = bool(prov_summary and muni_summary)
+    cols = st.columns(2) if has_both else [st.container()]
     idx = 0
     for label, summ in [("Provincial", prov_summary), ("Municipal", muni_summary)]:
         if not summ:
             continue
-        target = cols[idx] if len(cols) > 1 else cols[0]
+        target = cols[idx] if has_both else cols[0]
         idx += 1
         with target:
             st.markdown(
                 f"""
-                <div style="background:#F6F1E7; border:1px solid #E0D5B8; border-left:4px solid #1B6B3A;
-                            border-radius:12px; padding:12px 14px; margin-bottom:10px;">
-                  <div style="font-weight:700; color:#0B2E1F; font-size:0.95rem;">{label} • {summ['rows']} record(s)</div>
-                  <div style="color:#2E5339; font-size:0.88rem; margin-top:4px;"><b>Year:</b> {summ['years']} &nbsp;|&nbsp; <b>Months:</b> {summ['months']}</div>
+                <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-radius:6px; padding:14px 16px; margin-bottom:12px;">
+                  <div style="font-family:Inter, sans-serif; font-size:11px; font-weight:600;
+                              letter-spacing:0.06em; text-transform:uppercase; color:#64748B; margin-bottom:10px;">
+                    Administrative Level: {label}
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:0;">
+                    <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #F1F5F9;">
+                      <span style="font-family:Inter, sans-serif; font-size:12.5px; color:#64748B;">Total Entries Processed</span>
+                      <span style="font-family:Inter, sans-serif; font-size:12.5px; font-weight:600; color:#0F172A;">{summ['rows']} Records</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #F1F5F9;">
+                      <span style="font-family:Inter, sans-serif; font-size:12.5px; color:#64748B;">Reporting Period</span>
+                      <span style="font-family:Inter, sans-serif; font-size:12.5px; font-weight:600; color:#0F172A;">{summ['coverage']}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding:7px 0;">
+                      <span style="font-family:Inter, sans-serif; font-size:12.5px; color:#64748B;">Status</span>
+                      <span style="font-family:Inter, sans-serif; font-size:11px; font-weight:700; letter-spacing:0.05em;
+                                   color:#065F46; background:#ECFDF5; border:1px solid #A7F3D0; border-radius:999px; padding:3px 8px;">Active / Live</span>
+                    </div>
+                  </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
     if not prov_summary and not muni_summary:
         st.info("No summary available — file was processed successfully.")
+    # Audit trail footer — official accountability, no Firebase exposure
+    tx_id = f"REF-{refresh_key:05d}"
+    ts_formatted = timestamp.replace("-", " |").replace(" ", " | ") if " " in timestamp else timestamp
+    # ensure PST label
+    if "PST" not in timestamp:
+        ts_display = f"{timestamp} (PST)"
+    else:
+        ts_display = timestamp
     st.markdown(
         f"""
-        <div style="background:#EAF2EC; border:1px solid #C8DCC F; border-radius:10px; padding:10px 12px; color:#0B2E1F; font-size:0.85rem;">
-          <b>Reference:</b> {timestamp} &nbsp;•&nbsp; <b>Refresh ID:</b> {refresh_key} &nbsp;•&nbsp; Secured in Firebase Storage
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:6px; padding:12px 16px; margin-top:4px;">
+          <div style="display:flex; flex-wrap:wrap; gap:16px; font-family:Inter, sans-serif; font-size:12px; color:#475569;">
+            <span><span style="font-weight:600; color:#334155;">Transaction ID:</span> {tx_id}</span>
+            <span style="color:#CBD5E1;">|</span>
+            <span><span style="font-weight:600; color:#334155;">Date Certified:</span> {ts_display}</span>
+            <span style="color:#CBD5E1;">|</span>
+            <span><span style="font-weight:600; color:#334155;">Storage Status:</span> Archived in Secure System Repository</span>
+          </div>
+          <div style="margin-top:6px; font-family:Inter, sans-serif; font-size:11px; color:#94A3B8;">
+            Security: Verified &amp; Encrypted • This update is reflected across Overview, Provincial, Municipal, and Forecast pages.
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.caption("This update is reflected across Overview, Provincial, Municipal, and Forecast pages.")
-    c1, c2 = st.columns(2)
+    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+    c1, c2 = st.columns([1, 1.1])
     with c1:
-        if st.button("Close", use_container_width=True, key="dialog_close_btn"):
+        if st.button("Close Window", use_container_width=True, key="dialog_close_btn"):
             st.rerun()
     with c2:
-        st.link_button("Go to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True, type="primary")
+        # Primary navy/slate — no red, authoritative
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stLinkButton"] a { background:#1E3A4A !important; border-color:#1E3A4A !important; color:white !important; border-radius:6px !important; font-family:Inter, sans-serif !important; font-weight:600 !important; }
+            div[data-testid="stLinkButton"] a:hover { background:#16324A !important; border-color:#16324A !important; }
+            button[kind="secondary"] { border-radius:6px !important; font-family:Inter, sans-serif !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.link_button("Proceed to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Case-sensitive on Linux (Railway) — folder is `Scripts` capital S
