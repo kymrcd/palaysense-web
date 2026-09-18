@@ -157,18 +157,10 @@ def _show_upload_success_dialog(refresh_key: int, timestamp: str, prov_summary: 
         if st.button("Close Window", use_container_width=True, key="dialog_close_btn"):
             st.rerun()
     with c2:
-        # Primary navy/slate — no red, authoritative
-        st.markdown(
-            """
-            <style>
-            div[data-testid="stLinkButton"] a { background:#1E3A4A !important; border-color:#1E3A4A !important; color:white !important; border-radius:6px !important; font-family:Inter, sans-serif !important; font-weight:600 !important; }
-            div[data-testid="stLinkButton"] a:hover { background:#16324A !important; border-color:#16324A !important; }
-            button[kind="secondary"] { border-radius:6px !important; font-family:Inter, sans-serif !important; }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.link_button("Proceed to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True)
+        # Primary navy/slate — stay inside LGU dashboard, do not jump to Overview landing page
+        if st.button("Proceed to LGU Dashboard →", use_container_width=True, key="dialog_goto_btn", type="primary"):
+            st.session_state["lgu_page"] = "overview"
+            st.rerun()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Case-sensitive on Linux (Railway) — folder is `Scripts` capital S
@@ -563,7 +555,9 @@ def upload_dataset():
                 if st.button("Reset uploader", use_container_width=True, key="post_pipeline_rerun"):
                     st.rerun()
             with c2:
-                st.link_button("Go to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True)
+                if st.button("Go to LGU Dashboard →", use_container_width=True, key="post_goto_dash"):
+                    st.session_state["lgu_page"] = "overview"
+                    st.rerun()
 
         except Exception as e:
             st.error(f"Pipeline failed: {e}")
