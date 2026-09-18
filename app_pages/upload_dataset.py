@@ -28,23 +28,81 @@ PROVINCIAL_CLEANED = os.path.join(CLEAN_FOLDER, "provincial_cleaned.xlsx")
 MUNICIPALITY_CLEANED = os.path.join(CLEAN_FOLDER, "municipality_cleaned.xlsx")
 
 
-# Professional LGU success dialog — replaces st.balloons()
+def _summarize_uploaded_file(temp_path: str) -> dict:
+    """Build layman summary: rows, year(s), months covered for dialog."""
+    try:
+        df = pd.read_excel(temp_path, engine="openpyxl")
+        n = len(df)
+        years = sorted(pd.to_numeric(df.get("Year", []), errors="coerce").dropna().astype(int).unique().tolist())
+        # Normalize months to Title Case and keep calendar order
+        order = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+        months_raw = df.get("Month", pd.Series(dtype=str)).astype(str).str.strip().str.title()
+        months = [m for m in order if m in months_raw.unique().tolist()]
+        year_str = f"{years[0]}" if len(years)==1 else f"{years[0]}-{years[-1]}" if years else "—"
+        month_str = ", ".join(months) if months else "—"
+        if len(months) > 4:
+            month_str = ", ".join(months[:4]) + f" +{len(months)-4} more"
+        return {"rows": n, "years": year_str, "months": month_str, "months_full": months}
+    except Exception:
+        return {"rows": 0, "years": "—", "months": "—", "months_full": []}
+
+
+# Professional LGU success dialog — PalaySense themed, with upload summary
 @st.dialog("Upload Successful", width="large")
-def _show_upload_success_dialog(refresh_key: int, timestamp: str):
-    st.markdown("### Data Import Completed Successfully")
-    st.write(
-        "The uploaded dataset has been validated, cleaned, and processed. "
-        "Forecasts have been generated and securely stored in cloud storage. "
-        "The updated data is now live in the LGU Dashboard."
+def _show_upload_success_dialog(refresh_key: int, timestamp: str, prov_summary: dict | None, muni_summary: dict | None):
+    # PalaySense theme: dark green + gold, aligned with sidebar
+    st.markdown(
+        """
+        <div style="background: linear-gradient(135deg, #0B2E1F 0%, #14532D 55%, #1B6B3A 100%);
+                    padding: 18px 20px; border-radius: 14px; border-left: 6px solid #C9A86A;
+                    color: white; margin-bottom: 14px;">
+          <div style="font-size: 1.15rem; font-weight: 800; letter-spacing: 0.2px; display:flex; align-items:center; gap:10px;">
+            <span style="background:#C9A86A; color:#0B2E1F; border-radius:8px; padding:4px 8px; font-size:1rem;">✓</span>
+            Data Import Completed Successfully
+          </div>
+          <div style="opacity:0.92; margin-top:6px; font-size:0.92rem; line-height:1.4;">
+            The dataset has been processed and forecasts are now live in the LGU Dashboard. Record is official for planning and reporting.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    st.info(f"Reference: {timestamp}  •  Refresh ID: {refresh_key}")
-    st.caption("This record is official and available for LGU planning and reporting.")
+    # Summary cards — what months were actually uploaded
+    cols = st.columns(2) if (prov_summary and muni_summary) else [st.container()]
+    idx = 0
+    for label, summ in [("Provincial", prov_summary), ("Municipal", muni_summary)]:
+        if not summ:
+            continue
+        target = cols[idx] if len(cols) > 1 else cols[0]
+        idx += 1
+        with target:
+            st.markdown(
+                f"""
+                <div style="background:#F6F1E7; border:1px solid #E0D5B8; border-left:4px solid #1B6B3A;
+                            border-radius:12px; padding:12px 14px; margin-bottom:10px;">
+                  <div style="font-weight:700; color:#0B2E1F; font-size:0.95rem;">{label} • {summ['rows']} record(s)</div>
+                  <div style="color:#2E5339; font-size:0.88rem; margin-top:4px;"><b>Year:</b> {summ['years']} &nbsp;|&nbsp; <b>Months:</b> {summ['months']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    if not prov_summary and not muni_summary:
+        st.info("No summary available — file was processed successfully.")
+    st.markdown(
+        f"""
+        <div style="background:#EAF2EC; border:1px solid #C8DCC F; border-radius:10px; padding:10px 12px; color:#0B2E1F; font-size:0.85rem;">
+          <b>Reference:</b> {timestamp} &nbsp;•&nbsp; <b>Refresh ID:</b> {refresh_key} &nbsp;•&nbsp; Secured in Firebase Storage
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("This update is reflected across Overview, Provincial, Municipal, and Forecast pages.")
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Close", use_container_width=True, key="dialog_close_btn"):
             st.rerun()
     with c2:
-        st.link_button("Go to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True)
+        st.link_button("Go to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True, type="primary")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Case-sensitive on Linux (Railway) — folder is `Scripts` capital S
@@ -423,13 +481,16 @@ def upload_dataset():
             st.session_state["upload_success_time"] = _now_str
             st.session_state["upload_refresh_key"] = _new_key
             st.session_state["show_success_dialog"] = True
+            # Build month summaries for dialog (what months were uploaded)
+            prov_summ = _summarize_uploaded_file(prov_file) if prov_file else None
+            muni_summ = _summarize_uploaded_file(muni_file) if muni_file else None
             try:
                 st.cache_data.clear()
                 st.cache_resource.clear()
             except Exception:
                 pass
-            # Professional pop-up with close button for LGU use
-            _show_upload_success_dialog(_new_key, _now_str)
+            # Professional PalaySense-themed pop-up with upload summary
+            _show_upload_success_dialog(_new_key, _now_str, prov_summ, muni_summ)
             st.caption("Parquet files updated: provincial/municipal forecasts and history.")
             c1, c2 = st.columns(2)
             with c1:
