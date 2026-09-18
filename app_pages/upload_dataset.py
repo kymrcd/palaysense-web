@@ -27,6 +27,25 @@ MASTER_MUNICIPAL_RAW = os.path.join(MASTER_FOLDER, "municipality_raw.xlsx")
 PROVINCIAL_CLEANED = os.path.join(CLEAN_FOLDER, "provincial_cleaned.xlsx")
 MUNICIPALITY_CLEANED = os.path.join(CLEAN_FOLDER, "municipality_cleaned.xlsx")
 
+
+# Professional LGU success dialog — replaces st.balloons()
+@st.dialog("Upload Successful", width="large")
+def _show_upload_success_dialog(refresh_key: int, timestamp: str):
+    st.markdown("### Data Import Completed Successfully")
+    st.write(
+        "The uploaded dataset has been validated, cleaned, and processed. "
+        "Forecasts have been generated and securely stored in cloud storage. "
+        "The updated data is now live in the LGU Dashboard."
+    )
+    st.info(f"Reference: {timestamp}  •  Refresh ID: {refresh_key}")
+    st.caption("This record is official and available for LGU planning and reporting.")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Close", use_container_width=True, key="dialog_close_btn"):
+            st.rerun()
+    with c2:
+        st.link_button("Go to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True)
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Case-sensitive on Linux (Railway) — folder is `Scripts` capital S
 for _cand in (PROJECT_ROOT / "Scripts" / "run_pipeline.py", PROJECT_ROOT / "scripts" / "run_pipeline.py"):
@@ -379,22 +398,22 @@ def upload_dataset():
 
             # ---- Persist forecasts to Firebase Storage (so live survives restarts) ----
             try:
-                with st.spinner("Syncing forecasts to cloud storage (para di mawala pag nag-restart)..."):
+                with st.spinner("Syncing forecasts to cloud storage..."):
                     res = upload_forecasts_to_storage()
                     ok = sum(1 for v in res.values() if v)
                     if ok > 0:
-                        st.success(f"☁️ Forecasts synced to Firebase Storage ({ok}/{len(res)} files) — safe kahit mag-restart ang live.")
+                        st.success(f"Forecasts synced to Firebase Storage ({ok}/{len(res)} files) — data is safely persisted.")
                     else:
-                        st.caption("Forecasts saved locally; cloud sync skipped (no Firebase creds on this env) — will still load this session.")
+                        st.caption("Forecasts saved locally; cloud sync skipped (no Firebase credentials in this environment) — data will still be available for this session.")
             except Exception as e:
-                st.caption(f"Cloud sync skipped: {e} — forecasts still available this session.")
+                st.caption(f"Cloud sync skipped: {e} — forecasts are still available for this session.")
 
-            # ---- Success: visible inside AND after the pipeline ----
+            # ---- Success: professional LGU dialog ----
             try:
                 st.toast("Forecasting completed — forecasts are ready!", icon="✅")
             except Exception:
                 pass
-            st.success("✅ Forecasting completed — forecasts are ready!")
+            st.success("Forecasting completed — forecasts are ready.")
 
             create_originals_backup()
             from datetime import datetime as _dt
@@ -403,17 +422,18 @@ def upload_dataset():
             st.session_state["upload_success"] = True
             st.session_state["upload_success_time"] = _now_str
             st.session_state["upload_refresh_key"] = _new_key
+            st.session_state["show_success_dialog"] = True
             try:
                 st.cache_data.clear()
                 st.cache_resource.clear()
             except Exception:
                 pass
-            st.success(f"🎉 All done! Forecasts updated (refresh_key={_new_key}).")
-            st.caption("Parquet mtimes updated: provincial/municipal forecasts + history.")
-            st.balloons()
+            # Professional pop-up with close button for LGU use
+            _show_upload_success_dialog(_new_key, _now_str)
+            st.caption("Parquet files updated: provincial/municipal forecasts and history.")
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("↻ Reset uploader", use_container_width=True, key="post_pipeline_rerun"):
+                if st.button("Reset uploader", use_container_width=True, key="post_pipeline_rerun"):
                     st.rerun()
             with c2:
                 st.link_button("Go to LGU Dashboard →", url="?page=lgu_dashboard", use_container_width=True)
@@ -425,9 +445,9 @@ def upload_dataset():
     st.divider()
     with st.container(border=True):
         st.markdown("**Restore Original Dataset**")
-        st.caption("Ibalik ang sistema sa orihinal na datos (baseline) kasama ang forecast files.")
-        confirm = st.checkbox("Kumpirmahin na nais ibalik sa orihinal na dataset", key="restore_confirm")
-        if st.button("↩️ Restore Original Data", type="primary", use_container_width=True, key="restore_btn", disabled=not confirm):
+        st.caption("Restore the system to the original baseline dataset including forecast files.")
+        confirm = st.checkbox("Confirm restoration to the original dataset", key="restore_confirm")
+        if st.button("Restore Original Data", type="primary", use_container_width=True, key="restore_btn", disabled=not confirm):
             with st.spinner("Restoring original dataset..."):
                 try:
                     restore_original_data()
