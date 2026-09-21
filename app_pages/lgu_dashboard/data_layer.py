@@ -1,5 +1,5 @@
 """
-PalaySense LGU Dashboard — Data Layer
+PalaySense OPA Dashboard — Data Layer
 =====================================
 Thin wrapper around `reload_dashboard_data()` that computes all derived
 metrics (totals, comparisons, year filtering) so the UI stays clean.
@@ -36,7 +36,9 @@ def get_provincial_df(dr):
 def get_available_years(df):
     if df is None or df.empty or "year" not in df.columns:
         return []
-    return sorted(df["year"].dropna().astype(int).unique().tolist())
+    years = sorted(df["year"].dropna().astype(int).unique().tolist())
+    # 2009-2014 are lag-only for model training — hide from UI filters
+    return [y for y in years if y >= 2015]
 
 
 def get_latest_date(df):
@@ -65,9 +67,9 @@ def filter_by_year(df, year):
     return df[df["year"] == year].copy()
 
 
-# Harvested area: normal ~5-120 ha/row, placeholder outliers 6k-15k inflate mean→
-# use median+IQR+hard cap. Single source of truth for overview.py + data_layer.
-_HARVESTED_HARD_CAP = 500  # ha, agronomist threshold
+# Harvested area: canonical ha, IQR only (500 cap removed — 11468 ha is valid, capped deleted Sheet1)
+# Single source of truth for overview.py + data_layer.
+_HARVESTED_HARD_CAP = 50000  # ha, province limit (~137k ha)
 _HARVESTED_COL_HINTS = ("harvest", "harvested", "area_harvested", "harvested_annual", "harvested_total")
 
 

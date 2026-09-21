@@ -1,5 +1,5 @@
 """
-PalaySense LGU Dashboard — Provincial Analytics
+PalaySense OPA Dashboard — Provincial Analytics
 ===============================================
 Consolidates all provincial-level price and yield analytics into a single
 page. Reuses the existing provincial price/yield charts and the historical
@@ -9,7 +9,7 @@ price/yield trend charts. Filters are limited to provincial data only
 Layout:
    • Production tab: Combo Bar+Line (harvested vs production) with slider + Quarterly Production bar
    • Yield tab: Bar with benchmark (Market/Government/None) + insight side-card
-   • Price tab: Grouped bar Fancy vs Regular per YEAR (rounded edges)
+   • Price tab: Monthly Price Detail — Grouped bar Fancy vs Regular per month for ONE selected year (vs Comparison > Multi-Year Price History which is long-term line view)
 """
 import numpy as np
 import pandas as pd
@@ -19,24 +19,22 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from . import theme
-from . import price_analytics
-from . import yield_analytics
 from . import data_layer as dl
 
 
 def _provincial_price_tab(df, dr):
     """Provincial price chart with inline Year + Palay Type filters.
 
-    Renders a single combined chart where the Fancy and Regular price lines
-    are shown dynamically based on the Palay Type multiselect selection.
+    Single-year monthly detail view — distinct from the multi-year
+    long-term history in Comparison > Multi-Year Price History.
     """
     years = dl.get_available_years(df)
     if not years:
         st.info("No year data available.")
         return
 
-    with theme.section_card(title="Provincial Palay Price Trend Analysis",
-                            desc="Fancy vs. Regular Palay (₱/kg).",
+    with theme.section_card(title="Monthly Price Detail — Single-Year View",
+                            desc="Fancy vs. Regular Palay per month (₱/kg) for the selected year.",
                             icon_name="trending_up"):
         # Inline Year + Palay Type filters side by side
         col1, col2 = st.columns(2)
@@ -62,7 +60,7 @@ def _provincial_price_tab(df, dr):
             st.info("No data available for the selected year.")
             return
 
-        # Bar graph (rounded edges) — requested replacement for line chart
+        # Bar graph (rounded edges) — single-year monthly detail
         fig = go.Figure()
         if "Fancy" in palay_types:
             fig.add_trace(go.Bar(x=hist["date"], y=hist["fancy_palay_price"], name="Fancy Palay",
@@ -77,7 +75,7 @@ def _provincial_price_tab(df, dr):
 
         fig.update_layout(
             yaxis_title="₱ / kg",
-            height=380, barmode="group", bargap=0.28, bargroupgap=0.1,
+            height=360, barmode="group", bargap=0.28, bargroupgap=0.1,
             hovermode="x unified", plot_bgcolor="white", paper_bgcolor="white",
             font=dict(family=theme.FONT, size=11),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(family="Inter, sans-serif", size=10)),
@@ -85,7 +83,51 @@ def _provincial_price_tab(df, dr):
             margin=dict(t=30, b=60, l=40, r=40),
             title="Monthly Price Comparison by Palay Variety" if len(fig.data) > 1 else None,
         )
-        st.plotly_chart(fig, use_container_width=True, key=f"prov_price_{year}_{'_'.join(palay_types)}")
+
+        # --- Simple Insight Summary (OPA) — chart left, insight on side ---
+        try:
+            _hist = hist.copy()
+            _hist["date"] = pd.to_datetime(_hist["date"], errors="coerce")
+            _hist = _hist.sort_values("date")
+            _has_fancy = "fancy_palay_price" in _hist.columns and _hist["fancy_palay_price"].notna().any()
+            _has_regular = "other_variety_price" in _hist.columns and _hist["other_variety_price"].notna().any()
+            def _fmt(v): return f"₱{v:,.2f}" if pd.notna(v) else "—"
+            def _mon(d):
+                try: return pd.to_datetime(d).strftime("%b %Y")
+                except: return str(d)
+            _avg_f = float(_hist["fancy_palay_price"].mean()) if _has_fancy else 0.0
+            _avg_r = float(_hist["other_variety_price"].mean()) if _has_regular else 0.0
+            _max_f = float(_hist["fancy_palay_price"].max()) if _has_fancy else 0.0
+            _min_f = float(_hist["fancy_palay_price"].min()) if _has_fancy else 0.0
+            _max_r = float(_hist["other_variety_price"].max()) if _has_regular else 0.0
+            _min_r = float(_hist["other_variety_price"].min()) if _has_regular else 0.0
+            _max_f_mon = _mon(_hist.loc[_hist["fancy_palay_price"].idxmax(), "date"]) if _has_fancy else "—"
+            _min_f_mon = _mon(_hist.loc[_hist["fancy_palay_price"].idxmin(), "date"]) if _has_fancy else "—"
+            _premium = _avg_f - _avg_r if (_has_fancy and _has_regular) else 0.0
+            _premium_pct = (_premium / _avg_r * 100) if _avg_r else 0.0
+
+            _col_chart, _col_insight = st.columns([0.70, 0.30], gap="medium")
+            with _col_chart:
+                st.plotly_chart(fig, use_container_width=True, key=f"prov_price_{year}_{'_'.join(palay_types)}")
+            with _col_insight:
+                st.markdown(f"""
+                <div style="background:#F1F8E9; border-left:4px solid #15803D; border-radius:10px; padding:12px 13px; box-shadow:0 1px 6px rgba(0,0,0,0.05); margin-top:8px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                    <i class="material-symbols-outlined" style="color:#15803D; font-size:16px;">insights</i>
+                    <span style="font-weight:800; color:#14532D; font-size:0.85rem;">Price Insight — {year}</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:6px; font-size:0.80rem; color:#374151; line-height:1.5;">
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#6B7280;">Avg Fancy</span><b style="color:#059669;">{_fmt(_avg_f)}</b></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#6B7280;">Avg Regular</span><b style="color:#6366F1;">{_fmt(_avg_r)}</b></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#6B7280;">Premium</span><b style="color:#1B5E20;">{_fmt(_premium)} ({_premium_pct:+.1f}%)</b></div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem;"><span style="color:#6B7280;">Peak</span><b>{_max_f_mon} · {_fmt(_max_f)}</b></div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem;"><span style="color:#6B7280;">Low</span><b>{_min_f_mon} · {_fmt(_min_f)}</b></div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+        except Exception:
+            # Fallback: just show chart full-width if insight fails
+            st.plotly_chart(fig, use_container_width=True, key=f"prov_price_{year}_{'_'.join(palay_types)}_fb")
 
 
 def _provincial_yield_tab(df, dr):
@@ -351,11 +393,12 @@ def _provincial_top_municipalities(dr, year):
 
 
 def _historical_production_vs_area(df):
-    """Single high-impact Combo Chart — Bar (harvested) + Dual Y-Axis Line (production). Replaces multi-select year tags."""
+    """Single high-impact Combo Chart — Bar (harvested) + Dual Y-Axis Line (production). 2015+ only — 2009-2014 lag-only."""
     if df is None or df.empty or "year" not in df.columns:
         st.info("No provincial production data.")
         return
     years = sorted(pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).unique().tolist())
+    years = [y for y in years if y >= 2015]
     if not years:
         st.info("No year data.")
         return
@@ -400,10 +443,9 @@ def _production_tab(df, dr):
 def render(df, dr):
     """Main Provincial Analytics page with tabbed sub-views.
 
-    Focuses on active price/yield analytics. The historical PRICE trend
-    graph has been moved to historical_comparison.py (Tab 2), and the
-    long-range yield trends have been moved to historical_comparison.py.
-    Year and Palay Type filters are placed inline inside each card.
+    Sole canonical location for Provincial Price (Monthly Price Detail).
+    Historical Comparison no longer carries Provincial Price (removed
+    2026-09-22 for OPA IA cleanup — Comparison is now municipal-only).
     """
     if dr is None or not getattr(dr, "has_provincial_data", False):
         st.info("No provincial data — provincial analytics hidden (0 values). Upload data via Import Data.")
@@ -414,7 +456,7 @@ def render(df, dr):
     tab_prod, tab_yield, tab_price = st.tabs([
         ":material/inventory_2: Production",
         ":material/eco: Yield",
-        ":material/payments: Price",
+        ":material/payments: Monthly Price Detail",
     ])
 
     with tab_prod:
