@@ -441,7 +441,7 @@ def overview_page():
     st.session_state.setdefault("overview_period", "ANNUAL")
     _valid_periods = ["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"]
     if st.session_state.get("overview_period") not in _valid_periods: st.session_state["overview_period"] = "ANNUAL"
-    st.session_state.setdefault("overview_selected_muni", "All Municipalities")
+    st.session_state.setdefault("overview_selected_muni", "Lahat ng Bayan")
     # sidebar first to know current section for conditional filter
     QUICK_VIEW_GROUPS = [("PANGKALAHATAN", [("Pangkalahatan", "dashboard")]), ("DETALYE", [("Tantiya sa Presyo", "payments"), ("Inaasahang Ani", "eco"), ("Pambayang Forecast", "location_on")]), ("SUPORTA", [("Gabay at Payo", "lightbulb")])]
     _SIDEBAR_KEY_BY_LABEL = {label: key for _, items in QUICK_VIEW_GROUPS for (label, key) in items}
@@ -462,27 +462,27 @@ def overview_page():
         filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 1], gap="small")
         filter_col4 = None
     with filter_col1:
-        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">YEAR RANGE</div>', unsafe_allow_html=True)
-        selected_start_year = st.selectbox("Start Year", options=available_years, key="overview_start_year", label_visibility="collapsed")
+        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">TAON (MULA)</div>', unsafe_allow_html=True)
+        selected_start_year = st.selectbox("Simula Taon", options=available_years, key="overview_start_year", label_visibility="collapsed")
     with filter_col2:
-        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">TO</div>', unsafe_allow_html=True)
-        selected_end_year = st.selectbox("End Year", options=available_years, key="overview_end_year", label_visibility="collapsed")
+        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">HANGGANG</div>', unsafe_allow_html=True)
+        selected_end_year = st.selectbox("Hanggang Taon", options=available_years, key="overview_end_year", label_visibility="collapsed")
     with filter_col3:
-        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">PERIOD</div>', unsafe_allow_html=True)
-        selected_period = st.selectbox("Period", options=["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"], key="overview_period", label_visibility="collapsed")
+        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">PANAHON</div>', unsafe_allow_html=True)
+        selected_period = st.selectbox("Panahon", options=["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"], key="overview_period", label_visibility="collapsed")
     _muni_label_col = _pick_column(muni, ["municipality", "Municipality", "Mun", "Area"])
     all_munis_options = sorted(muni[_muni_label_col].dropna().unique()) if _muni_label_col is not None else []
-    muni_options = ["All Municipalities"] + all_munis_options
-    if st.session_state["overview_selected_muni"] not in muni_options: st.session_state["overview_selected_muni"] = "All Municipalities"
+    muni_options = ["Lahat ng Bayan"] + all_munis_options
+    if st.session_state["overview_selected_muni"] not in muni_options: st.session_state["overview_selected_muni"] = "Lahat ng Bayan"
     if _is_municipal_section and filter_col4 is not None:
         with filter_col4:
-            st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">MUNICIPALITY</div>', unsafe_allow_html=True)
-            selected_muni = st.selectbox("Municipality", options=muni_options, key="overview_selected_muni", label_visibility="collapsed")
+            st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">BAYAN</div>', unsafe_allow_html=True)
+            selected_muni = st.selectbox("Bayan", options=muni_options, key="overview_selected_muni", label_visibility="collapsed")
     else:
-        selected_muni = st.session_state.get("overview_selected_muni", "All Municipalities")
+        selected_muni = st.session_state.get("overview_selected_muni", "Lahat ng Bayan")
         # keep state in sync but hide dropdown on Buong Dashboard
     selected_years = list(range(selected_start_year, selected_end_year + 1))
-    selected_munis = [selected_muni] if selected_muni != "All Municipalities" else all_munis_options
+    selected_munis = [selected_muni] if selected_muni != "Lahat ng Bayan" else all_munis_options
     # visible tooltip for farmers - not techy, always shown
     if _current_section_for_filter == "Buong Dashboard":
         st.markdown("""
@@ -605,8 +605,8 @@ def overview_page():
     st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap'); .main-container { font-family:'Poppins', sans-serif; padding:0 1% 20px 1%; background:#F8FAF9; } .block-container { padding-left:1rem !important; padding-right:1rem !important; padding-top:2rem !important; padding-bottom:0rem !important; } .hero-banner { background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 40%, #388E3C 100%); padding:35px 40px; border-radius:20px; color:white; margin-bottom:28px; box-shadow:0 12px 35px rgba(27,94,32,0.2); position:relative; overflow:hidden; margin-top:-2.08rem; } .hero-title { font-size:clamp(1.8rem, 2.8vw, 2.5rem); font-weight:900; margin-bottom:8px; letter-spacing:-0.5px; } .hero-subtitle { font-size:1rem; opacity:0.92; line-height:1.6; font-weight:400; } .hero-badge { display:inline-block; background:rgba(255,255,255,0.15); padding:4px 16px; border-radius:20px; font-size:0.75rem; font-weight:600; margin-top:8px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); } .forecast-bar-text { color:#1B5E20 !important; font-weight:700 !important; font-size:0.85rem !important; letter-spacing:0.3px; white-space:nowrap; display:flex; align-items:center; gap:8px; } .kpi-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:16px; } .metric-card { background:#FFFFFF; padding:20px 22px; border-radius:16px; border:1px solid rgba(46,125,50,0.08); position:relative; overflow:hidden; } .metric-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, #2E7D32, #66BB6A); } .metric-title { font-size:0.8rem; font-weight:600; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; } .metric-data { font-size:1.8rem; font-weight:800; color:#1B5E20; margin:4px 0 2px 0; letter-spacing:-0.5px; } .metric-footer { font-size:0.7rem; color:#9CA3AF; font-weight:500; } .metric-change-positive { color:#16A34A; font-weight:700; } .metric-change-negative { color:#DC2626; font-weight:700; } .component-card { background:#FFFFFF; border-radius:16px; border:1px solid rgba(0,0,0,0.05); padding:22px 24px 24px 24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); } .component-header { font-size:1.05rem; font-weight:700; color:#111827; } .component-desc { font-size:0.8rem; color:#6B7280; margin-bottom:16px; font-weight:400; } .advisory-container { display:flex; flex-direction:column; gap:12px; width:100%; margin-top:4px; } .advisory-card { display:flex; align-items:flex-start; padding:16px 20px; border-radius:12px; background:#FFFFFF; border:1px solid #E5E7EB; } .card-status { border-left:4px solid #1B5E20; background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); } .card-marketing { border-left:4px solid #16A34A; background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); } .card-notice { border-left:4px solid #EA580C; background:linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 100%); } .card-optimization { border-left:4px solid #7C3AED; background:linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%); } .card-icon { font-size:1.2rem; margin-right:14px; margin-top:2px; } .card-body { flex:1; font-size:0.88rem; line-height:1.6; color:#374151; } .card-label { font-weight:700; margin-right:4px; } .label-status { color:#1B5E20; } .label-marketing { color:#15803D; } .label-notice { color:#C2410C; } .label-optimization { color:#6D28D9; } .highlight-text { font-weight:700; color:#1B5E20; background:rgba(27,94,32,0.06); padding:1px 6px; border-radius:4px; } .kailan-card { background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); border:1px solid #C8E6C9; border-left:6px solid #1B5E20; border-radius:16px; padding:18px 20px; margin-bottom:16px; }</style>""", unsafe_allow_html=True)
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     if show_all:
-        st.markdown(f"""<div class="hero-banner"><div class="hero-title">Bataan Rice Monitoring & Prediction</div><div class="hero-subtitle">Datos para sa mas matalinong desisyon sa pagsasaka &bull; <strong>All Types</strong></div><span class="hero-badge"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#FFFFFF;">analytics</i>Live Dashboard &bull; {len(selected_munis) if selected_munis else 0} bayan</span></div>""", unsafe_allow_html=True)
-    muni_badge = selected_muni if selected_muni != "All Municipalities" else "Lahat ng Bayan sa Bataan"
+        st.markdown(f"""<div class="hero-banner"><div class="hero-title">Bataan Rice Monitoring & Forecast</div><div class="hero-subtitle">Datos para sa mas matalinong desisyon sa pagsasaka &bull; <strong>Lahat ng Variety</strong></div><span class="hero-badge"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#FFFFFF;">analytics</i>Live Dashboard &bull; {len(selected_munis) if selected_munis else 0} bayan</span></div>""", unsafe_allow_html=True)
+    muni_badge = selected_muni if selected_muni != "Lahat ng Bayan" else "Lahat ng Bayan sa Bataan"
     st.markdown(f"""<div style="display:inline-flex; align-items:center; gap:6px; background:#E8F5E9; border:1px solid #C8E6C9; color:#1B5E20; padding:6px 14px; border-radius:999px; font-size:0.78rem; font-weight:700; margin-bottom:14px;"><i class="material-symbols-outlined" style="font-size:16px; color:#1B5E20;">location_on</i>Tinitingnan: {muni_badge} &bull; {selected_start_year}–{selected_end_year}</div>""", unsafe_allow_html=True)
     top5_municipalities = dl.get_top_5_producing_municipalities(muni_filtered, selected_years)
     total_production = dl.get_total_production(provincial_year, selected_years)
@@ -679,7 +679,7 @@ def overview_page():
         except Exception:
             _kailan_chips = f'<div style="font-size:0.82rem; color:#6B7280;">Walang datos</div>'
         st.markdown(f"""<div class="kailan-card"><div style="font-weight:800; color:#1B5E20; font-size:0.95rem; margin-bottom:10px; display:flex; align-items:center; gap:6px;"><i class="material-symbols-outlined" style="font-size:18px; color:#1B5E20;">calendar_month</i>Kailan Inaasahang Mataas / Mababa</div><div style="display:flex; gap:8px; margin-bottom:10px;">{_kailan_chips}</div><div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.82rem; line-height:1.5; color:#374151; border-top:1px solid #E8F5E9; padding-top:10px;"><div><span style="color:#6B7280; font-weight:600;">Ani (susunod na 4 na quarter):</span><br><span style="color:#16A34A; font-weight:700;">Pinakamataas: {_ymax:.2f} MT/ha</span> &bull; <span style="color:#D97706; font-weight:700;">Pinakamababa: {_ymin:.2f} MT/ha</span></div><div style="font-size:0.78rem; color:#6B7280;">Tip: Ibenta sa <b style="color:#1B5E20;">{_fmax_month}</b> para mas mataas ang kita.</div></div></div>""", unsafe_allow_html=True)
-        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Trend ng Presyo at Ani (Forecast)</div><div class="component-desc">Isang graph lang ito. Pili ka kung Presyo o Ani ang gusto mong makita.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Trend ng Presyo at Ani (Forecast)</div><div class="component-desc">Forecast trend ng presyo at ani. Piliin kung Presyo o Inaasahang Ani ang nais ipakita.</div>', unsafe_allow_html=True)
         try:
             trend_choice = st.segmented_control("Trend", options=["Presyo", "Ani"], default="Presyo", key="essentials_trend_toggle")
             if trend_choice is None: trend_choice = "Presyo"
@@ -715,7 +715,7 @@ def overview_page():
             except Exception:
                 st.markdown(_farmer_insight_box("Pag pataas ang guhit, mas marami ang aanihin."), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>Pangunahing Payo</div><div class="component-desc">Anong ibig sabihin nito para sa iyo? Dalawang payo lang — diretso, walang paligoy-ligoy.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>Pangunahing Payo</div><div class="component-desc">Buod ng rekomendasyon batay sa forecast ng presyo at ani.</div>', unsafe_allow_html=True)
         if not muni_filtered.empty:
             if percent_change_fancy > 5:
                 _trade_title = "Itago muna ang Fancy"; _trade_body = f"Tataas pa ang Fancy sa <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span> — mas kikita kung sa {_fmax_month} ibebenta."
@@ -741,7 +741,7 @@ def overview_page():
         return
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     if section_choice == "Tantiya sa Presyo":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">payments</i>Tantiya sa Presyo</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Provincial price forecast — Fancy vs Regular, historical trend, 6-month forecast.</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">payments</i>Tantiya sa Presyo</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast ng presyo sa lalawigan — Fancy vs Regular, kasama ang historical trend at 6-month forecast.</div></div>""", unsafe_allow_html=True)
         try:
             benchmark_option = st.segmented_control("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], default="Wala", key="price_detail_benchmark")
             if benchmark_option is None: benchmark_option = "Wala"
@@ -749,13 +749,13 @@ def overview_page():
             benchmark_option = st.radio("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], horizontal=True, key="price_detail_benchmark_radio")
         _pc1, _pc2 = st.columns(2, gap="medium")
         with _pc1:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Historical Price Trend</div><div class="component-desc">Dating presyo ng Fancy at Regular.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Historical Price Trend</div><div class="component-desc">Historical na presyo ng Fancy at Regular na palay.</div>', unsafe_allow_html=True)
             _fig = _price_historical_chart(provincial_year, selected_period, benchmark_option)
             st.plotly_chart(_fig, use_container_width=True, key="detail_price_hist")
             st.markdown(_farmer_insight_box("Ito ang dating presyo. Pag pataas ang guhit, tumataas ang presyo. Ihambing sa presyo ng NFA para malaman kung lugi o panalo."), unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
         with _pc2:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">query_stats</i>6-Month Price Forecast (Fancy vs Regular)</div><div class="component-desc">Hula ng presyo sa susunod na 6 na buwan.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">query_stats</i>6-Month Price Forecast (Fancy vs Regular)</div><div class="component-desc">Forecast ng presyo para sa susunod na 6 na buwan.</div>', unsafe_allow_html=True)
             _fig2 = _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option)
             st.plotly_chart(_fig2, use_container_width=True, key="detail_price_fc")
             st.markdown(_farmer_insight_box(f"Fancy \u20B1{next_fancy_pred:.2f}/kg, Regular \u20B1{next_regular_pred:.2f}/kg sa {next_month_name}. NFA floor: \u20B119.00 (Regular) / \u20B123.75 (Fancy)."), unsafe_allow_html=True)
@@ -768,7 +768,7 @@ def overview_page():
             st.markdown(f"<div style='background:#FFF7ED; border:1px solid #FDBA74; border-radius:10px; padding:12px;'><div style='font-weight:700; color:#9A3412; font-size:0.85rem;'><i class='material-symbols-outlined' style='font-size:14px; vertical-align:middle; margin-right:4px;'>flag</i>Kumpara sa Presyo ng NFA</div><div style='font-size:0.85rem; color:#374151; margin-top:4px;'>Regular \u20B1{next_regular_pred:.2f} vs \u20B119.00 — {'lagpas sa presyo ng NFA, puwedeng ibenta' if next_regular_pred >= 19 else 'mababa sa presyo ng NFA, malulugi pag binenta'}</div></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     elif section_choice == "Inaasahang Ani":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">eco</i>Inaasahang Ani</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Hula ng ani — dating datos at trend kada quarter at taon.</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">eco</i>Inaasahang Ani</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast ng ani — historical na datos at trend kada quarter at taon.</div></div>""", unsafe_allow_html=True)
         try:
             benchmark_option = st.segmented_control("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], default="Wala", key="yield_detail_benchmark")
             if benchmark_option is None: benchmark_option = "Wala"
@@ -776,13 +776,13 @@ def overview_page():
             benchmark_option = st.radio("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], horizontal=True, key="yield_detail_benchmark_radio")
         _yc1, _yc2 = st.columns(2, gap="medium")
         with _yc1:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Historical Yield Trend</div><div class="component-desc">Dating ani kada ektarya.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Historical Yield Trend</div><div class="component-desc">Historical na ani kada ektarya (MT/ha).</div>', unsafe_allow_html=True)
             _fig = _yield_historical_chart(provincial_year, selected_period, benchmark_option)
             st.plotly_chart(_fig, use_container_width=True, key="detail_yield_hist")
             st.markdown(_farmer_insight_box("Ito ang dating ani. Pag pataas ang guhit, mas marami ang naaani kada ektarya. Target ng DA: 4.50 MT/ha."), unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
         with _yc2:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">query_stats</i>Yield Forecast (Next 4 Quarters)</div><div class="component-desc">Hula ng ani sa susunod na 4 na quarter.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">query_stats</i>Yield Forecast (Next 4 Quarters)</div><div class="component-desc">Forecast ng ani para sa susunod na 4 na quarter.</div>', unsafe_allow_html=True)
             _fig2 = _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option)
             st.plotly_chart(_fig2, use_container_width=True, key="detail_yield_fc")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -820,7 +820,7 @@ def overview_page():
         else:
             st.info("Walang sapat na datos para sa buod ng ani.")
     elif section_choice == "Pambayang Forecast":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">location_on</i>Pambayang Forecast</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Municipality-level — selector, comparisons, charts, historical production.</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">location_on</i>Pambayang Forecast</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast kada bayan — pili ng binhi at klase, comparison ng presyo at historical production.</div></div>""", unsafe_allow_html=True)
         try:
             df_municipal_forecast = df_municipal_forecasts.copy()
             if df_municipal_forecast.empty:
@@ -847,7 +847,7 @@ def overview_page():
                 """, unsafe_allow_html=True)
                 st.markdown('<div class="muni-group-anchor" style="display:none;"></div>', unsafe_allow_html=True)
                 with st.container(border=True):
-                    _muni_for_chart = [selected_muni] if selected_muni != "All Municipalities" else []
+                    _muni_for_chart = [selected_muni] if selected_muni != "Lahat ng Bayan" else []
                     c1, c2, c3 = st.columns(3, gap="small")
                     with c1:
                         ov_rice_type = st.radio("Binhi", options=["Inbred", "Hybrid"], horizontal=True, key="ov_muni_rt_detail")
@@ -864,7 +864,7 @@ def overview_page():
                     _type_col = "rice type & season"
                     _df_lc = df_municipal_forecast.copy()
                     _df_lc.columns = [str(c).lower() for c in _df_lc.columns]
-                    if selected_muni != "All Municipalities":
+                    if selected_muni != "Lahat ng Bayan":
                         _dry_sub = _df_lc[(_df_lc["municipality"].str.lower() == selected_muni.lower()) & (_df_lc[_type_col].str.lower() == _dry_key)]
                         _wet_sub = _df_lc[(_df_lc["municipality"].str.lower() == selected_muni.lower()) & (_df_lc[_type_col].str.lower() == _wet_key)]
                         _label_muni = selected_muni
@@ -907,11 +907,11 @@ def overview_page():
         except Exception as e:
             st.error(f"Unable to render municipal forecast: {str(e)}")
         if not top5_municipalities.empty:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">emoji_events</i>Top 5 Municipalities — Historical Production</div><div class="component-desc">Pinakamaraming ani kada bayan.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">emoji_events</i>Top 5 Bayan — Historical Production</div><div class="component-desc">Top 5 bayan na may pinakamataas na produksyon (historical).</div>', unsafe_allow_html=True)
             try:
                 fig_muni = px.bar(top5_municipalities.sort_values("palay_production"), x="palay_production", y="municipality", orientation="h", color="palay_production", color_continuous_scale=["#A5D6A7", "#1B5E20"], text="palay_production")
-                fig_muni.update_traces(texttemplate="%{text:,.0f} MT", textposition="outside", marker=dict(line=dict(width=2, color='white'), cornerradius=4), hovertemplate="<b>%{y}</b><br>Production: %{x:,.0f} MT<extra></extra>")
-                fig_muni.update_layout(height=360, margin=dict(l=10, r=80, t=10, b=10), xaxis_title="Metric Tons", yaxis_title=None, showlegend=False, plot_bgcolor="white", paper_bgcolor="white", coloraxis_showscale=False, yaxis={"categoryorder": "total ascending"})
+                fig_muni.update_traces(texttemplate="%{text:,.0f} MT", textposition="outside", marker=dict(line=dict(width=2, color='white'), cornerradius=4), hovertemplate="<b>%{y}</b><br>Produksyon: %{x:,.0f} MT<extra></extra>")
+                fig_muni.update_layout(height=360, margin=dict(l=10, r=80, t=10, b=10), xaxis_title="Produksyon (MT)", yaxis_title="Bayan", showlegend=False, plot_bgcolor="white", paper_bgcolor="white", coloraxis_showscale=False, yaxis={"categoryorder": "total ascending"})
                 fig_muni.update_xaxes(gridcolor="#F3F4F6", showgrid=True)
                 st.plotly_chart(fig_muni, use_container_width=True, key="muni_detail_top5")
                 _top = top5_municipalities.sort_values("palay_production", ascending=False).iloc[0]
@@ -922,7 +922,7 @@ def overview_page():
         # pies hidden for farmer - kept for LGU only
     elif section_choice == "Gabay at Payo":
         st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">lightbulb</i>Gabay at Payo</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Mga payong galing sa hula</div></div>""", unsafe_allow_html=True)
-        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>Payo Batay sa Forecast</div><div class="component-desc">Diretsahan at madaling intindihin — walang teknikal na salita.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>Payo Batay sa Forecast</div><div class="component-desc">Rekomendasyon batay sa forecast ng presyo at ani.</div>', unsafe_allow_html=True)
         if not muni_filtered.empty:
             if percent_change_fancy > 5: _p_title, _p_body, _p_icon, _p_accent = "Itago muna ang Fancy", f"Fancy tataas sa <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span> sa {next_month_name}. Mas kikita kung sa {_fmax_month} ibebenta. Regular nasa \u20B1{next_regular_pred:.2f}/kg.", "trending_up", "card-marketing"
             elif percent_change_fancy < -5: _p_title, _p_body, _p_icon, _p_accent = "Ibenta na ang Fancy", f"Bababa ang Fancy sa <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span>. Mas maganda ibenta ngayon bago bumaba pa sa {_fmin_month}.", "trending_down", "card-notice"
@@ -930,11 +930,11 @@ def overview_page():
             if avg_yield_forecast >= 4.5 and (_ymax - _ymin) < 0.4: _y_title, _y_body, _y_icon, _y_accent = "Maganda ang ani — ituloy ang plano", f"Avg <span class='highlight-text'>{avg_yield_forecast:.2f} MT/ha</span> lagpas sa target ng DA na 4.50. Sapat ang supply, ituloy ang pagtatanim.", "eco", "card-marketing"
             elif avg_yield_forecast < 4.0: _y_title, _y_body, _y_icon, _y_accent = "Magtipid at ayusin ang patubig", f"Avg <span class='highlight-text'>{avg_yield_forecast:.2f} MT/ha</span> kulang sa target. Magtipid sa abono, ayusin ang patubig.", "water_drop", "card-notice"
             else: _y_title, _y_body, _y_icon, _y_accent = "Magtabi ng reserba", f"Pinakamataas <span class='highlight-text'>{_ymax:.2f} MT/ha</span>, pinakamababa <span class='highlight-text'>{_ymin:.2f} MT/ha</span> — magtabi ng reserba para sa mga buwang mahina ang ani.", "inventory_2", "card-optimization"
-            st.markdown(f"""<div class="advisory-container"><div class="advisory-card {_p_accent}"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">{_p_icon}</i></div><div class="card-body"><span class="card-label label-marketing">{_p_title}:</span> {_p_body}<br><span style="font-size:0.78rem; color:#6B7280; margin-top:6px; display:inline-block;"><i class="material-symbols-outlined" style="font-size:12px; vertical-align:middle; margin-right:4px;">help</i><b>Anong ibig sabihin?</b> Pag naghintay ka, puwedeng mas malaki ang kita. Pag nagbenta ka agad, iwas-lugi.</span></div></div><div class="advisory-card {_y_accent}"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">{_y_icon}</i></div><div class="card-body"><span class="card-label label-optimization">{_y_title}:</span> {_y_body}<br><span style="font-size:0.78rem; color:#6B7280; margin-top:6px; display:inline-block;"><i class="material-symbols-outlined" style="font-size:12px; vertical-align:middle; margin-right:4px;">help</i><b>Anong ibig sabihin?</b> Pag mataas ang MT/ha, marami ang aanihin kada ektarya.</span></div></div><div class="advisory-card card-status"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">location_on</i></div><div class="card-body"><span class="card-label label-status">Para sa {muni_badge}:</span> Kabuuang ani <span class="highlight-text">{prod_val:,.0f} MT</span> sa {selected_start_year}–{selected_end_year}. Kung mataas ang presyo sa {_fmax_month}, mas mainam magbenta noon.<br><span style="font-size:0.78rem; color:#6B7280; margin-top:6px; display:inline-block;"><i class="material-symbols-outlined" style="font-size:12px; vertical-align:middle; margin-right:4px;">help</i><b>Anong ibig sabihin?</b> Piliin ang buwang pinakamataas ang presyo para mas malaki ang kita.</span></div></div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="advisory-container"><div class="advisory-card {_p_accent}"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">{_p_icon}</i></div><div class="card-body"><span class="card-label label-marketing">{_p_title}:</span> {_p_body}</div></div><div class="advisory-card {_y_accent}"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">{_y_icon}</i></div><div class="card-body"><span class="card-label label-optimization">{_y_title}:</span> {_y_body}</div></div><div class="advisory-card card-status"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">location_on</i></div><div class="card-body"><span class="card-label label-status">Para sa {muni_badge}:</span> Kabuuang ani <span class="highlight-text">{prod_val:,.0f} MT</span> sa {selected_start_year}–{selected_end_year}. Kung mataas ang presyo sa {_fmax_month}, mas mainam magbenta noon.</div></div></div>""", unsafe_allow_html=True)
         else:
             st.warning("Walang sapat na datos para makapagbigay ng payo sa pinili mo.")
         st.markdown("</div>", unsafe_allow_html=True)
-        with st.expander("Paano basahin ang hula?", expanded=False):
-            st.markdown("- **Presyo ng Palay:** Pag pataas ang guhit, tataas ang presyo.\n- **Inaasahang Ani:** MT/ha — toneladang aanihin kada ektarya.\n- **Batayan:** 'Yung putol-putol na guhit — presyo ng NFA (₱19.00) at karaniwang presyo sa loob ng 3 taon.\n- **Pambayan:** Piliin ang bayan para makita kung saan pinakamataas ang presyo.")
+        with st.expander("Gabay sa Pagbasa ng Forecast", expanded=False):
+            st.markdown("- **Presyo ng Palay:** Pag pataas ang linya, tumataas ang presyo.\n- **Inaasahang Ani:** MT/ha — toneladang aanihin kada ektarya.\n- **Batayan:** Putol-putol na linya — NFA floor price (₱19.00) at 3-year average.\n- **Pambayang Forecast:** Piliin ang bayan para sa comparison ng presyo.")
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("""<div style="text-align:center; padding:10px 0 5px 0; font-size:0.75rem; color:#9CA3AF; border-top:1px solid #E5E7EB; margin-top:10px;"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#9CA3AF;">agriculture</i>Bataan Rice Monitoring System &bull; v2.0</div>""", unsafe_allow_html=True)

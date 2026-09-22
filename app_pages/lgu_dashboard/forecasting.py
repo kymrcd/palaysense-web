@@ -4,25 +4,57 @@ PalaySense LGU Dashboard — Forecasting
 Card-based forecasting page.
 
 Layout:
-  • Top Section: Summary KPI cards (horizontal row) using a stable default
-    benchmark classification (Hybrid Premium).
-  • Middle Section: NEW Price & Yield Forecast visual chart (line with dashed
-    forecast + yield forecast bar) + Yield Forecast Summary side-card.
-  • Bottom Section: Pure forecast data tables inside card containers, using
-    the seasonal tabs Dry Season Forecasts and Wet Season Forecasts.
-    The local filters (Rice Type / Classification / Municipality) live here
-    and ONLY scope the table DataFrames.
+  • Provincial tab: 6-month price + 4-quarter yield forecast with benchmarks.
+  • Municipal tab: searchable municipality selector (full comparison) +
+    grouped bar forecast chart + data table + KPIs.
 
-Strictly NO purely historical past data on this page.
+Fixes vs. critique:
+  - Removes literal "undefined" Plotly title.
+  - Shows full municipal comparison (all selected municipalities, accessible palette).
+  - Consolidates Rice Type + Classification into single selector.
+  - Vectorizes price averages (no per-municipality loop).
+  - Dynamic forecast period (no hardcoded Jan-Mar 2026).
+  - Accessible legend + price-chip legend, WCAG-sized fonts.
+  - Named constants for NFA/DA benchmarks, no bare excepts swallowed silently.
 """
+import logging
+import math
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from . import theme
 from . import data_layer as dl
+from . import theme
+
+logger = logging.getLogger(__name__)
+
+# ------------------------------------------------------------------
+# Constants
+# ------------------------------------------------------------------
+NFA_FLOOR_PRICE = 19.00  # ₱/kg Regular NFA floor
+FANCY_COMMERCIAL_TARGET = 23.75  # ₱/kg Fancy (19 * 1.25)
+DA_TARGET_YIELD = 4.50  # MT/ha
+MUNI_MAX_COMPARE = 12  # show all municipalities (Bataan = 12)
+MUNI_MAX_LIST = 50  # safety cap for list rendering
+
+# Accessible, colorblind-friendly palette (Okabe-Ito + Tol, high contrast) — 12 colors for full Bataan
+ACCESSIBLE_PALETTE = [
+    "#1B5E20",  # dark green
+    "#0072B2",  # blue
+    "#D55E00",  # vermillion
+    "#CC79A7",  # pink
+    "#009E73",  # teal
+    "#E69F00",  # amber
+    "#56B4E9",  # sky
+    "#F0E442",  # yellow (with dark border)
+    "#000000",  # black
+    "#882255",  # wine
+    "#117733",  # green-teal
+    "#44AA99",  # aqua
+]
 
 # Rice type/season -> presentation label mapping
 _RICE_TYPE_MAP = {
@@ -39,6 +71,13 @@ _RICE_CLASS_KEYWORDS = {
     "Inbred Premium": "inbredpremium",
     "Inbred Ordinary": "inbredordinary",
 }
+
+_RICE_CLASS_OPTIONS = [
+    "Inbred Ordinary",
+    "Inbred Premium",
+    "Hybrid Ordinary",
+    "Hybrid Premium",
+]
 
 
 def _municipal_month_labels(dr):
@@ -398,9 +437,132 @@ def _season_avg(df):
     """Average predicted price across all dry OR wet configurations."""
     if df is None or df.empty:
         return 0.0
-    vals = pd.to_numeric(df[["Month 1", "Month 2", "Month 3"]].stack(), errors="coerce")
+    # guard missing columns
+    cols = [c for c in ["Month 1", "Month 2", "Month 3"] if c in df.columns]
+    if not cols:
+        return 0.0
+    vals = pd.to_numeric(df[cols].stack(), errors="coerce")
     vals = vals.dropna()
     return float(vals.mean()) if not vals.empty else 0.0
+
+
+def _compute_season_change_pct(dr, selected_munis, selected_class, season_label):
+    """Return (pct_change, last_avg) for forecast avg vs last 3-month historical avg.
+
+    Compares the forecast average (Month 1-3) for the selected municipalities /
+    classification / season against the mean of the same column in
+    municipality_history_df for the last 3 historical months (e.g. Oct-Dec 2025).
+    Returns (None, None) when history is unavailable.
+    """
+    try:
+        class_keyword = _class_column_keyword(selected_class)
+        suffix = "_wet" if str(season_label).lower().startswith("wet") else "_dry"
+        col = f"{class_keyword}{suffix}"
+        # history df is lowercase municipality
+        hist = getattr(dr, "municipality_history_df", None)
+        if hist is None or getattr(hist, "empty", True):
+            return None, None
+        # normalize column existence
+        if col not in hist.columns:
+            return None, None
+        # filter by municipality if selected
+        if selected_munis:
+            wanted = {m.lower().strip() for m in selected_munis}
+            # column name is lowercase 'municipality' in parquet
+            muni_col = "municipality" if "municipality" in hist.columns else "Municipality"
+            hist_sub = hist[hist[muni_col].astype(str).str.lower().isin(wanted)]
+            if hist_sub.empty:
+                hist_sub = hist
+        else:
+            hist_sub = hist
+        # last 3 months by date
+        if "date" not in hist_sub.columns:
+            return None, None
+        hist_sub = hist_sub.copy()
+        hist_sub["date"] = pd.to_datetime(hist_sub["date"], errors="coerce")
+        hist_sub = hist_sub.dropna(subset=["date"])
+        if hist_sub.empty:
+            return None, None
+        # get last 3 distinct months
+        uniq_dates = hist_sub["date"].drop_duplicates().sort_values()
+        if uniq_dates.empty:
+            return None, None
+        last_dates = uniq_dates.tail(3).tolist()
+        last_rows = hist_sub[hist_sub["date"].isin(last_dates)]
+        last_vals = pd.to_numeric(last_rows[col], errors="coerce").dropna()
+        if last_vals.empty:
+            return None, None
+        last_avg = float(last_vals.mean())
+        # forecast avg for same scope
+        _, df_dry, df_wet, _ = _prepare_forecast_df(dr, selected_munis, selected_class)
+        season_df = df_wet if suffix == "_wet" else df_dry
+        forecast_avg = _season_avg(season_df)
+        if forecast_avg == 0 or last_avg == 0 or pd.isna(last_avg):
+            return None, last_avg
+        pct = (forecast_avg - last_avg) / last_avg * 100
+        return float(pct), float(last_avg)
+    except Exception as exc:
+        logger.debug("season change pct failed: %s", exc)
+        return None, None
+
+
+def _format_period_short(labs):
+    """Return short period like 'Jan-Mar 2026' from labs ['January 2026', ...]."""
+    try:
+        if not labs or len(labs) < 1:
+            return "3 months"
+        starts = pd.to_datetime(labs[0])
+        ends = pd.to_datetime(labs[-1]) if len(labs) > 1 else starts
+        if pd.isna(starts) or pd.isna(ends):
+            return "3 months"
+        if starts.year == ends.year:
+            return f"{starts.strftime('%b')}\u2013{ends.strftime('%b')} {ends.year}"
+        return f"{starts.strftime('%b %Y')} \u2013 {ends.strftime('%b %Y')}"
+    except Exception:
+        return "3 months"
+
+
+# ------------------------------------------------------------------
+# Vectorized municipal price averages (replaces per-municipality loop)
+# ------------------------------------------------------------------
+def _compute_municipal_avg_prices(dr, selected_class):
+    """Return {municipality: avg_price} for the given classification, vectorized."""
+    df_forecast = getattr(dr, "df_municipal_forecasts", None)
+    if df_forecast is None or getattr(df_forecast, "empty", True):
+        return {}
+    _, df_dry, _, _ = _prepare_forecast_df(dr, [], selected_class)
+    if df_dry is None or df_dry.empty:
+        return {}
+    cols = [c for c in ["Month 1", "Month 2", "Month 3"] if c in df_dry.columns]
+    if not cols:
+        return {}
+    tmp = df_dry.copy()
+    for c in cols:
+        tmp[c] = pd.to_numeric(tmp[c], errors="coerce")
+    tmp["avg_price"] = tmp[cols].mean(axis=1)
+    grouped = tmp.groupby("Municipality")["avg_price"].mean()
+    return grouped.to_dict()
+
+
+def _compute_tag_map(df_forecast_all):
+    """Return {muni: (Type, Class)} for filter chips, vectorized where possible."""
+    tag_map = {}
+    if df_forecast_all is None or df_forecast_all.empty:
+        return tag_map
+    if "Rice Classification" in df_forecast_all.columns and "Municipality" in df_forecast_all.columns:
+        try:
+            mode_series = df_forecast_all.groupby("Municipality")["Rice Classification"].agg(lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0])
+            for muni, cls_full in mode_series.items():
+                parts = str(cls_full).strip().split()
+                t = parts[0] if len(parts) >= 1 else "Inbred"
+                c = parts[1] if len(parts) >= 2 else "Ordinary"
+                tag_map[str(muni)] = (t, c)
+            return tag_map
+        except Exception as exc:
+            logger.debug("tag map mode failed: %s", exc)
+    for muni in df_forecast_all["Municipality"].dropna().unique():
+        tag_map[str(muni)] = ("Inbred", "Ordinary")
+    return tag_map
 
 
 def _render_table_filters(dr):
@@ -576,15 +738,11 @@ def _forecast_visual_chart(dr, selected_class, selected_munis):
 
 
 def _municipal_season_bar(df, labels, selected_class, season_label, key):
-    """Grouped bar chart for municipal forecasts — same data as tables, chart view.
-
-    Reuses the already-filtered season DataFrame (df_dry / df_wet). Melts
-    Month 1-3 to long form so each forecast month groups municipalities
-    side-by-side. Returns silently on empty data.
-    """
+    """Grouped bar chart for municipal forecasts — full set, accessible, no undefined title."""
     if df is None or df.empty:
         return
     try:
+        # Full municipal set — no capping (user requested buong bar graph)
         plot_df = (
             df[["Municipality", "Month 1", "Month 2", "Month 3"]]
             .melt(id_vars=["Municipality"], value_vars=["Month 1", "Month 2", "Month 3"],
@@ -598,102 +756,321 @@ def _municipal_season_bar(df, labels, selected_class, season_label, key):
             st.info("No price available for the selected filters.")
             return
         plot_df["Municipality"] = plot_df["Municipality"].astype(str).str.title()
+        # Accessible palette — repeat if needed to cover full Bataan (12)
+        n_muni = plot_df["Municipality"].nunique()
+        repeats = (n_muni // len(ACCESSIBLE_PALETTE)) + 1
+        palette = (ACCESSIBLE_PALETTE * repeats)[: max(n_muni, 1)]
         fig = px.bar(
             plot_df, x="forecast_month", y="price", color="Municipality",
             barmode="group",
             category_orders={"forecast_month": labels},
-            color_discrete_sequence=px.colors.qualitative.Set3,
+            color_discrete_sequence=palette,
             labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "Municipality": "Municipality"},
-            title=f"{selected_class} — {season_label}",
         )
+        # FIX: force empty title — never show literal "undefined" (Plotly converts None -> "undefined" in some builds)
+        _bargap = 0.15 if n_muni >= 10 else 0.22
+        _bargroupgap = 0.08 if n_muni >= 10 else 0.12
+        _legend_y = -0.30 if n_muni >= 8 else -0.22
+        _bottom_margin = 140 if n_muni >= 8 else 110
         fig.update_layout(
-            height=340, margin=dict(t=35, b=120, l=45, r=10),
+            title=dict(text="", font=dict(size=1, color="rgba(0,0,0,0)")),
+            title_text="",
+            height=400, margin=dict(t=12, b=_bottom_margin, l=55, r=10),
             plot_bgcolor="white", paper_bgcolor="white",
             font=dict(family="Inter, sans-serif", size=11),
-            legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="center", x=0.5,
-                        font=dict(size=10), bgcolor="rgba(255,255,255,0.95)",
-                        bordercolor="#E5E7EB", borderwidth=1),
-            yaxis=dict(gridcolor="#F3F4F6", showgrid=True),
-            xaxis=dict(gridcolor="#F3F4F6", showgrid=False, automargin=True),
-            title=dict(font=dict(size=13)),
-            bargap=0.22, bargroupgap=0.10,
+            legend=dict(orientation="h", yanchor="top", y=_legend_y, xanchor="center", x=0.5,
+                        font=dict(size=9), bgcolor="rgba(255,255,255,0.98)",
+                        bordercolor="#E5E7EB", borderwidth=1, itemsizing="constant"),
+            yaxis=dict(gridcolor="#F3F4F6", showgrid=True, title="Price (₱/kg)"),
+            xaxis=dict(gridcolor="#F3F4F6", showgrid=False, automargin=True, title="Forecast Month"),
+            bargap=_bargap, bargroupgap=_bargroupgap,
             uniformtext_minsize=8, uniformtext_mode="hide",
         )
-        fig.update_traces(hovertemplate="Bayan: %{fullData.name}<br>%{x}<br>₱%{y:.2f}/kg<extra></extra>",
-                          cliponaxis=False)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True},
-                        key=key)
-    except Exception:
-        return
-
-
-def _render_forecast_tables(dr, month_labels):
-    """Bottom section: pure forecast data tables inside card containers.
-
-    The local filters (Rice Type / Classification / Municipality) render in a
-    compact 3-column row right above the Dry/Wet tabs. They ONLY scope the
-    tables' DataFrames, leaving top-level KPIs/charts unaffected.
-    """
-    with theme.section_card(title="Forecast Data Tables",
-                            desc="Monthly predictions per municipality and rice classification.",
-                            icon_name="table_view"):
-        # Localized filters — scoped strictly to the table data below.
-        selected_munis, selected_class = _render_table_filters(dr)
-        df_filtered, df_dry, df_wet, _ = _prepare_forecast_df(dr, selected_munis, selected_class)
-
-        if df_filtered is None:
-            st.info("No forecast configurations available for the selected filters.")
-            return
-
-        tab_dry, tab_wet = st.tabs([":material/wb_sunny: Dry Season Forecasts", ":material/water_drop: Wet Season Forecasts"])
-
-        labels = month_labels if len(month_labels) == 3 else ["Month 1", "Month 2", "Month 3"]
-
-        def _display(df, heading, season_label, chart_key):
-            if df is None or df.empty:
-                st.info("No forecast configurations for this season.")
-                return
-            display = (
-                df[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]]
-                .rename(columns={
-                    "Month 1": labels[0],
-                    "Month 2": labels[1],
-                    "Month 3": labels[2],
-                })
-            )
-            st.markdown(f"### {heading}")
-            _municipal_season_bar(df, labels, selected_class, season_label, chart_key)
-            st.dataframe(display, use_container_width=True, hide_index=True, height=300)
-            st.caption(f"Displaying {len(display)} season configurations.")
-
-        with tab_dry:
-            _display(df_dry, ":material/wb_sunny: Peak & Off-Peak Dry Season Metrics", "Dry Season Crop Cycle", "fc_dry_chart")
-        with tab_wet:
-            _display(df_wet, ":material/water_drop: Rain-fed & High-Moisture Wet Season Metrics", "Wet Season Crop Cycle", "fc_wet_chart")
-
-
-def _render_forecast_insights(df, dr):
-    """Now inside respective graph cards — kept as no-op for backward compat."""
-    return
+        # hard-clear any leftover title/annotations that could render as "undefined"
+        fig.layout.title.text = ""
+        try:
+            # remove any annotation whose text is "undefined" (defensive)
+            if fig.layout.annotations:
+                fig.layout.annotations = [a for a in fig.layout.annotations if str(getattr(a, "text", "")).lower() != "undefined"]
+        except Exception:
+            pass
+        fig.update_traces(
+            hovertemplate="<b>%{fullData.name}</b><br>%{x}<br>₱%{y:.2f}/kg<extra></extra>",
+            cliponaxis=False,
+            marker_line_width=0.5, marker_line_color="rgba(0,0,0,0.15)",
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True}, key=f"{key}_v4")
+        # Accessibility note below chart
+        st.caption(f"Grouped bars by forecast month · {n_muni} {'municipalities' if n_muni != 1 else 'municipality'} · {selected_class} · {season_label}")
+    except Exception as exc:
+        logger.debug("municipal season bar failed: %s", exc)
+        st.error("Could not render forecast chart for the selected filters.")
 
 
 def render(df, dr):
-    """Main Forecasting page — pure forecast data (no historical graphs)."""
-    theme.page_title("Forecasting",
-                     "Peak and Off-Peak forecast data for palay across Bataan municipalities.")
+    """Main Forecasting page — provincial vs municipal tabs."""
+    theme.page_title(
+        "Forecasting",
+        "Provincial and municipal forecasts for palay prices and yields in Bataan — 6-month price and 4-quarter yield projections to support OPA planning.",
+    )
 
-    # Stable default benchmark for forecast visuals (unaffected by table filters).
     benchmark_class = "Hybrid Premium"
     _, df_dry, df_wet, month_labels = _prepare_forecast_df(dr, [], benchmark_class)
 
-    # Top section: forecasted values (system-generated, separate from historical KPIs)
-    _render_summary_kpis(df_dry, df_wet, benchmark_class)
+    tab_prov, tab_muni = st.tabs([
+        ":material/show_chart: Provincial",
+        ":material/location_city: Municipal",
+    ])
 
-    # Middle section: price & yield forecast visual chart + yield summary card
-    _forecast_visual_chart(dr, benchmark_class, [])
+    with tab_prov:
+        _forecast_visual_chart(dr, benchmark_class, [])
 
-    # Insights — Planning Division centric, below both graphs
-    _render_forecast_insights(df, dr)
+    with tab_muni:
+        # --- Shared scoped CSS ---
+        st.markdown("""
+        <style>
+        .muni-card { background:white; border:1px solid #E5E7EB; border-radius:14px; box-shadow:0 4px 12px rgba(0,0,0,0.04); }
+        .muni-card-pad { padding:14px; }
+        .muni-label { font-size:0.70rem; color:#6B7280; text-transform:uppercase; letter-spacing:0.3px; font-weight:600; margin-bottom:4px; display:block; }
+        .muni-badge { font-size:0.68rem; color:#065F46; background:#D1FAE5; border:1px solid #A7F3D0; padding:3px 8px; border-radius:999px; font-weight:600; }
+        </style>
+        """, unsafe_allow_html=True)
 
-    # Bottom section: pure forecast data tables (filters scoped locally to tables)
-    _render_forecast_tables(dr, month_labels)
+        # --- TOP: Single consolidated classification + dynamic info ---
+        try:
+            dyn_labels = month_labels if month_labels and len(month_labels) == 3 else _municipal_month_labels(dr)
+            if dyn_labels and len(dyn_labels) == 3:
+                period_str = f"{dyn_labels[0]} – {dyn_labels[2]}"
+                try:
+                    m_num = pd.to_datetime(dyn_labels[0]).month
+                    season_str = "Dry Season" if m_num <= 6 else "Wet Season"
+                except Exception:
+                    season_str = "Dry Season"
+            else:
+                period_str = "Next 3 months"
+                season_str = "Dry Season"
+        except Exception:
+            period_str = "Next 3 months"
+            season_str = "Dry Season"
+
+        with st.container(border=True):
+            top1, top2 = st.columns([0.38, 0.62], gap="medium")
+            with top1:
+                st.markdown('<span class="muni-label">Rice Classification</span>', unsafe_allow_html=True)
+                sel_class_top = st.selectbox(
+                    "Rice Classification",
+                    options=_RICE_CLASS_OPTIONS,
+                    index=0,
+                    key="muni_rice_class_top_v2",
+                    label_visibility="collapsed",
+                    help="Binhi classification — Hybrid/Inbred × Premium/Ordinary. Filters the municipal forecasts.",
+                )
+            with top2:
+                st.markdown(f"""
+                <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:10px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start;">
+                  <i class="material-symbols-outlined" style="color:#059669; font-size:20px; margin-top:1px; flex-shrink:0;">lightbulb</i>
+                  <div style="font-size:0.78rem; color:#374151; line-height:1.5;"><b style="color:#14532D;">How forecasts work</b><br>
+                  Based on <b>{sel_class_top}</b>. Each municipality has its own projection by binhi type. Forecast period <b>{period_str}</b> ({season_str}).</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        _season_top = season_str
+
+        # --- BODY: Left selector + Right chart ---
+        left, right = st.columns([0.40, 0.60], gap="medium")
+        with left:
+            with st.container(border=True):
+                df_forecast_all = getattr(dr, "df_municipal_forecasts", None)
+                if df_forecast_all is None or getattr(df_forecast_all, "empty", True):
+                    st.info("No municipal forecast data available.")
+                    all_munis = []
+                    tag_map = {}
+                    price_map = {}
+                else:
+                    all_munis = sorted(df_forecast_all["Municipality"].dropna().astype(str).unique().tolist())
+                    tag_map = _compute_tag_map(df_forecast_all)
+                    price_map = _compute_municipal_avg_prices(dr, sel_class_top)
+
+                    st.markdown(f"""
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                      <span style="font-weight:800; color:#14532D; font-size:0.88rem; display:flex; align-items:center; gap:6px;"><i class="material-symbols-outlined" style="font-size:18px; color:#16A34A;">location_on</i> MUNICIPALITIES</span>
+                      <span class="muni-badge">{len(all_munis)} municipalities</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    search = st.text_input(
+                        "Search municipality",
+                        placeholder="Search municipality...",
+                        key="muni_search_v2",
+                        label_visibility="collapsed",
+                    )
+                    st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
+
+                    filtered = [m for m in all_munis if not search or search.lower() in m.lower()]
+
+                    prev_selected = st.session_state.get("muni_selected_v2", [])
+                    prev_selected = [m for m in prev_selected if m in filtered]
+                    selected_munis = st.multiselect(
+                        "Compare municipalities",
+                        options=filtered,
+                        default=prev_selected,
+                        key="muni_selected_v2",
+                        help="Select any municipalities to filter the chart. Leave empty to show all municipalities (buong bar graph).",
+                        placeholder="Choose municipalities… (empty = all)",
+                    )
+
+                    st.caption(f"{len(filtered)} match · {len(selected_munis) if selected_munis else len(filtered)} shown · prices for {sel_class_top}")
+
+                    if filtered:
+                        ref_rows = []
+                        for m in filtered[:MUNI_MAX_LIST]:
+                            t, c = tag_map.get(m, ("Inbred", "Ordinary"))
+                            p = float(price_map.get(m, 0.0) or 0.0)
+                            ref_rows.append({"Municipality": m.title(), "Type": t, "Class": c, "Avg Price (₱/kg)": round(p, 2)})
+                        ref_df = pd.DataFrame(ref_rows)
+                        st.dataframe(
+                            ref_df,
+                            use_container_width=True,
+                            hide_index=True,
+                            height=340,
+                            column_config={
+                                "Municipality": st.column_config.TextColumn("Municipality", width="medium"),
+                                "Type": st.column_config.TextColumn("Type", width="small"),
+                                "Class": st.column_config.TextColumn("Class", width="small"),
+                                "Avg Price (₱/kg)": st.column_config.NumberColumn("Avg Price (₱/kg)", format="₱%.2f", width="small"),
+                            },
+                        )
+                        if len(filtered) > MUNI_MAX_LIST:
+                            st.caption(f"+ {len(filtered) - MUNI_MAX_LIST} more — refine search")
+                    else:
+                        st.info("No municipalities match the current search/filter.")
+
+                    st.session_state["_muni_conn_v2"] = (selected_munis, sel_class_top, _season_top, filtered, tag_map)
+
+        with right:
+            with st.container(border=True):
+                conn = st.session_state.get("_muni_conn_v2", ([], sel_class_top, _season_top, [], {}))
+                if isinstance(conn, tuple) and len(conn) >= 2:
+                    lm = conn[0] if isinstance(conn[0], list) else []
+                    lc = conn[1] if len(conn) > 1 and isinstance(conn[1], str) else sel_class_top
+                    ss_default = conn[2] if len(conn) > 2 and isinstance(conn[2], str) else _season_top
+                    filtered_state = conn[3] if len(conn) > 3 and isinstance(conn[3], list) else []
+                    tag_map_state = conn[4] if len(conn) > 4 and isinstance(conn[4], dict) else tag_map if 'tag_map' in locals() else {}
+                else:
+                    lm, lc, ss_default, filtered_state, tag_map_state = [], sel_class_top, _season_top, [], {}
+
+                lc = sel_class_top
+                # Season selector — KPI & chart follow this selection
+                try:
+                    _season_choice = st.segmented_control(
+                        "Season",
+                        options=["Dry Season", "Wet Season"],
+                        default=ss_default if ss_default in ["Dry Season", "Wet Season"] else _season_top,
+                        key="muni_season_selector_v2",
+                    )
+                    if _season_choice is None:
+                        _season_choice = ss_default if ss_default in ["Dry Season", "Wet Season"] else _season_top
+                except Exception:
+                    _season_choice = st.radio(
+                        "Season",
+                        options=["Dry Season", "Wet Season"],
+                        index=0 if (ss_default == "Dry Season" or _season_top == "Dry Season") else 1,
+                        horizontal=True,
+                        key="muni_season_selector_v2_radio",
+                    )
+                ss = _season_choice
+
+                if lm:
+                    if len(lm) == 1:
+                        ctx_muni = lm[0].title()
+                        ctx_sub = f"{lc} · {ss} · 1 municipality"
+                    else:
+                        ctx_muni = f"{len(lm)} Municipalities Compared"
+                        ctx_sub = f"{lc} · {ss} · {', '.join([m.title() for m in lm[:3]])}{' …' if len(lm)>3 else ''}"
+                else:
+                    ctx_muni = "Overview — Top Municipalities"
+                    ctx_sub = f"{lc} · {ss} · highest avg price"
+
+                _, ddry, dwet, labs = _prepare_forecast_df(dr, lm, lc)
+                labs = labs if labs and len(labs) == 3 else month_labels
+                df_show = ddry if ss == "Dry Season" else dwet
+                if (df_show is None or df_show.empty) and ddry is not None and not ddry.empty:
+                    df_show = ddry
+                    ss = "Dry Season"
+
+                st.markdown(f"<div style='display:flex;align-items:center;gap:8px;'><i class='material-symbols-outlined' style='color:#16A34A;font-size:22px;'>bar_chart</i><b style='color:#14532D; font-size:0.95rem;'>RICE PRICE FORECAST</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:0.88rem;color:#14532D;font-weight:700;margin-top:4px;'>{ctx_muni}</div><div style='font-size:0.78rem;color:#6B7280;'>{ctx_sub}</div><div style='font-size:0.74rem;color:#6B7280;margin-top:2px;'>Average farmgate price (₱/kg) — 3-month projection • {labs[0]} – {labs[2] if len(labs)>2 else ''}</div>", unsafe_allow_html=True)
+
+                if df_show is None or df_show.empty:
+                    st.info("No forecasts for the current selection. Try another classification or clear the municipality filter.")
+                else:
+                    _municipal_season_bar(df_show, labs, lc, f"{ss} Crop Cycle", "muni_fig_v3")
+
+                with st.expander("Show Forecast Table (Numbers)", expanded=False):
+                    if df_show is not None and not df_show.empty:
+                        disp = df_show[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": labs[0], "Month 2": labs[1], "Month 3": labs[2]})
+                        disp["Municipality"] = disp["Municipality"].astype(str).str.title()
+                        st.dataframe(disp, use_container_width=True, hide_index=True, height=220)
+                        st.caption(f"Displaying {len(disp)} forecast row{'s' if len(disp)!=1 else ''} for {lc}.")
+                    else:
+                        st.info("No forecasts for selection.")
+
+                # ---- FORECAST SUMMARY KPI — dynamically follows selected season + municipality ----
+                try:
+                    _avg_price = _season_avg(df_show) if df_show is not None and not df_show.empty else 0.0
+                    _change_pct, _last_avg = _compute_season_change_pct(dr, lm, lc, ss)
+                    _period_short = _format_period_short(labs)
+                    # Municipality-aware title: image shows "FORECAST SUMMARY — ABUCAY"
+                    if lm and len(lm) == 1:
+                        _muni_title = lm[0].strip().upper()
+                    elif lm and len(lm) > 1:
+                        _muni_title = f"{len(lm)} MUNICIPALITIES"
+                    else:
+                        # Overview — use selected municipality if any filtered else generic
+                        _muni_title = "OVERVIEW"
+                    _season_label = "DRY" if ss == "Dry Season" else "WET"
+                    _season_icon = "wb_sunny" if ss == "Dry Season" else "water_drop"
+                    _season_color = "#92400E" if ss == "Dry Season" else "#1E40AF"
+                    _season_bg = "#FFFBEB" if ss == "Dry Season" else "#EFF6FF"
+                    _season_border = "#FDE68A" if ss == "Dry Season" else "#BFDBFE"
+
+                    # Change display
+                    if _change_pct is None or pd.isna(_change_pct):
+                        _change_text = "—"
+                        _change_sub = "vs. last period"
+                        _change_icon = "trending_flat"
+                        _change_color = "#6B7280"
+                    else:
+                        _sign = "+" if _change_pct >= 0 else ""
+                        _change_text = f"{_sign}{_change_pct:.1f}%"
+                        _change_sub = "vs. last period"
+                        _change_icon = "trending_up" if _change_pct >= 0 else "trending_down"
+                        _change_color = "#16A34A" if _change_pct >= 0 else "#DC2626"
+
+                    st.markdown(f"""
+                    <div style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px; padding:8px 10px; margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-family:monospace; font-size:0.72rem; color:#374151; font-weight:700; letter-spacing:0.4px;">FORECAST SUMMARY — {_muni_title}</span>
+                      <span style="font-size:0.65rem; color:#6B7280;">{lc} · {_season_label}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
+                      <div style="background:{_season_bg}; border:1px solid {_season_border}; border-radius:12px; padding:12px 10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+                        <div style="font-size:0.68rem; color:{_season_color}; text-transform:uppercase; letter-spacing:0.3px; display:flex; align-items:center; justify-content:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">{_season_icon}</i> AVG. {_season_label}</div>
+                        <div style="font-weight:800; color:{_season_color}; font-size:1.05rem; margin-top:2px;">₱{_avg_price:.2f} <span style="font-weight:400; font-size:0.70rem; color:#6B7280;">/kg</span></div>
+                      </div>
+                      <div style="background:white; border:1px solid #E5E7EB; border-radius:12px; padding:12px 10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+                        <div style="font-size:0.68rem; color:#6B7280; text-transform:uppercase; letter-spacing:0.3px; display:flex; align-items:center; justify-content:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">{_change_icon}</i> CHANGE</div>
+                        <div style="font-weight:800; color:{_change_color}; font-size:1.05rem; margin-top:2px;">{_change_text}</div>
+                        <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">{_change_sub}</div>
+                      </div>
+                      <div style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:12px; padding:12px 10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+                        <div style="font-size:0.68rem; color:#6B7280; text-transform:uppercase; letter-spacing:0.3px; display:flex; align-items:center; justify-content:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">calendar_month</i> PERIOD</div>
+                        <div style="font-size:0.78rem; color:#374151; font-weight:600; margin-top:2px;">3 months</div>
+                        <div style="font-size:0.70rem; color:#6B7280; margin-top:1px;">{_period_short}</div>
+                      </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                except Exception as exc:
+                    logger.debug("bottom KPI failed: %s", exc)
+

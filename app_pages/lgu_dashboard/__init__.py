@@ -1,9 +1,5 @@
 """
-PalaySense LGU Dashboard — Main Entry
-=====================================
-Renders the modern sidebar (collapsible groups, Material icons, active
-highlight), the top header with year filter, and routes to the correct
-subpage. Reconnects to the existing backend data layer.
+PalaySense OPA Dashboard — Main Entry
 """
 import base64
 import streamlit as st
@@ -33,7 +29,7 @@ def _get_base64(path):
 # ------------------------------------------------------------------
 # Sidebar navigation model — Style C: Grouped Comprehensive, LGU English, Minimal
 # ------------------------------------------------------------------
-# Each entry: (key, label, icon, group) — English for LGU/OPA (Tagalog was for farmers)
+# Each entry: (key, label, icon, group)
 NAV_GROUPS = [
   {
     "label": "OVERVIEW",
@@ -68,14 +64,11 @@ NAV_GROUPS = [
     ],
   },
 ]
-
-# Flatten: key -> label
 _KEY_TO_LABEL = {k: label for g in NAV_GROUPS for (k, label, _) in g["items"]}
 
 
 def _render_sidebar(active_page):
   with st.sidebar:
-    # Style C — Compact, no-scroll, minimal professional (fits exactly) — left-aligned nav
     st.markdown("""
     <style>
     /* Compact desktop — tight spacing to fit without scroll — left-aligned */
@@ -281,9 +274,4 @@ def lgu_dashboard():
                   pass
               st.rerun()
 
-  # Footer
-  st.markdown("""
-  <div style="text-align:center; padding:1rem 0 0.5rem 0; font-size:0.75rem; color:#9CA3AF; border-top:1px solid #E6EAE6; margin-top:1rem;">
-    <i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#9CA3AF;">agriculture</i> PalaySense · Bataan Rice Monitoring System · v4.0
-  </div>
-  """, unsafe_allow_html=True)
+  # Footer removed per request

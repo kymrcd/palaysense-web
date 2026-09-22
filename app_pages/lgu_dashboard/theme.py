@@ -1,5 +1,5 @@
 """
-PalaySense LGU Dashboard — Design System & Reusable Components
+PalaySense OPA Dashboard — Design System & Reusable Components
 =============================================================
 Modern, government-grade agricultural dashboard theme.
 Centralizes all colors, CSS, and small reusable UI renderers.
@@ -101,9 +101,9 @@ div[data-testid="stToolbar"], div[data-testid="stDecoration"], .stAppDeployButto
     background: transparent; border: none;
 }
 .ps-header-card .ps-topbar-title,
-.ps-page-header .ps-topbar-title { font-size: 1.25rem; font-weight: 700; color: var(--ps-dark); margin: 0; letter-spacing: -0.3px; line-height: 1.25; }
+.ps-page-header .ps-topbar-title { font-size: 1.55rem; font-weight: 800; color: var(--ps-dark); margin: 0; letter-spacing: -0.4px; line-height: 1.2; }
 .ps-header-card .ps-topbar-subtitle,
-.ps-page-header .ps-topbar-subtitle { font-size: 0.76rem; color: var(--ps-text-secondary); margin: 0.05rem 0 0 0; font-weight: 400; }
+.ps-page-header .ps-topbar-subtitle { font-size: 0.82rem; color: var(--ps-text-secondary); margin: 0.12rem 0 0 0; font-weight: 400; }
 .ps-page-header { border-top: 1px solid #F1F5F9; border-bottom: 1px solid #E5E7EB; padding: 0.25rem 0 0.25rem 0 !important; margin-bottom: 0.15rem !important; }
 .ps-header-right { display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem; }
 
@@ -318,7 +318,7 @@ def topbar(title, subtitle, as_of=""):
     st.markdown(f"""
     <div class="ps-page-header">
         <div>
-            <div class="ps-topbar-title" style="font-size:1.25rem;font-weight:700;color:#123524;letter-spacing:-0.3px;line-height:1.25;">{title}</div>
+            <div class="ps-topbar-title" style="font-size:1.55rem;font-weight:800;color:#123524;letter-spacing:-0.4px;line-height:1.2;">{title}</div>
             <div class="ps-topbar-subtitle" style="font-size:0.76rem;color:#6B7280;">{subtitle}</div>
         </div>
         <div class="ps-header-right">

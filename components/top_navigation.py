@@ -130,7 +130,7 @@ def top_navigation():
                 )
 
     with col5:
-        if st.button("LGU Portal", use_container_width=True):
+        if st.button("OPA Portal", use_container_width=True):
             st.query_params["page"] = "login"
             try:
                 st.rerun()

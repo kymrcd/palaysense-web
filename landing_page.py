@@ -362,7 +362,7 @@ def landing_page():
             </div>
             <div class="hero-buttons">
                 <a href="?page=overview" target="_self" class="primary-btn"> Launch Dashboard </a>
-                <a href="?page=login" target="_self" class="secondary-btn">LGU Portal</a>
+                <a href="?page=login" target="_self" class="secondary-btn">OPA Portal</a>
             </div>
         </div>
     </div>
@@ -386,8 +386,8 @@ def landing_page():
             Anticipate future palay market prices to support planning and decision-making.
         </div>
         <div class="feature-card">
-            <div class="feature-title">LGU Insights</div>
-            Provide local government units with accessible agricultural intelligence.
+            <div class="feature-title">OPA Insights</div>
+            Provide the Office of the Provincial Agriculturist with accessible agricultural intelligence.
         </div>
     </div>
     """,

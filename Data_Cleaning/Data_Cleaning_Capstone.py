@@ -69,7 +69,7 @@ def run_cleaning(file_path,
             if col in ["quarterly_yield", "quarterly_yield_mt", "quarterlyyield"]:
                 col = "quarterly_yield_mt_per_ha"
             if col == "ave_production":
-                col = "ave_production"  # keep, handled via numeric_cols2
+                col = "ave_production"
             cleaned_columns.append(col)  # Add cleaned name to list
 
         return cleaned_columns  # Return cleaned column names
@@ -140,9 +140,22 @@ def run_cleaning(file_path,
                 # Remove negative values ONLY for selected columns
                 if col in non_negative_cols:
                     df_cleaned[col] = df_cleaned[col].clip(lower=0)
-                # Step 2: auto cap harvested outliers (>500 ha = placeholder, agronomist threshold)
+                # Step 2: UOM-aware harvested correction (recompute via prod/yield, not drop)
+                # Canonical UOM = ha. If harv mismatches prod/yld by >20%, recompute.
                 if col in ["harvested_irrigated", "harvested_rainfed", "harvested_total", "harvested_annual"]:
-                    df_cleaned[col] = df_cleaned[col].where(df_cleaned[col] <= 500)
+                    if "production_total" in df_cleaned.columns and "quarterly_yield_mt_per_ha" in df_cleaned.columns:
+                        prod = pd.to_numeric(df_cleaned["production_total"], errors="coerce")
+                        yld = pd.to_numeric(df_cleaned["quarterly_yield_mt_per_ha"], errors="coerce")
+                        harv = pd.to_numeric(df_cleaned[col], errors="coerce")
+                        expected = prod / yld.replace(0, np.nan)
+                        # valid expected only
+                        mask = expected.notna() & harv.notna() & (yld > 0) & (harv > 0) & (expected > 0)
+                        mismatch = mask & ((harv - expected).abs() / expected > 0.20)
+                        # also NaN harv where expected exists -> fill
+                        fill_nan = harv.isna() & expected.notna() & (yld > 0)
+                        df_cleaned.loc[mismatch | fill_nan, col] = expected[mismatch | fill_nan]
+                    # Fallback hard cap only if still >50000 ha (true outlier, province 137k ha)
+                    df_cleaned[col] = df_cleaned[col].where(df_cleaned[col] <= 50000)
 
         # -----------------------------
         # 3. HANDLE MISSING VALUES

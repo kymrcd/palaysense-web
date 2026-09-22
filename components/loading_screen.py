@@ -27,8 +27,8 @@ PAGE_LOADING_MESSAGES = {
     "overview": ("Loading Overview...", "Fetching provincial & municipal data"),
     "price_forecast": ("Loading Price Forecast...", "Analyzing palay price trends"),
     "yield_forecast": ("Loading Yield Forecast...", "Calculating yield projections"),
-    "lgu_dashboard": ("Loading LGU Dashboard...", "Syncing latest records — please wait"),
-    "login": ("Loading LGU Portal...", "Preparing secure login — please wait"),
+    "lgu_dashboard": ("Loading OPA Dashboard...", "Syncing latest records — please wait"),
+    "login": ("Loading OPA Portal...", "Preparing secure login — please wait"),
 }
 
 # LGU sub-page specific messages (used when query_page == lgu_dashboard)

@@ -48,6 +48,11 @@ MUNICIPAL_PRODUCTION_ML = BASE_DIR / "Capstone_Dataset_Cleaned_ML.xlsx"
 MUNICIPAL_PRODUCTION_RAW = BASE_DIR / "Capstone_Datasets.xlsx"
 _MUNICIPAL_PRODUCTION_SHEET = "Palay_Production_per_Municipali"
 
+# Live production source (updated by LGU Provincial upload -> provincial_cleaned.xlsx)
+# Prioritized over static Capstone files so Top-5 reflects LGU adds.
+CLEANED_PROVINCIAL_XLSX = BASE_DIR / "cleaned" / "provincial_cleaned.xlsx"
+MASTER_PROVINCIAL_CLEANED_XLSX = BASE_DIR / "Master" / "provincial_cleaned.xlsx"
+
 
 # =========================
 # DEMO EMPTY STATE — hide backup/forecasts for defense (no files deleted)
@@ -110,6 +115,8 @@ def _get_cache_version_key() -> tuple:
         MUNICIPAL_FORECASTS_FORWARD,
         METRICS_JSON,
         METADATA_JSON,
+        CLEANED_PROVINCIAL_XLSX,
+        MASTER_PROVINCIAL_CLEANED_XLSX,
     ]
 
     mtimes = []
@@ -239,35 +246,98 @@ def load_supply_data() -> pd.DataFrame:
 def load_municipal_production() -> pd.DataFrame:
     """Load per-municipality palay PRODUCTION (dry/wet season, total, average).
 
-    ``municipality_history`` stores palay PRICES; the Top-5 / production
-    rankings must use this authoritative production source instead.
+    Priority:
+      1) Live LGU data: data/cleaned/provincial_cleaned.xlsx sheet Palay_Production_per_Municipali
+         (updated via LGU Provincial upload -> append_to_raw_master + cleaning)
+         -> This makes Top-5 reflect LGU adds on farmer side.
+      2) Fallback: static Capstone_Dataset_Cleaned_ML.xlsx / Capstone_Datasets.xlsx
+         (for defense demo / first install)
+    ``municipality_history`` stores palay PRICES; this is the VOLUME source.
     """
     if _is_demo_empty():
         return pd.DataFrame()
-    for path in (MUNICIPAL_PRODUCTION_ML, MUNICIPAL_PRODUCTION_RAW):
+
+    def _normalize_production_df(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df.columns = [str(c).strip() for c in df.columns]
+        renames = {
+            "Municipality": "municipality", "Year": "year",
+            "Dry_Season": "dry_season", "Wet_Season": "wet_season",
+            "Palay_Production": "palay_production", "Ave_Production": "ave_production",
+        }
+        df = df.rename(columns=renames)
+        if "date" not in df.columns and "year" in df.columns:
+            df["date"] = pd.to_datetime(df["year"].astype(str) + "-12-01", errors="coerce")
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        return df
+
+    def _try_load_production_from_excel(path: Path) -> pd.DataFrame | None:
         if not path.exists():
-            continue
+            return None
         try:
-            df = pd.read_excel(path, sheet_name=_MUNICIPAL_PRODUCTION_SHEET, engine="openpyxl")
-            if df is None or getattr(df, "empty", True):
-                continue
-            df = df.copy()
-            df.columns = [str(c).strip() for c in df.columns]
-            renames = {
-                "Municipality": "municipality", "Year": "year",
-                "Dry_Season": "dry_season", "Wet_Season": "wet_season",
-                "Palay_Production": "palay_production", "Ave_Production": "ave_production",
-            }
-            df = df.rename(columns=renames)
-            if "date" not in df.columns and "year" in df.columns:
-                df["date"] = pd.to_datetime(
-                    df["year"].astype(str) + "-12-01", errors="coerce"
-                )
-            if "date" in df.columns:
-                df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            # sheet name is case-insensitive / underscore-insensitive (handles "Palay_Production_per_Municipali" typo)
+            xls = pd.read_excel(path, sheet_name=None, engine="openpyxl")
+            if not xls:
+                return None
+            # find target sheet
+            target_norm = _MUNICIPAL_PRODUCTION_SHEET.lower().replace(" ", "").replace("_", "")
+            matched_df = None
+            for sheet_name, sdf in xls.items():
+                norm = str(sheet_name).lower().replace(" ", "").replace("_", "").replace("-", "")
+                if norm == target_norm or "palayproductionpermunicip" in norm:
+                    matched_df = sdf
+                    break
+            if matched_df is None or getattr(matched_df, "empty", True):
+                return None
+            df = _normalize_production_df(matched_df)
+            # require at least municipality + palay_production columns
+            if df.empty or "municipality" not in df.columns:
+                return None
+            # drop completely empty rows
+            df = df.dropna(subset=["municipality", "year"], how="all")
+            if df.empty:
+                return None
             return df
         except Exception:
-            continue
+            return None
+
+    # 1) Try live cleaned files + static files, then MERGE
+    # so LGU adds reflect immediately but baseline 2019-2025 (84 rows) is preserved.
+    # Live sheet currently has 18 rows (2009-2018 + outliers); static has 84 rows (2019-2025).
+    # Merge with dedup on (municipality, year) keeping live last -> new uploads overwrite.
+    live_df = None
+    for live_path in (CLEANED_PROVINCIAL_XLSX, MASTER_PROVINCIAL_CLEANED_XLSX):
+        live_df = _try_load_production_from_excel(live_path)
+        if live_df is not None and not live_df.empty:
+            break
+
+    static_df = None
+    for path in (MUNICIPAL_PRODUCTION_ML, MUNICIPAL_PRODUCTION_RAW):
+        static_df = _try_load_production_from_excel(path)
+        if static_df is not None and not static_df.empty:
+            break
+
+    # Merge logic: keep both, live wins on conflict
+    if live_df is not None and static_df is not None:
+        # Normalize municipality for dedup (case-insensitive)
+        combined = pd.concat([static_df, live_df], ignore_index=True)
+        # Create dedup key: year + municipality lower
+        combined["_muni_norm"] = combined["municipality"].astype(str).str.strip().str.lower()
+        combined["_year_norm"] = pd.to_numeric(combined["year"], errors="coerce").astype("Int64")
+        # Sort so live (later in concat) wins on keep="last"
+        combined = combined.drop_duplicates(subset=["_muni_norm", "_year_norm"], keep="last")
+        combined = combined.drop(columns=["_muni_norm", "_year_norm"])
+        # Sort for stable output
+        try:
+            combined = combined.sort_values(["year", "municipality"]).reset_index(drop=True)
+        except Exception:
+            pass
+        return combined
+    if live_df is not None and not live_df.empty:
+        return live_df
+    if static_df is not None and not static_df.empty:
+        return static_df
     return pd.DataFrame()
 
 

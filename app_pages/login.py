@@ -29,11 +29,11 @@ def login_page():
         except Exception:
             pass
 
-    # Render popup overlay if active (Option B - CSS-only auto-hide, no JS removeChild to avoid React mismatch)
+    # Render popup overlay if active
     if st.session_state.get("show_login_error_popup"):
         popup_msg = st.session_state.get("login_error_msg", GENERIC_LOGIN_ERROR)
         _popup_html = get_error_popup_html(message=popup_msg, duration_ms=4500)
-        # Prefer st.html (raw HTML, no Markdown parsing) — avoids 4-space indented HTML becoming code blocks.
+
         # Fallback to st.markdown with unsafe_allow_html for older Streamlit.
         try:
             # st.html available since Streamlit 1.51
@@ -79,20 +79,20 @@ def login_page():
             max-width: 100% !important;
         }}
 
-        /* EKSATTONG SQUARE WHITE CARD (Kinukulong lahat sa loob) */
+        
         [data-testid="stElementContainer"]:has(.st-key-login_box),
         div[class*="st-key-login_box"] {{
             background-color: #FFFFFF !important;
             border-radius: 16px !important;
             padding: 30px 32px 24px !important;
             box-shadow: 0 15px 35px rgba(0,0,0,0.25) !important;
-            width: 380px !important;            /* Sakto ang lapad, hindi masyadong malapad */
+            width: 380px !important;          
             max-width: 90vw !important;
             margin: 0 auto !important;
             box-sizing: border-box !important;
         }}
 
-        /* Logo styling sa loob ng card */
+        /* Logo styling */
         .login-logo {{
             display: block;
             width: 130px; 
@@ -100,7 +100,7 @@ def login_page():
             margin: 0 auto 15px auto;
         }}
 
-        /* Inputs sa loob ng card */
+        /* Inputs */
         div[data-testid="stTextInput"] label {{
             color: #222222 !important;
             font-size: 12px !important; 
@@ -128,7 +128,7 @@ def login_page():
             margin-top: 4px !important;
         }}
 
-        /* Log in button sa loob ng card */
+        /* Log in button card */
         .stButton > button {{
             width: 100% !important;
             height: 40px !important; 
@@ -213,7 +213,7 @@ def login_page():
         unsafe_allow_html=True,
     )
 
-    # 2b. Auto-clear individual field errors when user has corrected them (so red border via :has disappears)
+    # 2b. Auto-clear individual field errors when user has corrected them
     _stored_field_errors = st.session_state.get("login_field_errors", {})
     if _stored_field_errors:
         _cur_u = str(st.session_state.get("username", "")).strip()
@@ -232,20 +232,19 @@ def login_page():
 
     field_errors = st.session_state.get("login_field_errors", {})
 
-    # 3. Gamit ang Streamlit Container na may key para siguradong NAKALOOB LAHAT
     with st.container(key="login_box"):
         # Logo Image
         logo_html = f'<img class="login-logo" src="data:image/png;base64,{logo_base64}">' if logo_base64 else '<div class="login-logo" style="text-align:center;"><i class="material-symbols-outlined" style="font-size:2rem; color:#1B5E20; vertical-align:middle;">agriculture</i></div>'
         st.markdown(logo_html, unsafe_allow_html=True)
 
-        # Text Inputs (Lahat 'to ay nasa LOOB na ng white box)
+        # Text Inputs
         username = st.text_input(
             "Username",
             placeholder="Enter your username",
             key="username",
             label_visibility="visible"
         )
-        # Inline error malapit sa username input
+        # Inline error
         if field_errors.get("username"):
             st.markdown(f'<div class="field-error">{field_errors["username"]}</div>', unsafe_allow_html=True)
 
@@ -256,14 +255,14 @@ def login_page():
             key="password",
             label_visibility="visible"
         )
-        # Inline error malapit sa password input
+        # Inline error
         if field_errors.get("password"):
             st.markdown(f'<div class="field-error">{field_errors["password"]}</div>', unsafe_allow_html=True)
 
-        # Login Button (Full width sa loob ng box)
+        # Login Button
         login_clicked = st.button("LOG IN", key="login_btn", use_container_width=True)
 
-        # Links sa ilalim - Forgot Password removed, replaced with Need help?
+        # Need help?
         st.markdown(
             """
             <div class="need-help">Need help? <strong>Contact support via login error popup</strong></div>
@@ -281,7 +280,7 @@ def login_page():
         st.session_state.pop("show_login_error_popup", None)
         st.session_state.pop("login_error_time", None)
 
-        # A: Blank fields -> inline error malapit sa input (hindi popup)
+        # A: Blank fields
         username_stripped = (username or "").strip()
         password_stripped = (password or "").strip()
         field_err = {}
@@ -316,7 +315,7 @@ def login_page():
                     loading_placeholder.markdown(
                         get_loading_html(
                             message="Login successful!",
-                            submessage="Redirecting to LGU Dashboard...",
+                            submessage="Redirecting to OPA Dashboard...",
                             logo_base64=logo_base64,
                         ),
                         unsafe_allow_html=True,

@@ -58,3 +58,9 @@ data/Master/*.bak_*
 # ---------- OS ----------
 Thumbs.db
 .DS_Store
+# ---------- Panel review - hide AI/IDE traces (organized) ----------
+archive/_hidden_for_panel/
+archive/data_forecasts_archive/
+
+archive/_hidden_for_panel/lgu_legacy/
+

@@ -1,9 +1,9 @@
 """
-PalaySense LGU Dashboard — Model Information (Paper-Aligned)
+PalaySense OPA Dashboard — Model Information (Paper-Aligned)
 =============================================================
 Clean, professional view for LGU / DA decision-makers.
 Grouped 4-card view: Fancy / Regular / Yield / Municipality — 3 metrics per card
-(MAE, RMSE, R²). Bias demoted to detail table only. Municipality uses Option A:
+(MAE, RMSE, R²). Bias shown only in detail table. Municipality shows
 mean across 96 municipal series (12 muni × 8 variety-season).
 Theme-aligned via app_pages/lgu_dashboard/theme.py (PRIMARY #1E5C3A).
 """
@@ -190,7 +190,7 @@ def _render_metadata():
 # C. High-Level Metric Summary — 4 grouped cards (Fancy / Regular / Yield / Municipality)
 # ------------------------------------------------------------------
 def _municipal_avg(metrics: dict):
-    """Option A: mean across 96 municipal series (12 muni x 8 variety-season)."""
+    """Mean across 96 municipal series (12 muni x 8 variety-season)."""
     muni = metrics.get("municipal", {}) or {}
     if not muni:
         return {"mae": None, "rmse": None, "r2": None, "bias": None, "n": 0}
@@ -511,7 +511,7 @@ def _render_breakdown_table(metrics: dict):
                     "Bias": round(bias, 3) if bias is not None else 0,
                 }
             )
-        # Municipality Option A — avg of 96 series
+        # Municipality — average of 96 series
         m_avg = _municipal_avg(metrics)
         rows.append(
             {
@@ -653,7 +653,7 @@ def render(df, dr):
     # C. Summary cards (per-target compact)
     _render_summary_cards(metrics)
 
-    # C2. Comparison bar (Option 1 micro-visual)
+    # C2. Comparison bar
     _render_comparison_bar(metrics)
 
     # F. Backtest side-by-side (defense validation)

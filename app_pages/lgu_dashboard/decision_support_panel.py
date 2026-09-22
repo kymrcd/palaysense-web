@@ -24,10 +24,29 @@ def _inject_css():
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
         .material-symbols-outlined { font-family:'Material Symbols Outlined' !important; }
-        .ps-dsp-card { background:#fff; border:1px solid #E6EAE6; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
-        .ps-dsp-kpi { background:#fff; border:1px solid #E6EAE6; border-radius:12px; padding:0.85rem 1rem; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
-        .ps-dsp-kpi-val { font-size:1.35rem; font-weight:800; color:#123524; line-height:1.1; letter-spacing:-0.3px; }
-        .ps-dsp-kpi-label { font-size:0.68rem; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:0.4px; }
+        /* Sakto lang — gaya sa filter bar sa pic: compact, no dead space */
+        .ps-dsp-card { background:#fff; border:1px solid #E5E7EB; border-radius:10px; padding:0.65rem 0.85rem 0.60rem 0.85rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); margin:0 0 0.50rem 0; overflow:visible; }
+        .ps-dsp-kpi { background:#fff; border:1px solid #E5E7EB; border-radius:8px; padding:0.60rem 0.65rem; text-align:center; box-shadow:0 1px 2px rgba(0,0,0,0.04); overflow:visible; }
+        .ps-dsp-kpi-val { font-size:1.15rem; font-weight:800; color:#123524; line-height:1.15; letter-spacing:-0.3px; }
+        .ps-dsp-kpi-label { font-size:10px !important; font-weight:700 !important; color:#1B5E20 !important; text-transform:uppercase !important; letter-spacing:0.4px !important; line-height:1.3 !important; margin-bottom:2px !important; white-space:nowrap; overflow:visible; }
+        /* Compact (Overview, no-scroll): denser grid — gaya sa pic, sakto lang spacing */
+        .ps-dsp-compact .ps-dsp-kpi { padding:0.50rem 0.60rem; border-radius:8px; }
+        .ps-dsp-compact .ps-dsp-kpi-val { font-size:1.05rem; }
+        .ps-dsp-compact .ps-dsp-kpi-label { font-size:9px !important; letter-spacing:0.3px !important; line-height:1.3 !important; }
+        .ps-dsp-compact .ps-dsp-kpi-sub { font-size:0.62rem !important; line-height:1.3 !important; }
+        .ps-dsp-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.60rem; margin:0; overflow:visible; }
+        /* Tighten Streamlit vertical rhythm for DSP — gaya sa filter bar */
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-dsp-card),
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-dsp-compact) {
+            padding:0 !important; margin:0 0 0.50rem 0 !important; overflow:visible !important;
+            background:#FFFFFF !important; border:1px solid #E5E7EB !important; border-radius:10px !important; box-shadow:0 1px 2px rgba(0,0,0,0.04) !important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-dsp-card) > div,
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-dsp-compact) > div { padding:0.65rem 0.85rem 0.60rem 0.85rem !important; gap:0 !important; overflow:visible !important; }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-dsp-card) div[data-testid="stHorizontalBlock"],
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ps-dsp-compact) div[data-testid="stHorizontalBlock"] { gap:0.60rem !important; align-items:end !important; overflow:visible !important; }
+        section[data-testid="stMain"] div[data-testid="stVerticalBlock"]:has(.ps-dsp-card),
+        section[data-testid="stMain"] div[data-testid="stVerticalBlock"]:has(.ps-dsp-compact) { gap:0.30rem !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -41,6 +60,7 @@ def render_decision_support_panel(
     low_yield: float = 4.04,
     price_month: str = "Sep 2026",
     yield_period: str = "Next 4 quarters",
+    compact: bool = False,
 ):
     """
     Executive Decision Support Panel for Bataan.
@@ -50,6 +70,8 @@ def render_decision_support_panel(
     yield_period: e.g. "Q4 2026 – Q3 2027" for yield horizon
     When clean state (no dataset), pass 0 for all numbers — panel auto-shows
     "No reading" instead of interpretations.
+    compact=True: dense no-scroll variant for Overview — pure HTML 2x2 grid,
+    no Streamlit columns/popover buttons, details behind "View Full Insights".
     """
     _inject_css()
     is_clean = (avg_yield == 0 and low_yield == 0 and supply_shortfall == 0 and price_outlook == 0)
@@ -95,28 +117,101 @@ def render_decision_support_panel(
     except Exception:
         _p_word = "mild"
 
-    # Header — executive — now shows both horizons to avoid confusion
+    # ---- Compact no-scroll variant (Overview): single HTML block, no columns/popovers ----
+    if compact:
+        _sup_col = PRIMARY if (supply_shortfall >= 0 and not is_clean) else AMBER
+        _pr_col = PRIMARY if (price_outlook >= -1 and not is_clean) else AMBER
+        _dir1 = "above" if supply_shortfall >= 0 else "below"
+        _pdir = "increase" if price_outlook >= 0 else "decrease"
+        st.markdown(
+            f"""
+            <div class="ps-dsp-compact" style="background:#fff; border:1px solid {BORDER}; border-radius:10px; padding:0.65rem 0.85rem 0.60rem 0.85rem; box-shadow:0 1px 2px rgba(0,0,0,0.04); overflow:visible;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; background:{PRIMARY}; color:#fff; border-radius:7px; flex-shrink:0;">
+                        <i class="material-symbols-outlined" style="font-size:15px; line-height:1;">agriculture</i>
+                    </span>
+                    <div style="min-width:0;">
+                        <div style="font-size:0.85rem; font-weight:800; color:{DARK}; letter-spacing:-0.2px; line-height:1.15;">Decision Support Panel</div>
+                        <div style="font-size:0.66rem; color:{MUTED}; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Bataan • Price: {price_month if not is_clean else "No data"} • Yield: {yield_period if not is_clean else "No data"}</div>
+                    </div>
+                </div>
+                <div class="ps-dsp-grid">
+                    <div class="ps-dsp-kpi" style="border-top:2px solid {_sup_col}">
+                        <div class="ps-dsp-kpi-label">Production vs Target</div>
+                        <div class="ps-dsp-kpi-val" style="color:{_sup_col}">{supply_shortfall:+.1f}%</div>
+                        <div class="ps-dsp-kpi-sub" style="font-size:0.66rem; color:{MUTED};">{abs(supply_shortfall):.1f}% {_dir1} DA target</div>
+                    </div>
+                    <div class="ps-dsp-kpi" style="border-top:2px solid {_pr_col}">
+                        <div class="ps-dsp-kpi-label">Farmgate Price • {price_month if not is_clean else "—"}</div>
+                        <div class="ps-dsp-kpi-val" style="color:{_pr_col}">{price_outlook:+.1f}%</div>
+                        <div class="ps-dsp-kpi-sub" style="font-size:0.66rem; color:{MUTED};">Projected to {_pdir} {abs(price_outlook):.1f}%</div>
+                    </div>
+                    <div class="ps-dsp-kpi" style="border-top:2px solid {PRIMARY}">
+                        <div class="ps-dsp-kpi-label">Expected Avg Harvest</div>
+                        <div class="ps-dsp-kpi-val">{avg_yield:.2f} <span style="font-size:0.65rem; font-weight:700; color:{MUTED};">MT/ha</span></div>
+                        <div class="ps-dsp-kpi-sub" style="font-size:0.66rem; color:{MUTED};">Avg over {yield_period if not is_clean else "next 4Q"}</div>
+                    </div>
+                    <div class="ps-dsp-kpi" style="border-top:2px solid #6B7280">
+                        <div class="ps-dsp-kpi-label">Worst-Case Estimate</div>
+                        <div class="ps-dsp-kpi-val">{low_yield:.2f} <span style="font-size:0.65rem; font-weight:700; color:{MUTED};">MT/ha</span></div>
+                        <div class="ps-dsp-kpi-sub" style="font-size:0.66rem; color:{MUTED};">Lowest quarter in period</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.expander("View Full Insights", expanded=bool(st.session_state.get("dsp_view_full_insights", False))):
+            if is_clean:
+                st.info("No reading — no dataset. Upload historical price & yield data via Import Data.", icon="ℹ️")
+            else:
+                _pw = "decrease" if price_outlook < 0 else "increase"
+                if is_clean:
+                    pass
+                elif (supply_shortfall >= 0) and (price_outlook >= -1):
+                    st.success(f"**On Track:** Harvest **{supply_shortfall:+.1f}% vs DA target** (avg **{avg_yield:.2f}**, low **{low_yield:.2f} MT/ha**); farmgate **{price_outlook:+.1f}%** in {price_month}. Supply sufficient — routine monitoring.", icon="✅")
+                else:
+                    st.warning(f"**Early warning ({yield_period} / {price_month}):** harvest **{abs(supply_shortfall):.1f}% below** DA target (avg **{avg_yield:.2f}**, low **{low_yield:.2f} MT/ha**); farmgate to **{_pw} by {abs(price_outlook):.1f}%**. Validate volume vs harvested area before planning.", icon="⚠️")
+                if _muni_line:
+                    st.caption(_muni_line)
+        st.caption("⚠️ *Forecast interpretation vs DA 4.50 MT/ha & historical avg — Bataan. Not an operations directive.*")
+        return
+
+    # Header — executive — KPIs first, View Full Insights toggle (forest-green, color-scheme aligned)
+    _hdr_left, _hdr_right = st.columns([0.68, 0.32])
+    with _hdr_left:
+        st.markdown(
+            f"""
+            <div style="display:flex; align-items:center; gap:0.6rem; margin:0.2rem 0 0.2rem 0;">
+                <span style="display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; background:{PRIMARY}; color:#fff; border-radius:8px; flex-shrink:0;">
+                    <i class="material-symbols-outlined" style="font-size:18px; line-height:1;">agriculture</i>
+                </span>
+                <div>
+                    <div style="font-size:1.05rem; font-weight:800; color:{DARK}; letter-spacing:-0.3px; line-height:1.1;">PalaySense Decision Support Panel</div>
+                    <div style="font-size:0.76rem; color:{MUTED}; font-weight:500;">Province of Bataan • Price: {price_month if not is_clean else "No data"} • Yield: {yield_period if not is_clean else "No data"}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with _hdr_right:
+        _view_full = st.toggle("View Full Insights", value=st.session_state.get("dsp_view_full_insights", False), key="dsp_view_full_insights", help="ON: show Core Problem + sub-problem details (floating). OFF: KPIs only.")
     st.markdown(
         f"""
-        <div style="display:flex; align-items:center; gap:0.6rem; margin:0.2rem 0 0.9rem 0;">
-            <span style="display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; background:{PRIMARY}; color:#fff; border-radius:8px;">
-                <i class="material-symbols-outlined" style="font-size:18px; line-height:1;">agriculture</i>
-            </span>
-            <div>
-                <div style="font-size:1.05rem; font-weight:800; color:{DARK}; letter-spacing:-0.3px; line-height:1.1;">PalaySense Decision Support Panel</div>
-                <div style="font-size:0.76rem; color:{MUTED}; font-weight:500;">Province of Bataan • Price: {price_month if not is_clean else "No data"} • Yield: {yield_period if not is_clean else "No data"}</div>
-            </div>
-            <span style="margin-left:auto; font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; padding:0.25rem 0.55rem; border-radius:999px;">LGU Executive Brief</span>
+        <div style="margin:0 0 0.9rem 0;">
+            <span style="font-size:0.68rem; font-weight:700; color:{PRIMARY}; background:#ECFDF5; border:1px solid #A7F3D0; padding:0.25rem 0.55rem; border-radius:999px;">LGU Executive Brief — KPIs only</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # KPIs — use yield gap, not volume shortfall
+    # KPIs — use yield gap, not volume shortfall — 2x2 grid (fits dual-view right column, no dead space)
     is_good_supply = supply_shortfall >= 0
     is_good_price = price_outlook >= -1
 
-    c1, c2, c3, c4 = st.columns(4)
+    _row1c1, _row1c2 = st.columns(2)
+    _row2c1, _row2c2 = st.columns(2)
+    c1, c2, c3, c4 = _row1c1, _row1c2, _row2c1, _row2c2
     with c1:
         col = PRIMARY if is_good_supply and not is_clean else AMBER
         label = "Production vs Target"
@@ -193,7 +288,21 @@ def render_decision_support_panel(
                 st.info("No data for chart.")
 
 
-    # Core problem — changes if outcome is good
+    if not _view_full:
+        st.caption("Toggle **View Full Insights** above for Core Problem + sub-problem details (floating popovers, no page scroll).")
+        st.markdown(
+            """
+            <div style="text-align:center; margin-top:0.9rem; padding:0.6rem 0.8rem; border-top:1px solid #E5E7EB;">
+                <span style="font-size:0.72rem; color:#6B7280; font-style:italic; line-height:1.4;">
+                ⚠️ <em>Disclaimer: Figures above are forecast interpretations (price + yield models vs DA 4.50 MT/ha and historical average) for the Province of Bataan. This panel does not prescribe LGU operations, procurement, or infrastructure actions.</em>
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    # Core problem (inline) — sub-problems float via popovers below
     with st.container(border=True):
         if is_clean:
             st.markdown(

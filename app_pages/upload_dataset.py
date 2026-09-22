@@ -80,7 +80,7 @@ def _show_upload_success_dialog(refresh_key: int, timestamp: str, prov_summary: 
                           color:#0F2A1D; letter-spacing:0.15px; line-height:1.2;">Dataset Successfully Cataloged</div>
               <div style="font-family:Inter, sans-serif; font-weight:400; font-size:13.5px; color:#2E3B33;
                           margin-top:6px; line-height:1.55;">
-                The submitted dataset has been verified and integrated. Predictive analytics and forecasts are now live on the LGU Dashboard. This record is authorized for official planning, budget allocation, and reporting.
+                The submitted dataset has been verified and integrated. Predictive analytics and forecasts are now live on the OPA Dashboard. This record is authorized for official planning, budget allocation, and reporting.
               </div>
             </div>
           </div>
@@ -157,8 +157,8 @@ def _show_upload_success_dialog(refresh_key: int, timestamp: str, prov_summary: 
         if st.button("Close Window", use_container_width=True, key="dialog_close_btn"):
             st.rerun()
     with c2:
-        # Primary navy/slate — stay inside LGU dashboard, do not jump to Overview landing page
-        if st.button("Proceed to LGU Dashboard →", use_container_width=True, key="dialog_goto_btn", type="primary"):
+        # Primary navy/slate — stay inside OPA dashboard, do not jump to Overview landing page
+        if st.button("Proceed to OPA Dashboard →", use_container_width=True, key="dialog_goto_btn", type="primary"):
             st.session_state["lgu_page"] = "overview"
             st.rerun()
 
@@ -555,7 +555,7 @@ def upload_dataset():
                 if st.button("Reset uploader", use_container_width=True, key="post_pipeline_rerun"):
                     st.rerun()
             with c2:
-                if st.button("Go to LGU Dashboard →", use_container_width=True, key="post_goto_dash"):
+                if st.button("Go to OPA Dashboard →", use_container_width=True, key="post_goto_dash"):
                     st.session_state["lgu_page"] = "overview"
                     st.rerun()
 
