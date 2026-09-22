@@ -526,21 +526,32 @@ def _format_period_short(labs):
 # Vectorized municipal price averages (replaces per-municipality loop)
 # ------------------------------------------------------------------
 def _compute_municipal_avg_prices(dr, selected_class):
-    """Return {municipality: avg_price} for the given classification, vectorized."""
+    """Return {municipality: avg_price} for the given classification, vectorized.
+
+    Averages across BOTH Dry and Wet for the classification (so the table price
+    aligns with the selected Rice Classification, not just Dry).
+    """
     df_forecast = getattr(dr, "df_municipal_forecasts", None)
     if df_forecast is None or getattr(df_forecast, "empty", True):
         return {}
-    _, df_dry, _, _ = _prepare_forecast_df(dr, [], selected_class)
-    if df_dry is None or df_dry.empty:
+    _, df_dry, df_wet, _ = _prepare_forecast_df(dr, [], selected_class)
+    cols = [c for c in ["Month 1", "Month 2", "Month 3"]]
+    frames = []
+    for _df in (df_dry, df_wet):
+        if _df is None or getattr(_df, "empty", True):
+            continue
+        use_cols = [c for c in cols if c in _df.columns]
+        if not use_cols:
+            continue
+        tmp = _df[["Municipality"] + use_cols].copy()
+        for c in use_cols:
+            tmp[c] = pd.to_numeric(tmp[c], errors="coerce")
+        tmp["avg_price"] = tmp[use_cols].mean(axis=1)
+        frames.append(tmp[["Municipality", "avg_price"]])
+    if not frames:
         return {}
-    cols = [c for c in ["Month 1", "Month 2", "Month 3"] if c in df_dry.columns]
-    if not cols:
-        return {}
-    tmp = df_dry.copy()
-    for c in cols:
-        tmp[c] = pd.to_numeric(tmp[c], errors="coerce")
-    tmp["avg_price"] = tmp[cols].mean(axis=1)
-    grouped = tmp.groupby("Municipality")["avg_price"].mean()
+    combined = pd.concat(frames, ignore_index=True)
+    grouped = combined.groupby("Municipality")["avg_price"].mean()
     return grouped.to_dict()
 
 
@@ -593,24 +604,24 @@ def _render_table_filters(dr):
 
 
 def _render_summary_kpis(df_dry, df_wet, selected_class):
-    """Top section: Forecasted values (separate from historical KPIs)."""
+    """Top section: Forecasted values (separate from historical KPIs). Dry/Wet = moisture, not season."""
     with theme.section_card(title="Forecasted Values — System-Generated",
-                            desc=f"Average predicted prices by season for {selected_class}. Separate from historical KPIs.",
+                            desc=f"Average predicted prices by moisture for {selected_class}. Separate from historical KPIs.",
                             icon_name="auto_awesome"):
-        dry_avg = _season_avg(df_dry)      # Dry Season (Peak)
-        wet_avg = _season_avg(df_wet)      # Wet Season (Off-Peak)
+        dry_avg = _season_avg(df_dry)      # Dry palay
+        wet_avg = _season_avg(df_wet)      # Wet palay
         price_diff = dry_avg - wet_avg     # Estimated difference
 
         diff_arrow = "↑" if price_diff >= 0 else "↓"
         diff_color = theme.SUCCESS if price_diff >= 0 else theme.DANGER
 
         cards = [
-            theme.kpi_card("Avg Predicted Dry Season Price", f"₱{dry_avg:.2f}",
-                           "Peak season estimate", "sunny",
+            theme.kpi_card("Avg Predicted Dry Palay Price", f"₱{dry_avg:.2f}",
+                           "Dry", "sunny",
                            icon_bg="rgba(245,158,11,0.12)", icon_color="#F59E0B",
                            accent="#F59E0B"),
-            theme.kpi_card("Avg Predicted Wet Season Price", f"₱{wet_avg:.2f}",
-                           "Off-peak season estimate", "water_drop",
+            theme.kpi_card("Avg Predicted Wet Palay Price", f"₱{wet_avg:.2f}",
+                           "Wet", "water_drop",
                            icon_bg="rgba(37,99,235,0.12)", icon_color="#2563EB",
                            accent="#2563EB"),
             theme.kpi_card("Estimated Price Difference", f"{diff_arrow} ₱{abs(price_diff):.2f}",
@@ -837,21 +848,15 @@ def render(df, dr):
         """, unsafe_allow_html=True)
 
         # --- TOP: Single consolidated classification + dynamic info ---
+        # Dry / Wet here refers to palay moisture, NOT cropping season.
         try:
             dyn_labels = month_labels if month_labels and len(month_labels) == 3 else _municipal_month_labels(dr)
             if dyn_labels and len(dyn_labels) == 3:
                 period_str = f"{dyn_labels[0]} – {dyn_labels[2]}"
-                try:
-                    m_num = pd.to_datetime(dyn_labels[0]).month
-                    season_str = "Dry Season" if m_num <= 6 else "Wet Season"
-                except Exception:
-                    season_str = "Dry Season"
             else:
                 period_str = "Next 3 months"
-                season_str = "Dry Season"
         except Exception:
             period_str = "Next 3 months"
-            season_str = "Dry Season"
 
         with st.container(border=True):
             top1, top2 = st.columns([0.38, 0.62], gap="medium")
@@ -863,18 +868,18 @@ def render(df, dr):
                     index=0,
                     key="muni_rice_class_top_v2",
                     label_visibility="collapsed",
-                    help="Binhi classification — Hybrid/Inbred × Premium/Ordinary. Filters the municipal forecasts.",
+                    help="Binhi classification — Hybrid/Inbred × Premium/Ordinary. Filters the municipal forecasts by moisture (Dry / Wet).",
                 )
             with top2:
                 st.markdown(f"""
                 <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:10px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start;">
                   <i class="material-symbols-outlined" style="color:#059669; font-size:20px; margin-top:1px; flex-shrink:0;">lightbulb</i>
                   <div style="font-size:0.78rem; color:#374151; line-height:1.5;"><b style="color:#14532D;">How forecasts work</b><br>
-                  Based on <b>{sel_class_top}</b>. Each municipality has its own projection by binhi type. Forecast period <b>{period_str}</b> ({season_str}).</div>
+                  Based on <b>{sel_class_top}</b>. Each municipality has its own projection by palay moisture (<b>Dry</b> • <b>Wet</b>). Forecast period <b>{period_str}</b>.</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-        _season_top = season_str
+        _season_top = "Dry"
 
         # --- BODY: Left selector + Right chart ---
         left, right = st.columns([0.40, 0.60], gap="medium")
@@ -894,19 +899,10 @@ def render(df, dr):
                     st.markdown(f"""
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                       <span style="font-weight:800; color:#14532D; font-size:0.88rem; display:flex; align-items:center; gap:6px;"><i class="material-symbols-outlined" style="font-size:18px; color:#16A34A;">location_on</i> MUNICIPALITIES</span>
-                      <span class="muni-badge">{len(all_munis)} municipalities</span>
                     </div>
                     """, unsafe_allow_html=True)
 
-                    search = st.text_input(
-                        "Search municipality",
-                        placeholder="Search municipality...",
-                        key="muni_search_v2",
-                        label_visibility="collapsed",
-                    )
-                    st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
-
-                    filtered = [m for m in all_munis if not search or search.lower() in m.lower()]
+                    filtered = list(all_munis)
 
                     prev_selected = st.session_state.get("muni_selected_v2", [])
                     prev_selected = [m for m in prev_selected if m in filtered]
@@ -915,162 +911,136 @@ def render(df, dr):
                         options=filtered,
                         default=prev_selected,
                         key="muni_selected_v2",
-                        help="Select any municipalities to filter the chart. Leave empty to show all municipalities (buong bar graph).",
-                        placeholder="Choose municipalities… (empty = all)",
+                        help="Select any municipalities to filter the chart. Leave empty to show all.",
+                        placeholder="Choose municipalities…",
                     )
 
                     st.caption(f"{len(filtered)} match · {len(selected_munis) if selected_munis else len(filtered)} shown · prices for {sel_class_top}")
 
-                    if filtered:
-                        ref_rows = []
-                        for m in filtered[:MUNI_MAX_LIST]:
-                            t, c = tag_map.get(m, ("Inbred", "Ordinary"))
+                    # Table now aligns with both filters: municipality + rice classification, sorted by highest avg price
+                    display_munis = selected_munis if selected_munis else filtered
+                    # Derive Type/Class directly from selected Rice Classification so table matches header (e.g. Inbred Premium)
+                    _parts = str(sel_class_top).strip().split()
+                    _sel_type = _parts[0] if len(_parts) >= 1 else "Inbred"
+                    _sel_class = _parts[1] if len(_parts) >= 2 else "Premium"
+                    # Sort by highest avg price for the selected rice classification (price_map already scoped to sel_class_top)
+                    try:
+                        display_munis = sorted(display_munis, key=lambda m: float(price_map.get(m, 0) or 0), reverse=True)
+                    except Exception:
+                        pass
+                    if display_munis:
+                        def _chip(txt, bg, bd, col):
+                            return f'<span style="display:inline-block; background:{bg}; border:1px solid {bd}; color:{col}; padding:3px 8px; border-radius:999px; font-size:0.74rem; font-weight:700; line-height:1; white-space:nowrap;">{txt}</span>'
+                        rows_html = ""
+                        for m in display_munis[:MUNI_MAX_LIST]:
                             p = float(price_map.get(m, 0.0) or 0.0)
-                            ref_rows.append({"Municipality": m.title(), "Type": t, "Class": c, "Avg Price (₱/kg)": round(p, 2)})
-                        ref_df = pd.DataFrame(ref_rows)
-                        st.dataframe(
-                            ref_df,
-                            use_container_width=True,
-                            hide_index=True,
-                            height=340,
-                            column_config={
-                                "Municipality": st.column_config.TextColumn("Municipality", width="medium"),
-                                "Type": st.column_config.TextColumn("Type", width="small"),
-                                "Class": st.column_config.TextColumn("Class", width="small"),
-                                "Avg Price (₱/kg)": st.column_config.NumberColumn("Avg Price (₱/kg)", format="₱%.2f", width="small"),
-                            },
-                        )
-                        if len(filtered) > MUNI_MAX_LIST:
-                            st.caption(f"+ {len(filtered) - MUNI_MAX_LIST} more — refine search")
+                            price_chip = _chip(f"\u20B1{p:.2f}", "#ECFDF5", "#A7F3D0", "#065F46")
+                            rows_html += f'<tr><td style="padding:10px 12px; font-size:0.84rem; color:#111827; font-weight:600; border-bottom:1px solid #F3F4F6;">{m.title()}</td><td style="padding:6px 12px; text-align:right; border-bottom:1px solid #F3F4F6;">{price_chip}</td></tr>'
+                        table_html = f'''
+                        <div style="max-height:340px; overflow-y:auto; border:1px solid #E5E7EB; border-radius:10px; background:white;">
+                          <table style="width:100%; border-collapse:collapse; font-family:Inter, sans-serif;">
+                            <thead style="position:sticky; top:0; background:#F9FAFB; z-index:1;">
+                              <tr>
+                                <th style="text-align:left; padding:8px 12px; font-size:0.70rem; color:#6B7280; text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid #E5E7EB;">Municipality</th>
+                                <th style="text-align:right; padding:8px 12px; font-size:0.70rem; color:#6B7280; text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid #E5E7EB;">Avg Price</th>
+                              </tr>
+                            </thead>
+                            <tbody>{rows_html}</tbody>
+                          </table>
+                        </div>
+                        '''
+                        st.markdown(table_html, unsafe_allow_html=True)
+                        if len(display_munis) > MUNI_MAX_LIST:
+                            st.caption(f"+ {len(display_munis) - MUNI_MAX_LIST} more")
                     else:
-                        st.info("No municipalities match the current search/filter.")
+                        st.info("No municipalities available.")
 
                     st.session_state["_muni_conn_v2"] = (selected_munis, sel_class_top, _season_top, filtered, tag_map)
 
         with right:
             with st.container(border=True):
+                # Keep compatibility with stored tuple (season slot ignored — Dry/Wet is moisture, not season)
                 conn = st.session_state.get("_muni_conn_v2", ([], sel_class_top, _season_top, [], {}))
                 if isinstance(conn, tuple) and len(conn) >= 2:
                     lm = conn[0] if isinstance(conn[0], list) else []
                     lc = conn[1] if len(conn) > 1 and isinstance(conn[1], str) else sel_class_top
-                    ss_default = conn[2] if len(conn) > 2 and isinstance(conn[2], str) else _season_top
                     filtered_state = conn[3] if len(conn) > 3 and isinstance(conn[3], list) else []
                     tag_map_state = conn[4] if len(conn) > 4 and isinstance(conn[4], dict) else tag_map if 'tag_map' in locals() else {}
                 else:
-                    lm, lc, ss_default, filtered_state, tag_map_state = [], sel_class_top, _season_top, [], {}
+                    lm, lc, filtered_state, tag_map_state = [], sel_class_top, [], {}
 
                 lc = sel_class_top
-                # Season selector — KPI & chart follow this selection
-                try:
-                    _season_choice = st.segmented_control(
-                        "Season",
-                        options=["Dry Season", "Wet Season"],
-                        default=ss_default if ss_default in ["Dry Season", "Wet Season"] else _season_top,
-                        key="muni_season_selector_v2",
-                    )
-                    if _season_choice is None:
-                        _season_choice = ss_default if ss_default in ["Dry Season", "Wet Season"] else _season_top
-                except Exception:
-                    _season_choice = st.radio(
-                        "Season",
-                        options=["Dry Season", "Wet Season"],
-                        index=0 if (ss_default == "Dry Season" or _season_top == "Dry Season") else 1,
-                        horizontal=True,
-                        key="muni_season_selector_v2_radio",
-                    )
-                ss = _season_choice
 
                 if lm:
                     if len(lm) == 1:
                         ctx_muni = lm[0].title()
-                        ctx_sub = f"{lc} · {ss} · 1 municipality"
+                        ctx_sub = f"{lc} · 1 municipality"
                     else:
                         ctx_muni = f"{len(lm)} Municipalities Compared"
-                        ctx_sub = f"{lc} · {ss} · {', '.join([m.title() for m in lm[:3]])}{' …' if len(lm)>3 else ''}"
+                        ctx_sub = f"{lc} · {', '.join([m.title() for m in lm[:3]])}{' …' if len(lm)>3 else ''}"
                 else:
                     ctx_muni = "Overview — Top Municipalities"
-                    ctx_sub = f"{lc} · {ss} · highest avg price"
+                    ctx_sub = f"{lc} · highest avg price"
 
                 _, ddry, dwet, labs = _prepare_forecast_df(dr, lm, lc)
                 labs = labs if labs and len(labs) == 3 else month_labels
-                df_show = ddry if ss == "Dry Season" else dwet
-                if (df_show is None or df_show.empty) and ddry is not None and not ddry.empty:
-                    df_show = ddry
-                    ss = "Dry Season"
 
-                st.markdown(f"<div style='display:flex;align-items:center;gap:8px;'><i class='material-symbols-outlined' style='color:#16A34A;font-size:22px;'>bar_chart</i><b style='color:#14532D; font-size:0.95rem;'>RICE PRICE FORECAST</b></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size:0.88rem;color:#14532D;font-weight:700;margin-top:4px;'>{ctx_muni}</div><div style='font-size:0.78rem;color:#6B7280;'>{ctx_sub}</div><div style='font-size:0.74rem;color:#6B7280;margin-top:2px;'>Average farmgate price (₱/kg) — 3-month projection • {labs[0]} – {labs[2] if len(labs)>2 else ''}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='display:flex;align-items:center;gap:8px;'><i class='material-symbols-outlined' style='color:#16A34A;font-size:22px;'>bar_chart</i><b style='color:#14532D; font-size:0.95rem;'>Granular Forecast for Hybrid and Inbred Palay Prices</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:0.88rem;color:#14532D;font-weight:700;margin-top:4px;'>{ctx_muni}</div><div style='font-size:0.78rem;color:#6B7280;'>{ctx_sub}</div><div style='font-size:0.74rem;color:#6B7280;margin-top:2px;'>Average farmgate price (₱/kg) — 3-month projection • {labs[0]} – {labs[2] if len(labs)>2 else ''} · Dry / Wet</div>", unsafe_allow_html=True)
 
-                if df_show is None or df_show.empty:
+                # Show Dry/Wet as moisture (not season) — use tabs so both are accessible
+                if (ddry is None or ddry.empty) and (dwet is None or dwet.empty):
                     st.info("No forecasts for the current selection. Try another classification or clear the municipality filter.")
                 else:
-                    _municipal_season_bar(df_show, labs, lc, f"{ss} Crop Cycle", "muni_fig_v3")
+                    # Tabs: Dry Palay | Wet Palay — labels without 'Season'
+                    try:
+                        tab_dry, tab_wet = st.tabs(["Dry Palay", "Wet Palay"])
+                    except Exception:
+                        tab_dry, tab_wet = st.tabs(["Dry", "Wet"])
+                    with tab_dry:
+                        if ddry is None or ddry.empty:
+                            st.info("No Dry palay forecast for this selection.")
+                        else:
+                            _municipal_season_bar(ddry, labs, lc, "Dry Palay", "muni_fig_dry_v3")
+                    with tab_wet:
+                        if dwet is None or dwet.empty:
+                            st.info("No Wet palay forecast for this selection.")
+                        else:
+                            _municipal_season_bar(dwet, labs, lc, "Wet Palay", "muni_fig_wet_v3")
 
                 with st.expander("Show Forecast Table (Numbers)", expanded=False):
-                    if df_show is not None and not df_show.empty:
-                        disp = df_show[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": labs[0], "Month 2": labs[1], "Month 3": labs[2]})
-                        disp["Municipality"] = disp["Municipality"].astype(str).str.title()
-                        st.dataframe(disp, use_container_width=True, hide_index=True, height=220)
-                        st.caption(f"Displaying {len(disp)} forecast row{'s' if len(disp)!=1 else ''} for {lc}.")
-                    else:
-                        st.info("No forecasts for selection.")
+                    st.caption("Note: System-generated forecast — read-only. Use the button to download CSV (editing disabled).")
+                    # Show both Dry/Wet tables tabbed
+                    try:
+                        t_dry, t_wet = st.tabs(["Dry", "Wet"])
+                    except Exception:
+                        t_dry, t_wet = st.tabs(["Dry", "Wet"])
+                    with t_dry:
+                        if ddry is not None and not ddry.empty:
+                            disp = ddry[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": labs[0], "Month 2": labs[1], "Month 3": labs[2]})
+                            disp["Municipality"] = disp["Municipality"].astype(str).str.title()
+                            st.data_editor(disp, use_container_width=True, hide_index=True, height=220, disabled=True, key=f"forecast_editor_dry_{lc}_{len(lm)}")
+                            st.caption(f"Displaying {len(disp)} Dry palay row{'s' if len(disp)!=1 else ''} for {lc}.")
+                            try:
+                                _csv_dry = disp.to_csv(index=False).encode("utf-8")
+                                st.download_button(label="Download Dry CSV — System-generated", data=_csv_dry, file_name=f"forecast_{lc.replace(' ', '_')}_Dry.csv", mime="text/csv", key=f"dl_dry_csv_{lc}_{len(lm)}", use_container_width=True)
+                            except Exception:
+                                pass
+                        else:
+                            st.info("No Dry forecast.")
+                    with t_wet:
+                        if dwet is not None and not dwet.empty:
+                            disp = dwet[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": labs[0], "Month 2": labs[1], "Month 3": labs[2]})
+                            disp["Municipality"] = disp["Municipality"].astype(str).str.title()
+                            st.data_editor(disp, use_container_width=True, hide_index=True, height=220, disabled=True, key=f"forecast_editor_wet_{lc}_{len(lm)}")
+                            st.caption(f"Displaying {len(disp)} Wet palay row{'s' if len(disp)!=1 else ''} for {lc}.")
+                            try:
+                                _csv_wet = disp.to_csv(index=False).encode("utf-8")
+                                st.download_button(label="Download Wet CSV — System-generated", data=_csv_wet, file_name=f"forecast_{lc.replace(' ', '_')}_Wet.csv", mime="text/csv", key=f"dl_wet_csv_{lc}_{len(lm)}", use_container_width=True)
+                            except Exception:
+                                pass
+                        else:
+                            st.info("No Wet forecast.")
 
-                # ---- FORECAST SUMMARY KPI — dynamically follows selected season + municipality ----
-                try:
-                    _avg_price = _season_avg(df_show) if df_show is not None and not df_show.empty else 0.0
-                    _change_pct, _last_avg = _compute_season_change_pct(dr, lm, lc, ss)
-                    _period_short = _format_period_short(labs)
-                    # Municipality-aware title: image shows "FORECAST SUMMARY — ABUCAY"
-                    if lm and len(lm) == 1:
-                        _muni_title = lm[0].strip().upper()
-                    elif lm and len(lm) > 1:
-                        _muni_title = f"{len(lm)} MUNICIPALITIES"
-                    else:
-                        # Overview — use selected municipality if any filtered else generic
-                        _muni_title = "OVERVIEW"
-                    _season_label = "DRY" if ss == "Dry Season" else "WET"
-                    _season_icon = "wb_sunny" if ss == "Dry Season" else "water_drop"
-                    _season_color = "#92400E" if ss == "Dry Season" else "#1E40AF"
-                    _season_bg = "#FFFBEB" if ss == "Dry Season" else "#EFF6FF"
-                    _season_border = "#FDE68A" if ss == "Dry Season" else "#BFDBFE"
-
-                    # Change display
-                    if _change_pct is None or pd.isna(_change_pct):
-                        _change_text = "—"
-                        _change_sub = "vs. last period"
-                        _change_icon = "trending_flat"
-                        _change_color = "#6B7280"
-                    else:
-                        _sign = "+" if _change_pct >= 0 else ""
-                        _change_text = f"{_sign}{_change_pct:.1f}%"
-                        _change_sub = "vs. last period"
-                        _change_icon = "trending_up" if _change_pct >= 0 else "trending_down"
-                        _change_color = "#16A34A" if _change_pct >= 0 else "#DC2626"
-
-                    st.markdown(f"""
-                    <div style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px; padding:8px 10px; margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
-                      <span style="font-family:monospace; font-size:0.72rem; color:#374151; font-weight:700; letter-spacing:0.4px;">FORECAST SUMMARY — {_muni_title}</span>
-                      <span style="font-size:0.65rem; color:#6B7280;">{lc} · {_season_label}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
-                      <div style="background:{_season_bg}; border:1px solid {_season_border}; border-radius:12px; padding:12px 10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
-                        <div style="font-size:0.68rem; color:{_season_color}; text-transform:uppercase; letter-spacing:0.3px; display:flex; align-items:center; justify-content:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">{_season_icon}</i> AVG. {_season_label}</div>
-                        <div style="font-weight:800; color:{_season_color}; font-size:1.05rem; margin-top:2px;">₱{_avg_price:.2f} <span style="font-weight:400; font-size:0.70rem; color:#6B7280;">/kg</span></div>
-                      </div>
-                      <div style="background:white; border:1px solid #E5E7EB; border-radius:12px; padding:12px 10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
-                        <div style="font-size:0.68rem; color:#6B7280; text-transform:uppercase; letter-spacing:0.3px; display:flex; align-items:center; justify-content:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">{_change_icon}</i> CHANGE</div>
-                        <div style="font-weight:800; color:{_change_color}; font-size:1.05rem; margin-top:2px;">{_change_text}</div>
-                        <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">{_change_sub}</div>
-                      </div>
-                      <div style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:12px; padding:12px 10px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
-                        <div style="font-size:0.68rem; color:#6B7280; text-transform:uppercase; letter-spacing:0.3px; display:flex; align-items:center; justify-content:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">calendar_month</i> PERIOD</div>
-                        <div style="font-size:0.78rem; color:#374151; font-weight:600; margin-top:2px;">3 months</div>
-                        <div style="font-size:0.70rem; color:#6B7280; margin-top:1px;">{_period_short}</div>
-                      </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                except Exception as exc:
-                    logger.debug("bottom KPI failed: %s", exc)
+                pass  # Forecast Summary KPI removed per request
 
