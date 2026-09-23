@@ -13,63 +13,70 @@ def top_navigation():
     """
 
     # =====================================================
-    # NAVIGATION BAR STYLES
+    # NAVIGATION BAR STYLES — reverted + fixed alignment for "About Us"
     # =====================================================
     st.markdown("""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
+    /* Wrapper to scope top-nav buttons only */
+    .topnav-wrap { margin: 0 -1rem; }
 
     /* Bottom border separating navbar from page content */
     .navbar-divider {
-        margin-top: -1rem;
-        margin-bottom: 2rem;
+        margin-top: 0.6rem;
+        margin-bottom: 1.2rem;
         border-bottom: 1px solid #e5e5e5;
     }
 
-    /* Navigation button container */
-    div[data-testid="stButton"] {
-        margin-top: 15px; 
+    /* Scope nav buttons — avoid leaking to sidebar */
+    .topnav-wrap div[data-testid="stButton"] {
+        margin-top: 0 !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
-    
-    /* Navigation buttons */
-    div[data-testid="stButton"] > button {
-        border: none;
-        background: transparent;
-    
-        color: #1B5E20;
-    
-        font-family: Poppins, sans-serif;
-        font-size: 1.2rem;
-        font-weight: 600;
-    
-        width: 100%;
-        height: 45px;
-    
-        transition: 0.3s;
+    .topnav-wrap div[data-testid="stButton"] > button {
+        border: none !important;
+        background: transparent !important;
+        color: #1B5E20 !important;
+        font-family: Poppins, sans-serif !important;
+        font-size: 0.92rem !important;
+        font-weight: 600 !important;
+        width: 100% !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        padding: 0 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        white-space: nowrap !important;
+        line-height: 1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
-
-    /* Hover effect */
-    div[data-testid="stButton"] > button:hover {
-        color: #2E7D32;
-        background: rgba(27, 94, 32, 0.05);
+    .topnav-wrap div[data-testid="stButton"] > button:hover {
+        color: #2E7D32 !important;
+        background: rgba(27, 94, 32, 0.06) !important;
     }
-
+    /* Keep divider tight */
+    .topnav-wrap + .navbar-divider { margin-top: 0.4rem; }
     </style>
     """, unsafe_allow_html=True)
 
     # =====================================================
-    # NAVBAR LAYOUT
+    # NAVBAR LAYOUT — equal-width nav items, About Us correctly sized
     # =====================================================
-    # Column structure:
-    # [Left Margin | Logo | Home | Overview | About | LGU]
+    st.markdown('<div class="topnav-wrap">', unsafe_allow_html=True)
     col_space, col_logo, col1, col2, col3, col5 = st.columns(
-        [0.5, 2, 1, 1, 2, 1]
+        [0.4, 1.6, 1, 1, 1.15, 1], gap="small", vertical_alignment="center"
     )
 
     # =====================================================
     # LOGO
     # =====================================================
     with col_logo:
-        st.image("assets/logo.png", width=150)
+        st.image("assets/logo.png", width=132)
 
     # =====================================================
     # NAVIGATION BUTTONS & ROUTING LOGIC
@@ -136,6 +143,8 @@ def top_navigation():
                 st.rerun()
             except Exception:
                 pass
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # =====================================================
     # NAVBAR DIVIDER
