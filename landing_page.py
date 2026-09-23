@@ -1,6 +1,5 @@
 import streamlit as st
 
-from data.Dashboard_Ready import load_metrics, load_provincial_forecasts
 
 
 def landing_page():
@@ -18,7 +17,7 @@ def landing_page():
         font-family: 'Plus Jakarta Sans', sans-serif !important;
     }
 
-    .hero-title, .hero-subtitle, .section-title, .feature-title, .stats-number, .about-heading, .pillar-title {
+    .hero-title, .hero-subtitle, .section-title, .feature-title, .about-heading, .pillar-title {
         font-family: 'DM Serif Display', serif !important;
     }
 
@@ -135,8 +134,8 @@ def landing_page():
         letter-spacing: -0.3px;
     }
 
-    /* FEATURE & STATS GRIDS */
-    .feature-grid, .stats-grid {
+    /* FEATURE GRID */
+    .feature-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 18px;
@@ -185,33 +184,6 @@ def landing_page():
         font-weight: 400;
         font-size: 1.1rem;
         margin-bottom: 8px;
-    }
-
-    /* STATS CARD */
-    .stats-card {
-        background: #F8FAF8;
-        border-radius: 10px;
-        padding: 22px 18px;
-        text-align: center;
-        border: 1px solid #E2E8F0;
-        border-top: 3px solid #2D6A4F;
-        box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.02);
-    }
-
-    .stats-number {
-        font-size: 2rem;
-        font-weight: 400;
-        color: #1B4332;
-        margin-bottom: 4px;
-        line-height: 1;
-    }
-
-    .stats-label {
-        color: #64748B;
-        font-size: 0.82rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
     }
 
     /* ABOUT SECTION WRAPPER */
@@ -388,89 +360,6 @@ def landing_page():
         <div class="feature-card">
             <div class="feature-title">OPA Insights</div>
             Provide the Office of the Provincial Agriculturist with accessible agricultural intelligence.
-        </div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    # AGRICULTURAL SNAPSHOT — live from forecasts (defensive fallback to hard-coded)
-    st.markdown(
-        '<div class="section-title">Agricultural Snapshot</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Defaults (fallback if parquet missing)
-    tons_display = "4.7"
-    tons_label = "Tons / Hectare"
-    price_display = "₱22.44"
-    price_label = "Avg Palay Price / Kg"
-    conf_display = "86%"
-    conf_label = "Forecast Confidence"
-
-    try:
-        _df = load_provincial_forecasts()
-        _metrics = load_metrics()
-        if not _df.empty and "forecast_type" in _df.columns and "forecast_value" in _df.columns:
-            # 1) Tons/Hectare — next quarter yield (Q4 2026)
-            _yield_series = _df[_df["forecast_type"] == "yield"]["forecast_value"].dropna()
-            if not _yield_series.empty:
-                _yield_val = float(_yield_series.iloc[0])
-                _yield_label_raw = ""
-                if "period_label" in _df.columns:
-                    try:
-                        _yield_label_raw = str(
-                            _df[_df["forecast_type"] == "yield"]["period_label"].dropna().iloc[0]
-                        )
-                    except Exception:
-                        _yield_label_raw = ""
-                tons_display = f"{_yield_val:.2f}"
-                # Keep card label farmer-friendly but add period as tooltip via title attr in label
-                tons_label = f"Tons / Hectare — {_yield_label_raw}" if _yield_label_raw else "Tons / Hectare"
-
-            # 2) Avg Palay Price — September 2026 avg (fancy + regular)/2, since Sept na ngayon
-            if "period_label" in _df.columns:
-                _sep_mask = _df["period_label"].astype(str).str.contains("September", case=False, na=False)
-                _sep_df = _df[_sep_mask]
-                if not _sep_df.empty:
-                    _fancy_sep = _sep_df[_sep_df["forecast_type"] == "fancy"]["forecast_value"].dropna()
-                    _regular_sep = _sep_df[_sep_df["forecast_type"] == "regular"]["forecast_value"].dropna()
-                    if not _fancy_sep.empty and not _regular_sep.empty:
-                        _avg_sep = (float(_fancy_sep.iloc[0]) + float(_regular_sep.iloc[0])) / 2
-                        price_display = f"₱{_avg_sep:.2f}"
-                        price_label = "Avg Palay Price / Kg — September 2026"
-
-            # 3) Blended confidence — avg of (100 - MAPE price) and (100 - MAPE yield)
-            try:
-                _mape_fancy = float(_metrics.get("fancy", {}).get("mape", 0) or 0)
-                _mape_regular = float(_metrics.get("regular", {}).get("mape", 0) or 0)
-                _mape_yield = float(_metrics.get("yield", {}).get("mape", 0) or 0)
-                if _mape_fancy or _mape_regular or _mape_yield:
-                    _avg_price_mape = (_mape_fancy + _mape_regular) / 2 if (_mape_fancy and _mape_regular) else (_mape_fancy or _mape_regular)
-                    _price_conf = 100 - _avg_price_mape
-                    _yield_conf = 100 - _mape_yield
-                    _blended = (_price_conf + _yield_conf) / 2
-                    conf_display = f"{int(round(_blended))}%"
-                    conf_label = "Forecast Confidence (Blended)"
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    st.markdown(
-        f"""
-    <div class="stats-grid">
-        <div class="stats-card">
-            <div class="stats-number">{tons_display}</div>
-            <div class="stats-label">{tons_label}</div>
-        </div>
-        <div class="stats-card">
-            <div class="stats-number">{price_display}</div>
-            <div class="stats-label">{price_label}</div>
-        </div>
-        <div class="stats-card">
-            <div class="stats-number">{conf_display}</div>
-            <div class="stats-label">{conf_label}</div>
         </div>
     </div>
     """,
