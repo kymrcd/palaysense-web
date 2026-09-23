@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import numpy as np
 import plotly.graph_objects as go
-from data.Dashboard_Ready import reload_dashboard_data, load_provincial_forecasts
+from data.Dashboard_Ready import reload_dashboard_data
 from app_pages.lgu_dashboard import data_layer as dl
 
 # safe helpers
@@ -66,79 +66,6 @@ def _pick_column(df, candidates):
     if df is None:
         return None
     return next((c for c in candidates if c in df.columns), None)
-
-# ---- farmer helpers for Pangkalahatan hero/top cards (surgical patch - DETALYE untouched) ----
-def _build_price_context(fc_fancy, fc_regular, forecast_months):
-    def _interp(vals):
-        if not vals or len(vals)==0:
-            return {"vals":[], "labels":[], "lowest":None, "highest":None, "trend_sentence":"Forecast data is being prepared. Check back soon.", "recover_sentence":"No trend data yet."}
-        labels = [m.strftime("%b %Y") if hasattr(m,'strftime') else str(m) for m in forecast_months[:len(vals)]]
-        try:
-            s = pd.Series(vals, dtype=float)
-            mn = float(s.min()); mx = float(s.max())
-            mn_idx = int(s.idxmin()); mx_idx = int(s.idxmax())
-            mn_lab = labels[mn_idx] if mn_idx < len(labels) else "N/A"
-            mx_lab = labels[mx_idx] if mx_idx < len(labels) else "N/A"
-        except Exception:
-            mn=mx=mn_lab=mx_lab=None
-        try:
-            first = float(vals[0]); last = float(vals[-1])
-            if last > first + 0.3:
-                if mn_idx is not None and mx_idx > mn_idx:
-                    trend = f"Forecast rising toward {mx_lab}"
-                    recover = f"The forecast shows prices recovering after {mn_lab}."
-                else:
-                    trend = f"Prices are forecast to increase toward {mx_lab}"
-                    recover = f"Prices are forecast to be highest in {mx_lab}."
-            elif last < first - 0.3:
-                trend = f"Forecast easing toward {mx_lab}"
-                recover = f"The forecast shows prices easing after {mn_lab}."
-            else:
-                trend = "Forecast steady over the next months"
-                recover = "Prices are forecast to remain steady."
-        except Exception:
-            trend = "Forecast steady over the next months"
-            recover = "Prices are forecast to remain steady."
-        return {"vals": vals, "labels": labels, "lowest": (mn_lab, mn), "highest": (mx_lab, mx), "trend_sentence": trend, "recover_sentence": recover}
-    return {"fancy": _interp(list(fc_fancy)), "regular": _interp(list(fc_regular))}
-
-def _harvest_interpretation(yield_vals, quarter_labels):
-    if not yield_vals:
-        return {"avg": None, "range": None, "delta_prev": None, "sentence": "Yield forecast is being prepared."}
-    s = pd.Series(yield_vals, dtype=float).dropna()
-    if s.empty:
-        return {"avg": None, "range": None, "delta_prev": None, "sentence": "Yield forecast is being prepared."}
-    avg = float(s.mean())
-    lo = float(s.min()); hi = float(s.max())
-    delta = float(s.iloc[-1] - s.iloc[0]) if len(s)>1 else 0.0
-    if abs(delta) < 0.05:
-        sent = f"Expected yield remains around {avg:.2f} MT/ha."
-    elif delta > 0:
-        sent = f"Yield is forecast to improve toward {quarter_labels[-1] if quarter_labels else 'next quarter'}."
-    else:
-        sent = f"Yield is forecast to ease slightly after {quarter_labels[0] if quarter_labels else 'next quarter'}."
-    return {"avg":avg, "range":(lo,hi), "delta_prev": delta, "sentence": sent, "lo":lo, "hi":hi}
-
-def _farmer_price_chart(forecast_months, vals, color="#1B5E20"):
-    fig = go.Figure()
-    if not vals or len(vals)==0:
-        return fig
-    labels = [m.strftime("%b %Y") if hasattr(m,'strftime') else str(m) for m in forecast_months[:len(vals)]]
-    fig.add_trace(go.Scatter(x=labels, y=vals, mode="lines+markers+text", name="Forecast", line=dict(color=color, width=2.6), marker=dict(size=7, color=color), text=[f"\u20B1{v:.2f}" if pd.notna(v) else "" for v in vals], textposition="top center", textfont=dict(size=10, color="#1B4332")))
-    try:
-        s = pd.Series(vals, dtype=float)
-        mn_idx = int(s.idxmin()); mx_idx = int(s.idxmax())
-        mn_val = float(s.min()); mx_val = float(s.max())
-        mn_lab = labels[mn_idx]; mx_lab = labels[mx_idx]
-        fig.add_annotation(x=mn_lab, y=mn_val, text=f"Lowest<br>{mn_lab}<br>\u20B1{mn_val:.2f}", showarrow=False, yshift=-28, bgcolor="#F1F8E9", bordercolor="#C5E1A5", borderwidth=1, font=dict(size=9, color="#33691E"), opacity=0.95)
-        fig.add_annotation(x=mx_lab, y=mx_val, text=f"Highest<br>{mx_lab}<br>\u20B1{mx_val:.2f}", showarrow=False, yshift=22, bgcolor="#E8F5E9", bordercolor="#A5D6A7", borderwidth=1, font=dict(size=9, color="#1B5E20"), opacity=0.95)
-        rng = max(vals)-min(vals)
-        pad = max(0.6, rng*0.35)
-        fig.update_yaxes(range=[min(vals)-pad, max(vals)+pad])
-    except Exception:
-        pass
-    fig.update_layout(height=300, margin=dict(l=10,r=10,t=26,b=10), plot_bgcolor="white", paper_bgcolor="white", xaxis=dict(gridcolor="#F3F4F6", showgrid=True, tickfont=dict(size=11, color="#6B7280")), yaxis=dict(gridcolor="#F3F4F6", showgrid=True, tickfont=dict(size=11, color="#6B7280"), title=dict(text="\u20B1/kg", font=dict(size=11, color="#6B7280"))), showlegend=False, hovermode="x unified")
-    return fig
 
 # benchmark helpers
 def _add_benchmark_ref_line(fig, y_value, label, line_color="#78909C", annotation_position="top left"):
@@ -675,35 +602,10 @@ def overview_page():
             _ymax = _ymin = 0
     except Exception:
         _fmax_month = _fmin_month = "N/A"; _fmax_val = _fmin_val = _ymax = _ymin = 0
-    # ---- surgical Pangkalahatan hero context (DETALYE untouched) ----
-    try:
-        _p_fancy = list(forecast_3months_fancy)[:6]
-        _p_regular = list(forecast_variety_3months)[:6]
-        while len(_p_fancy) < len(forecast_months):
-            _p_fancy.append(np.nan)
-        while len(_p_regular) < len(forecast_months):
-            _p_regular.append(np.nan)
-        _price_ctx = _build_price_context(_p_fancy, _p_regular, forecast_months)
-        try:
-            _pf_y = load_provincial_forecasts()
-            _y_labs = _pf_y[_pf_y["forecast_type"]=="yield"]["period_label"].tolist() if not _pf_y.empty else ["Q4 2026", "Q1 2027"]
-        except Exception:
-            _y_labs = ["Q4 2026", "Q1 2027"]
-        _harvest_ctx = _harvest_interpretation(forecast_quarterly_yield, _y_labs)
-        _next_yield = float(pd.Series(forecast_quarterly_yield).dropna().iloc[0]) if forecast_quarterly_yield and len(pd.Series(forecast_quarterly_yield).dropna())>0 else None
-    except Exception:
-        _price_ctx = {"fancy": {"vals": [], "labels": [], "lowest": None, "highest": None, "trend_sentence": "Forecast data is being prepared.", "recover_sentence": "No data"}, "regular": {"vals": [], "labels": [], "lowest": None, "highest": None, "trend_sentence": "", "recover_sentence": ""}}
-        _harvest_ctx = {"avg": None, "lo": None, "hi": None, "sentence": ""}
-        _next_yield = None
     st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap'); .main-container { font-family:'Poppins', sans-serif; padding:0 1% 20px 1%; background:#F8FAF9; } .block-container { padding-left:1rem !important; padding-right:1rem !important; padding-top:2rem !important; padding-bottom:0rem !important; } .hero-banner { background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 40%, #388E3C 100%); padding:35px 40px; border-radius:20px; color:white; margin-bottom:28px; box-shadow:0 12px 35px rgba(27,94,32,0.2); position:relative; overflow:hidden; margin-top:-2.08rem; } .hero-title { font-size:clamp(1.8rem, 2.8vw, 2.5rem); font-weight:900; margin-bottom:8px; letter-spacing:-0.5px; } .hero-subtitle { font-size:1rem; opacity:0.92; line-height:1.6; font-weight:400; } .hero-badge { display:inline-block; background:rgba(255,255,255,0.15); padding:4px 16px; border-radius:20px; font-size:0.75rem; font-weight:600; margin-top:8px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); } .forecast-bar-text { color:#1B5E20 !important; font-weight:700 !important; font-size:0.85rem !important; letter-spacing:0.3px; white-space:nowrap; display:flex; align-items:center; gap:8px; } .kpi-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:16px; } .metric-card { background:#FFFFFF; padding:20px 22px; border-radius:16px; border:1px solid rgba(46,125,50,0.08); position:relative; overflow:hidden; } .metric-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, #2E7D32, #66BB6A); } .metric-title { font-size:0.8rem; font-weight:600; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; } .metric-data { font-size:1.8rem; font-weight:800; color:#1B5E20; margin:4px 0 2px 0; letter-spacing:-0.5px; } .metric-footer { font-size:0.7rem; color:#9CA3AF; font-weight:500; } .metric-change-positive { color:#16A34A; font-weight:700; } .metric-change-negative { color:#DC2626; font-weight:700; } .component-card { background:#FFFFFF; border-radius:16px; border:1px solid rgba(0,0,0,0.05); padding:22px 24px 24px 24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); } .component-header { font-size:1.05rem; font-weight:700; color:#111827; } .component-desc { font-size:0.8rem; color:#6B7280; margin-bottom:16px; font-weight:400; } .advisory-container { display:flex; flex-direction:column; gap:12px; width:100%; margin-top:4px; } .advisory-card { display:flex; align-items:flex-start; padding:16px 20px; border-radius:12px; background:#FFFFFF; border:1px solid #E5E7EB; } .card-status { border-left:4px solid #1B5E20; background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); } .card-marketing { border-left:4px solid #16A34A; background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); } .card-notice { border-left:4px solid #EA580C; background:linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 100%); } .card-optimization { border-left:4px solid #7C3AED; background:linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%); } .card-icon { font-size:1.2rem; margin-right:14px; margin-top:2px; } .card-body { flex:1; font-size:0.88rem; line-height:1.6; color:#374151; } .card-label { font-weight:700; margin-right:4px; } .label-status { color:#1B5E20; } .label-marketing { color:#15803D; } .label-notice { color:#C2410C; } .label-optimization { color:#6D28D9; } .highlight-text { font-weight:700; color:#1B5E20; background:rgba(27,94,32,0.06); padding:1px 6px; border-radius:4px; } .kailan-card { background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); border:1px solid #C8E6C9; border-left:6px solid #1B5E20; border-radius:16px; padding:18px 20px; margin-bottom:16px; }</style>""", unsafe_allow_html=True)
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     if show_all:
-        # surgical farmer hero - Pangkalahatan only, DETALYE unchanged
-        try:
-            _hero_label = forecast_months[0].strftime("%b %Y") if len(forecast_months) > 0 else "Forecast"
-        except Exception:
-            _hero_label = "Forecast"
-        st.markdown(f"""<div style="background: linear-gradient(90deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.82) 45%, rgba(255,255,255,0.10) 100%), url("https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2070"); background-size:cover; background-position:center; border-radius:16px; padding:22px 28px; border:1px solid #E8EFDE; margin-bottom:16px; display:flex; align-items:center; gap:12px;"><div style="width:38px; height:38px; background:#E8F5E9; border-radius:10px; display:flex; align-items:center; justify-content:center; border:1px solid #C8E6C9;"><i class="material-symbols-outlined" style="font-size:20px; color:#2E7D32;">eco</i></div><div><div style="font-family:'DM Serif Display', serif; font-size:20px; color:#1B4332; font-weight:400; margin:0;">Good day, Farmer!</div><div style="font-size:12px; color:#3A4D3D; margin-top:2px;">Here's your palay outlook for Bataan &bull; {_hero_label} forecast &bull; {len(selected_munis) if selected_munis else 0} bayan</div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="hero-banner"><div class="hero-title">Bataan Rice Monitoring & Forecast</div><div class="hero-subtitle">Datos para sa mas matalinong desisyon sa pagsasaka &bull; <strong>Lahat ng Variety</strong></div><span class="hero-badge"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#FFFFFF;">analytics</i>Live Dashboard &bull; {len(selected_munis) if selected_munis else 0} bayan</span></div>""", unsafe_allow_html=True)
     muni_badge = selected_muni if selected_muni != "Lahat ng Bayan" else "Lahat ng Bayan sa Bataan"
     st.markdown(f"""<div style="display:inline-flex; align-items:center; gap:6px; background:#E8F5E9; border:1px solid #C8E6C9; color:#1B5E20; padding:6px 14px; border-radius:999px; font-size:0.78rem; font-weight:700; margin-bottom:14px;"><i class="material-symbols-outlined" style="font-size:16px; color:#1B5E20;">location_on</i>Tinitingnan: {muni_badge} &bull; {selected_start_year}–{selected_end_year}</div>""", unsafe_allow_html=True)
     top5_municipalities = dl.get_top_5_producing_municipalities(muni_filtered, selected_years)
@@ -711,47 +613,72 @@ def overview_page():
     if total_production is None: total_production = dl.get_total_production(muni_filtered, selected_years)
     prod_val = total_production if total_production is not None else 0
     if show_all:
-        # surgical top cards - farmer style, DETALYE untouched
-        _ctx = _price_ctx.get("regular", _price_ctx.get("fancy")) if '_price_ctx' in locals() and _price_ctx else None
-        _vals = _ctx["vals"] if _ctx else []
-        _labs = _ctx["labels"] if _ctx else []
+        st.markdown('<div class="forecast-banner-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([0.8, 0.2], vertical_alignment="center", gap="small")
+        with col1:
+            st.markdown(f'<div class="forecast-bar-text"><i class="material-symbols-outlined" style="font-size:18px; color:#1B5E20;">trending_up</i>Hula para sa {next_month_name} <small style="font-weight:500; color:#2E7D32; margin-left:6px;">({forecast_range_label})</small></div>', unsafe_allow_html=True)
+        with col2:
+            with st.popover("Metadata", icon=":material/info:"):
+                st.markdown("**Source:** Municipal & Provincial Agriculture Office (PhilRice / PSA Aligned)"); st.caption("Periodic / Quarterly LGU Encoding.")
+        fancy_price_has = next_fancy_pred is not None and not pd.isna(next_fancy_pred)
+        regular_price_has = next_regular_pred is not None and not pd.isna(next_regular_pred)
+        fancy_price_display = f"\u20B1{next_fancy_pred:.2f}/kg" if fancy_price_has else "Walang datos"
+        regular_price_display = f"\u20B1{next_regular_pred:.2f}/kg" if regular_price_has else "Walang datos"
+        fancy_has_data = bool(forecast_3months_fancy) and not provincial_year.empty and not pd.isna(avg_fancy_price) and avg_fancy_price != 0
+        regular_has_data = bool(forecast_variety_3months) and not provincial_year.empty and not pd.isna(avg_regular_price) and avg_regular_price != 0
+        fancy_color = "metric-change-positive" if percent_change_fancy >= 0 else "metric-change-negative"
+        regular_color = "metric-change-positive" if percent_change_regular >= 0 else "metric-change-negative"
+        fancy_arrow = "\u2191" if percent_change_fancy >= 0 else "\u2193"
+        regular_arrow = "\u2191" if percent_change_regular >= 0 else "\u2193"
+        fancy_delta_html = f'<span class="{fancy_color}">{fancy_arrow} {abs(percent_change_fancy):.1f}%</span> kumpara sa dati' if fancy_has_data else '<span class="metric-footer">Wala pang datos sa pagbabago</span>'
+        regular_delta_html = f'<span class="{regular_color}">{regular_arrow} {abs(percent_change_regular):.1f}%</span> kumpara sa dati' if regular_has_data else '<span class="metric-footer">Wala pang datos sa pagbabago</span>'
+        forecasted_has_data = bool(forecast_quarterly_yield) and not pd.isna(avg_yield_forecast)
+        forecasted_display = f"{avg_yield_forecast:.2f} MT/ha" if forecasted_has_data else "Walang datos"
+        if forecasted_has_data:
+            forecast_low = _safe_min(forecast_quarterly_yield); forecast_peak = _safe_max(forecast_quarterly_yield)
+            if forecast_low is not None and forecast_peak is not None: forecasted_sub = f"Range: {forecast_low:.2f} - {forecast_peak:.2f} MT/ha"
+            else: forecasted_sub = f"Hula \u2022 {forecast_range_label}"
+        else: forecasted_sub = "Walang hula"
+        # gauge vs NFA
         try:
-            _prim_val = float(_vals[0]) if _vals and len(_vals)>0 and not __import__("pandas").isna(_vals[0]) else 0
-            _prim_lab = _labs[0] if _labs else next_month_name
-            _trend = _ctx["trend_sentence"] if _ctx else ""
-            _next_vals = _vals[1:4] if len(_vals)>=4 else (_vals[1:] if len(_vals)>1 else [])
-            _next_labs = _labs[1:4] if len(_labs)>=4 else (_labs[1:] if len(_labs)>1 else [])
+            _f_floor = 23.75; _r_floor = 19.00
+            _f_diff = (_fancy_current - _f_floor) if _fancy_current is not None and not pd.isna(_fancy_current) else 0
+            _r_diff = (_regular_current - _r_floor) if _regular_current is not None and not pd.isna(_regular_current) else 0
+            _f_col = "#16A34A" if _f_diff >= 0 else "#DC2626"
+            _r_col = "#16A34A" if _r_diff >= 0 else "#DC2626"
+            _f_width = max(15, min(95, 50 + _f_diff * 12))
+            _r_width = max(15, min(95, 50 + _r_diff * 12))
+            _f_label = f"Lagpas sa NFA \u20B1{_f_floor:.2f} (+{_f_diff:.2f})" if _f_diff >= 0 else f"Kulang sa NFA \u20B1{_f_floor:.2f} ({_f_diff:.2f})"
+            _r_label = f"Lagpas sa NFA \u20B1{_r_floor:.2f} (+{_r_diff:.2f})" if _r_diff >= 0 else f"Kulang sa NFA \u20B1{_r_floor:.2f} ({_r_diff:.2f})"
+            _fancy_gauge = f'<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; font-size:0.62rem; color:#6B7280; margin-bottom:3px;"><span>kumpara sa NFA</span><span style="color:{_f_col}; font-weight:700;">{_f_label}</span></div><div style="background:#E5E7EB; height:6px; border-radius:999px; overflow:hidden;"><div style="width:{_f_width:.0f}%; background:{_f_col}; height:100%;"></div></div></div>'
+            _regular_gauge = f'<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; font-size:0.62rem; color:#6B7280; margin-bottom:3px;"><span>kumpara sa NFA</span><span style="color:{_r_col}; font-weight:700;">{_r_label}</span></div><div style="background:#E5E7EB; height:6px; border-radius:999px; overflow:hidden;"><div style="width:{_r_width:.0f}%; background:{_r_col}; height:100%;"></div></div></div>'
         except Exception:
-            _prim_val=0; _prim_lab=next_month_name; _trend=""; _next_vals=[]; _next_labs=[]
-        c1, c2 = st.columns([1.15, 0.85], gap="medium")
-        with c1:
-            st.markdown('<div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.03);">', unsafe_allow_html=True)
-            st.markdown('<div style="font-size:13px; font-weight:700; color:#1B4332; display:flex; align-items:center; gap:8px;"><span style="width:32px; height:32px; background:#E8F5E9; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #C8E6C9;"><i class="material-symbols-outlined" style="font-size:18px; color:#2E7D32;">payments</i></span> Palay Price Forecast</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="font-family:DM Serif Display, serif; font-size:28px; color:#0F2A1A; margin:6px 0 2px 0;">₱{_prim_val:.2f}/kg</div><div style="font-size:12px; color:#6B7C6E;">regular palay • {_prim_lab} forecast</div><div style="font-size:12px; color:#1B7A3D; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">trending_up</i> {_trend}</div>', unsafe_allow_html=True)
-            if _next_vals:
-                _cols = "".join([f'<div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">{lab}</div><div style="font-size:13px; font-weight:800; color:#0F2A1A;">₱{val:.2f}/kg</div></div>' for lab,val in zip(_next_labs,_next_vals)])
-                st.markdown(f'<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; background:#FAFAF7; border:1px solid #F0EDE0; border-radius:10px; padding:10px;">{_cols}</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown('<div style="background:#FFFEF8; border:1px solid #F2E8C8; border-radius:16px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.03);">', unsafe_allow_html=True)
-            st.markdown('<div style="font-size:13px; font-weight:700; color:#1B4332; display:flex; align-items:center; gap:8px;"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825;">eco</i></span> Expected Harvest (Ani)</div>', unsafe_allow_html=True)
-            if _next_yield is not None:
-                st.markdown(f'<div style="font-family:DM Serif Display, serif; font-size:26px; color:#0F2A1A; margin:4px 0 2px 0;">{_next_yield:.2f} MT/ha</div><div style="font-size:12px; color:#6B7C6E;">Forecast for {_y_labs[0] if _y_labs else "next harvest"}</div>', unsafe_allow_html=True)
-                if _harvest_ctx.get("lo") is not None:
-                    st.markdown(f'<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; background:white; border:1px solid #F2E8C8; border-radius:10px; padding:10px;"><div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Forecast range</div><div style="font-size:12px; font-weight:800; color:#0F2A1A;">{_harvest_ctx["lo"]:.2f} – {_harvest_ctx["hi"]:.2f} MT/ha</div></div><div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Trend</div><div style="font-size:12px; font-weight:600; color:#1B7A3D;">{_harvest_ctx["sentence"]}</div></div></div>', unsafe_allow_html=True)
+            _fancy_gauge = ""; _regular_gauge = ""
+        st.markdown(f"""<div class="kpi-row"><div class="metric-card"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><div class="metric-title"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">grade</i>Presyo ng Palay — Fancy</div></div><div class="metric-data">{fancy_price_display}</div><div class="metric-footer">{fancy_delta_html} &bull; {next_month_name}</div>{_fancy_gauge}</div><div class="metric-card"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><div class="metric-title"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">inventory_2</i>Presyo ng Palay — Regular</div></div><div class="metric-data">{regular_price_display}</div><div class="metric-footer">{regular_delta_html} &bull; {next_month_name}</div>{_regular_gauge}</div><div class="metric-card"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><div class="metric-title"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">eco</i>Inaasahang Ani</div></div><div class="metric-data">{forecasted_display}</div><div class="metric-footer">{forecasted_sub}</div></div></div>""", unsafe_allow_html=True)
+        if is_awaiting_lgu: st.caption(f"Pinakabagong hula ({last_avail_month}). Naghihintay ng bagong datos mula sa LGU.")
+        # kailan chips
+        _kailan_chips = ""
+        try:
+            if fc_fancy_vals and len(forecast_months) >= len(fc_fancy_vals):
+                for i, v in enumerate(fc_fancy_vals[:3]):
+                    mlab = forecast_months[i].strftime("%b") if i < len(forecast_months) else f"M{i+1}"
+                    is_max = abs(v - _fmax_val) < 0.001
+                    is_min = abs(v - _fmin_val) < 0.001
+                    if is_max:
+                        bg, bd, col, icon = "#E8F5E9", "#1B5E20", "#1B5E20", "trending_up"
+                        lab = "Pinakamataas"
+                    elif is_min:
+                        bg, bd, col, icon = "#FFF3E0", "#E65100", "#BF360C", "trending_down"
+                        lab = "Pinakamababa"
+                    else:
+                        bg, bd, col, icon = "#F9FAFB", "#E5E7EB", "#374151", "trending_flat"
+                        lab = "Gitna"
+                    _kailan_chips += f'<div style="flex:1; background:{bg}; border:1.5px solid {bd}; border-radius:10px; padding:10px 6px; text-align:center;"><div style="font-size:0.70rem; font-weight:600; color:#6B7280;">{mlab}</div><div style="font-size:0.95rem; font-weight:800; color:{col};"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:2px; color:{col};">{icon}</i>\u20B1{v:.2f}</div><div style="font-size:0.65rem; color:{col}; font-weight:600;">{lab}</div></div>'
             else:
-                st.markdown('<div style="font-size:13px; color:#6B7C6E;">No data</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        try:
-            _fig_preview = _farmer_price_chart(forecast_months, _vals, color="#1B5E20")
-            st.plotly_chart(_fig_preview, use_container_width=True, config={"displayModeBar": False})
-            if _ctx and _ctx.get("lowest") and _ctx.get("highest"):
-                _lo_lab,_lo_val = _ctx["lowest"]; _hi_lab,_hi_val = _ctx["highest"]
-                if _lo_val is not None and _hi_val is not None:
-                    st.markdown(f'<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;"><div style="background:white; border:1px solid #E8EFDE; border-left:3px solid #C62828; border-radius:10px; padding:10px;"><div style="font-size:11px; font-weight:700; color:#6B7C6E;">Lowest forecast</div><div style="font-size:12px; font-weight:600;">{_lo_lab}</div><div style="font-size:14px; font-weight:800;">₱{_lo_val:.2f}/kg</div></div><div style="background:white; border:1px solid #E8EFDE; border-left:3px solid #2E7D32; border-radius:10px; padding:10px;"><div style="font-size:11px; font-weight:700; color:#6B7C6E;">Highest forecast</div><div style="font-size:12px; font-weight:600;">{_hi_lab}</div><div style="font-size:14px; font-weight:800;">₱{_hi_val:.2f}/kg</div></div></div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="background:#E8F5E9; border:1px solid #C8E6C9; border-radius:8px; padding:8px 12px; margin-top:8px; font-size:12px; color:#1B5E20; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="font-size:16px;">lightbulb</i> {_ctx["recover_sentence"]}</div>', unsafe_allow_html=True)
+                _kailan_chips = f'<div style="font-size:0.82rem; color:#6B7280;">Walang datos</div>'
         except Exception:
-            pass
+            _kailan_chips = f'<div style="font-size:0.82rem; color:#6B7280;">Walang datos</div>'
+        st.markdown(f"""<div class="kailan-card"><div style="font-weight:800; color:#1B5E20; font-size:0.95rem; margin-bottom:10px; display:flex; align-items:center; gap:6px;"><i class="material-symbols-outlined" style="font-size:18px; color:#1B5E20;">calendar_month</i>Kailan Inaasahang Mataas / Mababa</div><div style="display:flex; gap:8px; margin-bottom:10px;">{_kailan_chips}</div><div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.82rem; line-height:1.5; color:#374151; border-top:1px solid #E8F5E9; padding-top:10px;"><div><span style="color:#6B7280; font-weight:600;">Ani (susunod na 4 na quarter):</span><br><span style="color:#16A34A; font-weight:700;">Pinakamataas: {_ymax:.2f} MT/ha</span> &bull; <span style="color:#D97706; font-weight:700;">Pinakamababa: {_ymin:.2f} MT/ha</span></div><div style="font-size:0.78rem; color:#6B7280;">Tip: Ibenta sa <b style="color:#1B5E20;">{_fmax_month}</b> para mas mataas ang kita.</div></div></div>""", unsafe_allow_html=True)
         st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Trend ng Presyo at Ani (Forecast)</div><div class="component-desc">Forecast trend ng presyo at ani. Piliin kung Presyo o Inaasahang Ani ang nais ipakita.</div>', unsafe_allow_html=True)
         try:
             trend_choice = st.segmented_control("Trend", options=["Presyo", "Ani"], default="Presyo", key="essentials_trend_toggle")
