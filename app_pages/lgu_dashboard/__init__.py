@@ -238,20 +238,50 @@ def lgu_dashboard():
     model_info.render(df, dr)
   elif active_page == "settings":
     theme.page_title("Settings", "Application preferences.")
-    with theme.section_card(title="Settings",
-                desc="Application preferences.", icon_name="settings"):
-      is_empty = st.session_state.get("demo_empty_state", False)
-      try:
-          if st.query_params.get("demo_empty") == "1":
-              is_empty = True
-      except Exception:
-          pass
-      if is_empty:
-          st.warning("Empty state preview is enabled — the dashboard is currently showing no data.")
-          st.caption("Data files are temporarily hidden for demonstration. No files are deleted.")
-          if st.button("Restore Data View", type="primary", use_container_width=True):
+    with theme.section_card():
+      # Maintenance mode controls farmer-facing maintenance notice
+      # Supports both legacy demo_empty_state and new maintenance_mode + file flag
+      from pathlib import Path as _Path
+      import json as _json
+      _flag_path = _Path(__file__).resolve().parents[2] / "data" / ".maintenance.json"
+      def _is_maint_active():
+          try:
+              if st.session_state.get("maintenance_mode") or st.session_state.get("demo_empty_state"):
+                  return True
+              if st.query_params.get("maintenance") == "1" or st.query_params.get("demo_empty") == "1":
+                  return True
+              if _flag_path.exists():
+                  try:
+                      d = _json.loads(_flag_path.read_text(encoding="utf-8"))
+                      if d.get("enabled"):
+                          return True
+                  except Exception:
+                      return True
+          except Exception:
+              pass
+          return False
+
+      def _set_maint_file(enabled: bool):
+          try:
+              if enabled:
+                  _flag_path.write_text(_json.dumps({"enabled": True}), encoding="utf-8")
+              else:
+                  if _flag_path.exists():
+                      _flag_path.unlink()
+          except Exception:
+              pass
+
+      is_maint = _is_maint_active()
+      if is_maint:
+          st.warning("Maintenance mode is enabled — farmer dashboard is showing “Under Maintenance”.")
+          st.caption("Farmers visiting Overview will see a maintenance notice. No data is deleted.")
+          if st.button("Disable Maintenance Mode", type="primary", use_container_width=True, icon=":material/check_circle:"):
+              st.session_state["maintenance_mode"] = False
               st.session_state["demo_empty_state"] = False
+              _set_maint_file(False)
               try:
+                  if "maintenance" in st.query_params:
+                      del st.query_params["maintenance"]
                   if "demo_empty" in st.query_params:
                       del st.query_params["demo_empty"]
               except Exception:
@@ -263,10 +293,12 @@ def lgu_dashboard():
                   pass
               st.rerun()
       else:
-          st.info("Demonstration mode for empty data handling.")
-          st.caption("Temporarily hide all datasets to preview how the system handles empty states.")
-          if st.button("Preview Empty State", use_container_width=True):
+          st.info("Maintenance mode for farmer dashboard.")
+          st.caption("Temporarily show an “Under Maintenance” notice on the farmer side (Overview).")
+          if st.button("Enable Maintenance Mode", use_container_width=True, icon=":material/construction:"):
+              st.session_state["maintenance_mode"] = True
               st.session_state["demo_empty_state"] = True
+              _set_maint_file(True)
               try:
                   st.cache_data.clear()
                   st.cache_resource.clear()

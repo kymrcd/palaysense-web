@@ -825,6 +825,8 @@ def render(df, dr):
         "Provincial and municipal forecasts for palay prices and yields in Bataan — 6-month price and 4-quarter yield projections to support OPA planning.",
     )
 
+    # Clean state: no early return — let graphs render with 0/empty safely (fallback 0 in graphs)
+    # Previous IndexError at labs[0] is now fixed via defensive _fallback_labs below.
     benchmark_class = "Hybrid Premium"
     _, df_dry, df_wet, month_labels = _prepare_forecast_df(dr, [], benchmark_class)
 
@@ -983,10 +985,17 @@ def render(df, dr):
                     ctx_sub = f"{lc} · highest avg price"
 
                 _, ddry, dwet, labs = _prepare_forecast_df(dr, lm, lc)
-                labs = labs if labs and len(labs) == 3 else month_labels
+                # Defensive: ensure 3 labels even if prepare returns [] (clean state edge)
+                _fallback_labs = ["Month 1", "Month 2", "Month 3"]
+                if not (isinstance(labs, list) and len(labs) >= 3):
+                    if isinstance(month_labels, list) and len(month_labels) >= 3:
+                        labs = month_labels
+                    else:
+                        labs = _fallback_labs
+                _labs_safe = labs if isinstance(labs, list) and len(labs) >= 3 else _fallback_labs
 
                 st.markdown(f"<div style='display:flex;align-items:center;gap:8px;'><i class='material-symbols-outlined' style='color:#16A34A;font-size:22px;'>bar_chart</i><b style='color:#14532D; font-size:0.95rem;'>Granular Forecast for Hybrid and Inbred Palay Prices</b></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size:0.88rem;color:#14532D;font-weight:700;margin-top:4px;'>{ctx_muni}</div><div style='font-size:0.78rem;color:#6B7280;'>{ctx_sub}</div><div style='font-size:0.74rem;color:#6B7280;margin-top:2px;'>Average farmgate price (₱/kg) — 3-month projection • {labs[0]} – {labs[2] if len(labs)>2 else ''} · Dry / Wet</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:0.88rem;color:#14532D;font-weight:700;margin-top:4px;'>{ctx_muni}</div><div style='font-size:0.78rem;color:#6B7280;'>{ctx_sub}</div><div style='font-size:0.74rem;color:#6B7280;margin-top:2px;'>Average farmgate price (₱/kg) — 3-month projection • {_labs_safe[0]} – {_labs_safe[2]} · Dry / Wet</div>", unsafe_allow_html=True)
 
                 # Show Dry/Wet as moisture (not season) — use tabs so both are accessible
                 if (ddry is None or ddry.empty) and (dwet is None or dwet.empty):
@@ -1017,7 +1026,8 @@ def render(df, dr):
                         t_dry, t_wet = st.tabs(["Dry", "Wet"])
                     with t_dry:
                         if ddry is not None and not ddry.empty:
-                            disp = ddry[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": labs[0], "Month 2": labs[1], "Month 3": labs[2]})
+                            _labs_safe = labs if isinstance(labs, list) and len(labs) >= 3 else ["Month 1", "Month 2", "Month 3"]
+                            disp = ddry[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": _labs_safe[0], "Month 2": _labs_safe[1], "Month 3": _labs_safe[2]})
                             disp["Municipality"] = disp["Municipality"].astype(str).str.title()
                             st.data_editor(disp, use_container_width=True, hide_index=True, height=220, disabled=True, key=f"forecast_editor_dry_{lc}_{len(lm)}")
                             st.caption(f"Displaying {len(disp)} Dry palay row{'s' if len(disp)!=1 else ''} for {lc}.")
@@ -1030,7 +1040,8 @@ def render(df, dr):
                             st.info("No Dry forecast.")
                     with t_wet:
                         if dwet is not None and not dwet.empty:
-                            disp = dwet[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": labs[0], "Month 2": labs[1], "Month 3": labs[2]})
+                            _labs_safe = labs if isinstance(labs, list) and len(labs) >= 3 else ["Month 1", "Month 2", "Month 3"]
+                            disp = dwet[["Municipality", "Rice Classification", "Month 1", "Month 2", "Month 3"]].rename(columns={"Month 1": _labs_safe[0], "Month 2": _labs_safe[1], "Month 3": _labs_safe[2]})
                             disp["Municipality"] = disp["Municipality"].astype(str).str.title()
                             st.data_editor(disp, use_container_width=True, hide_index=True, height=220, disabled=True, key=f"forecast_editor_wet_{lc}_{len(lm)}")
                             st.caption(f"Displaying {len(disp)} Wet palay row{'s' if len(disp)!=1 else ''} for {lc}.")

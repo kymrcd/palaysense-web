@@ -2064,7 +2064,7 @@ def render(df, dr):
                 st.markdown(f'<div style="display:flex; align-items:center; gap:8px; font-weight:800; color:#1F2937; font-size:1.00rem; width:100%;"><i class="material-symbols-outlined" style="font-size:18px; color:#1F2937;">bar_chart</i> Production and Yield Trends <span style="font-weight:500; font-size:0.72rem; color:#6B7280; margin-left:6px;">{_trends_sub}</span></div>', unsafe_allow_html=True)
               with _tr_h2:
                 if st.button("See full graph →", key="see_full_trends_before", use_container_width=True):
-                  st.session_state["lgu_page"]="forecasting"; st.rerun()
+                  st.session_state["lgu_page"]="provincial"; st.rerun()
               st.plotly_chart(_trends_fig, use_container_width=True, config={"displayModeBar": False}, key="overview_trends_before")
           except Exception:
             pass

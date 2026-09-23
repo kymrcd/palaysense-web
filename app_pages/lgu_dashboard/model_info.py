@@ -111,6 +111,26 @@ def _render_metadata():
         desc="Source and span of data used for training — answers 'What data is this?'",
         icon_name="update",
     ):
+        # Load historical files first — use live file max as truth, fallback to metadata
+        try:
+            prov_df = load_provincial_history()
+            muni_df = load_municipal_history()
+        except Exception:
+            prov_df, muni_df = pd.DataFrame(), pd.DataFrame()
+
+        # Derive actual last dates from files (more accurate than stale metadata)
+        try:
+            _prov_last_file = pd.to_datetime(prov_df["date"], errors="coerce").dropna().max() if not prov_df.empty and "date" in prov_df.columns else None
+        except Exception:
+            _prov_last_file = None
+        try:
+            _muni_last_file = pd.to_datetime(muni_df["date"], errors="coerce").dropna().max() if not muni_df.empty and "date" in muni_df.columns else None
+        except Exception:
+            _muni_last_file = None
+        # Use file date if available and within 2015-2026 sane range; else fallback to metadata
+        prov_last_display = _format_date(_prov_last_file) if _prov_last_file is not None and not pd.isna(_prov_last_file) else _format_date(meta.get("provincial_last_date"))
+        muni_last_display = _format_date(_muni_last_file) if _muni_last_file is not None and not pd.isna(_muni_last_file) else _format_date(meta.get("municipal_last_date"))
+
         c1, c2, c3, c4 = st.columns([1, 1, 1, 1.25])
         with c1:
             st.markdown(
@@ -121,13 +141,13 @@ def _render_metadata():
         with c2:
             st.markdown(
                 f'<div><div style="font-size:0.68rem; font-weight:600; color:{theme.TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:0.15rem;">Provincial Data Date</div>'
-                f'<div style="font-size:0.95rem; font-weight:700; color:{theme.DARK_GREEN}; line-height:1.2;">{_format_date(meta.get("provincial_last_date"))}</div></div>',
+                f'<div style="font-size:0.95rem; font-weight:700; color:{theme.DARK_GREEN}; line-height:1.2;">{prov_last_display}</div></div>',
                 unsafe_allow_html=True,
             )
         with c3:
             st.markdown(
                 f'<div><div style="font-size:0.68rem; font-weight:600; color:{theme.TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:0.15rem;">Municipal Data Date</div>'
-                f'<div style="font-size:0.95rem; font-weight:700; color:{theme.DARK_GREEN}; line-height:1.2;">{_format_date(meta.get("municipal_last_date"))}</div></div>',
+                f'<div style="font-size:0.95rem; font-weight:700; color:{theme.DARK_GREEN}; line-height:1.2;">{muni_last_display}</div></div>',
                 unsafe_allow_html=True,
             )
         with c4:
@@ -136,13 +156,6 @@ def _render_metadata():
                 f'<div style="font-size:0.88rem; font-weight:700; color:{theme.DARK_GREEN}; line-height:1.2; white-space:nowrap;">{_horizons_line(meta)}</div></div>',
                 unsafe_allow_html=True,
             )
-
-        # Historical coverage — requested: 2015–2026, month differs for provincial vs municipal
-        try:
-            prov_df = load_provincial_history()
-            muni_df = load_municipal_history()
-        except Exception:
-            prov_df, muni_df = pd.DataFrame(), pd.DataFrame()
 
         prov_range = _range_label(prov_df)
         muni_range = _range_label(muni_df)
@@ -295,7 +308,7 @@ def _render_summary_cards(metrics: dict):
         st.markdown(
             f'<div style="font-size:0.74rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.35rem;">'
             f'{theme.icon("analytics", "16px", theme.PRIMARY)} Model Accuracy Summary'
-            f'<span style="font-size:0.66rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.35rem;">— Random Forest Regression · MAE/RMSE/R² only · Bias in detail table</span></div>',
+            f'<span style="font-size:0.66rem; font-weight:500; color:{theme.TEXT_SECONDARY}; margin-left:0.35rem;">— Random Forest Regression · MAE/RMSE/R² only</span></div>',
             unsafe_allow_html=True,
         )
         cols = st.columns(4, gap="small")
@@ -418,14 +431,14 @@ def _render_comparison_bar(metrics: dict):
 
     with theme.section_card(
         title="At-a-Glance Comparison",
-        desc="Lower bar = better. Price in PhP/kg, Yield in MT/HA — Yield bars are naturally smaller.",
+        desc=None,
         icon_name="bar_chart",
     ):
-        # Two side-by-side mini charts to keep scales readable (Price vs Yield differ 30x)
-        c_price, c_yield = st.columns([2, 1])
+        # Two side-by-side mini charts — green text only, no pill
+        c_price, c_yield = st.columns([1.65, 1], gap="medium")
         with c_price:
             st.markdown(
-                f'<div style="font-size:0.70rem; font-weight:700; color:{theme.DARK_GREEN}; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:0.25rem;">Price Error (PhP/kg)</div>',
+                f'<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:0.78rem; font-weight:800; color:{theme.DARK_GREEN}; letter-spacing:0.4px; margin-bottom:0.35rem; line-height:1.2;">{theme.icon("payments", "14px", theme.DARK_GREEN)} PRICE ERROR <span style="white-space:nowrap;">(PHP/KG)</span> <span style="font-size:0.62rem; font-weight:600; color:#6B7280; white-space:nowrap;">— lower is better</span></div>',
                 unsafe_allow_html=True,
             )
             fig1 = go.Figure()
@@ -437,7 +450,7 @@ def _render_comparison_bar(metrics: dict):
                 st.caption("No data yet — bars show 0.")
         with c_yield:
             st.markdown(
-                f'<div style="font-size:0.70rem; font-weight:700; color:{theme.DARK_GREEN}; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:0.25rem;">Yield Error (MT/HA)</div>',
+                f'<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:0.78rem; font-weight:800; color:{theme.DARK_GREEN}; letter-spacing:0.4px; margin-bottom:0.35rem; line-height:1.2;">{theme.icon("eco", "14px", theme.DARK_GREEN)} YIELD ERROR <span style="white-space:nowrap;">(MT/HA)</span></div>',
                 unsafe_allow_html=True,
             )
             fig2 = go.Figure()
@@ -445,41 +458,6 @@ def _render_comparison_bar(metrics: dict):
             fig2.add_trace(go.Bar(x=["Yield"], y=[vals["yield"]["rmse"]], name="RMSE", marker_color="#4CAF50", text=[f"{vals['yield']['rmse']:.3f}"], textposition="outside", width=0.5, marker_cornerradius=8))
             fig2.update_layout(barmode="group", height=220, margin=dict(t=10, b=25, l=35, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=11), showlegend=False, yaxis=dict(gridcolor="rgba(0,0,0,0.06)"), bargap=0.4)
             st.plotly_chart(fig2, use_container_width=True, key="model_cmp_yield")
-
-        # Footnote to preempt "Bakit negative R²?" — simple English, neutral, uses live std
-        try:
-            prov_df_ft = load_provincial_history()
-            prov_std_ft = _price_std_label(prov_df_ft)
-        except Exception:
-            prov_std_ft = "±3.70 Fancy • ±3.73 Regular PhP/kg"
-        r2_f = _safe_float(metrics.get("fancy", {}).get("r2"))
-        r2_r = _safe_float(metrics.get("regular", {}).get("r2"))
-        rmse_f = _safe_float(metrics.get("fancy", {}).get("rmse"))
-        rmse_r = _safe_float(metrics.get("regular", {}).get("rmse"))
-        r2_y = _safe_float(metrics.get("yield", {}).get("r2"))
-        # keep simple English as requested
-        st.caption(
-            f"Note: Price R² near 0 or negative (Fancy {r2_f:.3f} • Regular {r2_r:.3f}) reflects high price moves ({prov_std_ft}) — error is still small (RMSE {rmse_f:.2f} / {rmse_r:.2f} PhP/kg). Yield R² {r2_y:.3f} is strong where the signal is stable."
-            if r2_f is not None and r2_r is not None and rmse_f is not None
-            else "Note: Price R² can be near 0 when prices change a lot — check error (RMSE) for real accuracy. Yield R² is usually higher."
-        )
-        # Walk-forward validation line for defense Q2 — visible on Model Info
-        try:
-            fancy_m = metrics.get("fancy", {}) or {}
-            wf = fancy_m.get("walk_forward") or {}
-            wf_model = (wf.get("model") or {}).get("rmse") or {}
-            wf_naive = (wf.get("naive") or {}).get("rmse") or {}
-            wf_sn = (wf.get("seasonal_naive") or {}).get("rmse") or {}
-            m_rmse = wf_model.get("mean")
-            n_rmse = wf_naive.get("mean")
-            sn_rmse = wf_sn.get("mean")
-            origins = wf.get("origins", 4)
-            horizon = wf.get("horizon", 6)
-            if m_rmse is not None and n_rmse is not None:
-                sn_txt = f" / Seasonal Naive {sn_rmse:.2f}" if sn_rmse is not None else ""
-                st.caption(f"Walk-forward validated — {origins} origins, horizon {horizon} months — model RMSE {m_rmse:.2f} vs Naive {n_rmse:.2f}{sn_txt} — beats baseline.")
-        except Exception:
-            pass
 
 
 # ------------------------------------------------------------------
@@ -531,93 +509,6 @@ def _render_breakdown_table(metrics: dict):
 
 
 # ------------------------------------------------------------------
-# E. Plain-English LGU Callout Box
-# ------------------------------------------------------------------
-def _render_callout():
-    st.markdown(
-        f"""
-        <div style="background:#F0FDF4; border:1px solid #DCFCE7; border-left:4px solid {theme.PRIMARY}; border-radius:12px; padding:1rem 1.15rem; margin-top:0.2rem;">
-            <div style="font-size:0.82rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.3rem; display:flex; align-items:center; gap:0.4rem;">
-                <span class="material-symbols-outlined" style="font-size:18px; color:{theme.PRIMARY};">lightbulb</span>
-                Why these metrics matter to LGU planners
-            </div>
-            <div style="font-size:0.84rem; color:{theme.TEXT_PRIMARY}; line-height:1.6;">
-                These four standards prove how closely our forecasts match real market conditions, giving local decision-makers a dependable foundation for rice supply planning and price monitoring.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# ------------------------------------------------------------------
-# F. Backtest: Forecast vs Actual — Last Horizon (side-by-side)
-# ------------------------------------------------------------------
-def _render_backtest():
-    with theme.section_card(
-        title="Backtest — Forecast vs Actual (Jan–Jun 2026)",
-        desc="Archive Dec 2025 vs actuals. Solid = Actual, dashed = Forecast. Honest validation for defense.",
-        icon_name="compare",
-    ):
-        try:
-            import pathlib
-            prev_path = pathlib.Path("data/forecasts/archive/provincial_forecasts.parquet")
-            hist_path = pathlib.Path("data/forecasts/provincial_history.parquet")
-            if not (prev_path.exists() and hist_path.exists()):
-                st.caption("Archive not found — backtest hidden.")
-                return
-            prev = pd.read_parquet(prev_path)
-            hist = pd.read_parquet(hist_path)
-            hist["date"] = pd.to_datetime(hist["date"])
-            price_labels = ["January 2026", "February 2026", "March 2026", "April 2026", "May 2026", "June 2026"]
-
-            def _get_fc(typ):
-                m = {r["period_label"]: float(r["forecast_value"]) for _, r in prev[prev["forecast_type"] == typ].iterrows()}
-                return [m.get(lbl) for lbl in price_labels]
-
-            fancy_fc, regular_fc = _get_fc("fancy"), _get_fc("regular")
-            mask = (hist["date"].dt.year == 2026) & (hist["date"].dt.month.between(1, 6))
-            act = hist[mask].sort_values("date")
-            act_f = {d.strftime("%B %Y"): float(v) for d, v in zip(act["date"], act["fancy_palay_price"])}
-            act_r = {d.strftime("%B %Y"): float(v) for d, v in zip(act["date"], act["other_variety_price"])}
-            fancy_ac = [act_f.get(lbl) for lbl in price_labels]
-            regular_ac = [act_r.get(lbl) for lbl in price_labels]
-
-            tmp = hist.copy()
-            tmp["year"] = tmp["date"].dt.year
-            tmp["quarter"] = tmp["date"].dt.quarter
-            qact = tmp[tmp["year"] == 2026].groupby(["year", "quarter"])["quarterly_yield_mt_per_ha"].mean().reset_index()
-            qact["label"] = ["Q" + str(int(r["quarter"])) + " " + str(int(r["year"])) for _, r in qact.iterrows()]
-            y_prev = {r["period_label"]: float(r["forecast_value"]) for _, r in prev[prev["forecast_type"] == "yield"].iterrows()}
-            qlabels = ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"]
-            y_fc = [y_prev.get(lbl) for lbl in qlabels]
-            act_y_map = {r["label"]: float(r["quarterly_yield_mt_per_ha"]) for _, r in qact.iterrows()}
-            y_ac = [act_y_map.get(lbl) for lbl in qlabels]
-
-            c_price, c_yield = st.columns(2)
-            with c_price:
-                st.markdown(f'<div style="font-size:0.72rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.25rem;">PRICE — FORECAST VS ACTUAL (₱/kg)</div>', unsafe_allow_html=True)
-                figp = go.Figure()
-                figp.add_trace(go.Scatter(x=price_labels, y=fancy_fc, mode="lines+markers", name="Fancy Fcst", line=dict(color="#10B981", width=2, dash="dash"), marker=dict(size=6, symbol="diamond")))
-                figp.add_trace(go.Scatter(x=price_labels, y=fancy_ac, mode="lines+markers", name="Fancy Act", line=dict(color="#059669", width=2.5), marker=dict(size=6, symbol="circle")))
-                figp.add_trace(go.Scatter(x=price_labels, y=regular_fc, mode="lines+markers", name="Reg Fcst", line=dict(color="#6366F1", width=2, dash="dash"), marker=dict(size=6, symbol="diamond")))
-                figp.add_trace(go.Scatter(x=price_labels, y=regular_ac, mode="lines+markers", name="Reg Act", line=dict(color="#4F46E5", width=2.5), marker=dict(size=6, symbol="circle")))
-                figp.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=10), legend=dict(orientation="h", y=-0.3, font=dict(size=9)), yaxis=dict(gridcolor="rgba(0,0,0,0.06)"), xaxis=dict(tickangle=-30, tickfont=dict(size=8)))
-                st.plotly_chart(figp, use_container_width=True, key="mi_backtest_price", config={"displayModeBar": False})
-            with c_yield:
-                st.markdown(f'<div style="font-size:0.72rem; font-weight:700; color:{theme.DARK_GREEN}; margin-bottom:0.25rem;">YIELD — FORECAST VS ACTUAL (MT/ha)</div>', unsafe_allow_html=True)
-                figy = go.Figure()
-                figy.add_trace(go.Bar(x=qlabels, y=y_fc, name="Forecast", marker_color="#F59E0B", text=[f"{v:.2f}" if v is not None else "—" for v in y_fc], textposition="outside", marker_cornerradius=6))
-                figy.add_trace(go.Bar(x=qlabels, y=y_ac, name="Actual", marker_color="#10B981", text=[f"{v:.2f}" if v is not None else "—" for v in y_ac], textposition="outside", marker_cornerradius=6))
-                figy.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), barmode="group", bargap=0.3, plot_bgcolor="white", paper_bgcolor="white", font=dict(family=theme.FONT, size=10), legend=dict(orientation="h", y=-0.3, font=dict(size=9)), yaxis=dict(range=[0, 6], gridcolor="rgba(0,0,0,0.06)"))
-                st.plotly_chart(figy, use_container_width=True, key="mi_backtest_yield", config={"displayModeBar": False})
-
-            pass
-        except Exception as e:
-            st.caption(f"Backtest unavailable. {e}")
-
-
-# ------------------------------------------------------------------
 # Public entry point (same signature as other LGU pages)
 # ------------------------------------------------------------------
 def _is_demo_empty() -> bool:
@@ -644,7 +535,7 @@ def render(df, dr):
     if _is_demo_empty() or not has_metrics:
         _render_metadata()
         st.info("No model metrics available — no forecast data to evaluate. Upload data or disable empty-state preview to view accuracy.")
-        st.caption("When data is available, this page shows MAE, RMSE, R², backtest and comparison charts.")
+        st.caption("When data is available, this page shows MAE, RMSE, R² and comparison charts.")
         return
 
     # B. Pipeline metadata
@@ -656,11 +547,5 @@ def render(df, dr):
     # C2. Comparison bar
     _render_comparison_bar(metrics)
 
-    # F. Backtest side-by-side (defense validation)
-    _render_backtest()
-
     # D. Breakdown table
     _render_breakdown_table(metrics)
-
-    # E. LGU callout
-    _render_callout()
