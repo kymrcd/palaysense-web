@@ -412,7 +412,7 @@ def overview_page():
         st.session_state["overview_section"] = "Overview"
     section_choice = st.session_state.get("overview_section", "Overview")
     # Farmer-friendly display names for sidebar (simple English, official tone)
-    _farmer_display = {"Municipal Forecast": "Prices per Town", "Guide and Advice": "Guide (Gabay)", "Harvest Forecast": "Harvest Forecast (Ani)", "Price Forecast": "Price Forecast"}
+    _farmer_display = {"Municipal Forecast": "Prices per Town", "Guide and Advice": "Guide", "Harvest Forecast": "Harvest Forecast", "Price Forecast": "Price Forecast"}
 
     st.session_state.setdefault("farmer_price_type", "Regular")
     st.session_state.setdefault("farmer_selected_muni", all_munis[0] if all_munis else "Mariveles")
@@ -610,7 +610,7 @@ def overview_page():
         with c2:
             with st.container():
                 st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082; flex-shrink:0;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825; line-height:1;">eco</i></span><span style="display:flex; align-items:center; line-height:1;">Expected Harvest (Inaasahang Ani)</span></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082; flex-shrink:0;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825; line-height:1;">eco</i></span><span style="display:flex; align-items:center; line-height:1;">Expected Harvest</span></div>', unsafe_allow_html=True)
                 if next_yield_val is not None:
                     st.markdown(f'<div class="farmer-expected-big">{next_yield_val:.2f} tons/ha</div>', unsafe_allow_html=True)
                     st.markdown(f'<div style="font-size:12px; color:#6B7C6E; font-weight:500;">Forecast for {y_labels[0] if y_labels else "next harvest"} • about {next_yield_val*1000:,.0f} kg per hectare</div>', unsafe_allow_html=True)
@@ -620,7 +620,7 @@ def overview_page():
                     st.markdown(f"""
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; background:white; border:1px solid #F2E8C8; border-radius:10px; padding:10px;">
                         <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Expected range</div><div style="font-size:13px; font-weight:800; color:#0F2A1A; margin-top:2px;">{yield_lo:.2f} – {yield_hi:.2f} tons/ha</div></div>
-                        <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Change vs last harvest (<i>ani</i>)</div><div style="font-size:13px; font-weight:800; color:#1B7A3D; margin-top:2px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px; color:#1B7A3D;">{"trending_up" if (yield_delta_prev is not None and yield_delta_prev>=0) else "trending_down"}</i> {f"{yield_delta_prev:+.2f} tons/ha" if yield_delta_prev is not None else "No data yet"}</div></div>
+                        <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Change vs last harvest</div><div style="font-size:13px; font-weight:800; color:#1B7A3D; margin-top:2px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px; color:#1B7A3D;">{"trending_up" if (yield_delta_prev is not None and yield_delta_prev>=0) else "trending_down"}</i> {f"{yield_delta_prev:+.2f} tons/ha" if yield_delta_prev is not None else "No data yet"}</div></div>
                     </div>
                     """, unsafe_allow_html=True)
                     try:
@@ -637,7 +637,7 @@ def overview_page():
         with c_chart:
             with st.container():
                 st.markdown('<div class="farmer-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">show_chart</i> Palay Price Trend ( ng Presyo)</div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">show_chart</i> Palay Price Trend</div>', unsafe_allow_html=True)
                 fig = _farmer_price_chart(forecast_months, vals, color="#1B5E20")
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
                 if lowest and highest and lowest[1] is not None and highest[1] is not None:
@@ -875,7 +875,7 @@ def overview_page():
         _render_municipal_outlook()
     elif section_choice == "Price Forecast":
         _render_hero()
-        st.markdown('<div style="background:linear-gradient(90deg,#F6FBF6 0%, #FFFFFF 100%); border:1px solid #E8EFDE; border-radius:14px; padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:12px;"><i class="material-symbols-outlined" style="font-size:22px; color:#1B4332;">payments</i><div><div style="font-weight:700; color:#1B4332; font-size:14px;">Palay Price Forecast (<i> ng Presyo</i>)</div><div style="font-size:12px; color:#6B7C6E;">See the current forecast, the coming months, and what it means for you.</div></div></div>', unsafe_allow_html=True)
+        st.markdown('<div style="background:linear-gradient(90deg,#F6FBF6 0%, #FFFFFF 100%); border:1px solid #E8EFDE; border-radius:14px; padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:12px;"><i class="material-symbols-outlined" style="font-size:22px; color:#1B4332;">payments</i><div><div style="font-weight:700; color:#1B4332; font-size:14px;">Palay Price Forecast</div><div style="font-size:12px; color:#6B7C6E;">See the current forecast, the coming months, and what it means for you.</div></div></div>', unsafe_allow_html=True)
         _render_top_cards(show_harvest=False)
         _render_chart_and_what()
         st.markdown('<div style="background:#FFFDF0; border:1px solid #F2E8C8; border-radius:10px; padding:8px 12px; margin-top:10px; font-size:11px; color:#6B7C6E; text-align:center;">Tip: Please compare this outlook with your buyer offer, storage and drying costs, and field conditions before deciding when to sell.</div>', unsafe_allow_html=True)
@@ -885,15 +885,15 @@ def overview_page():
         with c1:
             with st.container():
                 st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082; flex-shrink:0;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825; line-height:1;">eco</i></span><span style="display:flex; align-items:center; line-height:1;">Expected Harvest (Inaasahang Ani)</span></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082; flex-shrink:0;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825; line-height:1;">eco</i></span><span style="display:flex; align-items:center; line-height:1;">Expected Harvest</span></div>', unsafe_allow_html=True)
                 if next_yield_val is not None:
                     st.markdown(f'<div class="farmer-expected-big">{next_yield_val:.2f} tons/ha</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="font-size:12px; color:#6B7C6E;">Forecast (<i></i>) for {y_labels[0] if y_labels else "next harvest"} — about {next_yield_val*1000:,.0f} kg per hectare</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="font-size:12px; color:#6B7C6E;">Forecast for {y_labels[0] if y_labels else "next harvest"} — about {next_yield_val*1000:,.0f} kg per hectare</div>', unsafe_allow_html=True)
                     if yield_lo is not None and yield_hi is not None:
                         st.markdown(f"""
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; background:white; border:1px solid #F2E8C8; border-radius:10px; padding:10px;">
                             <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Expected range</div><div style="font-size:13px; font-weight:800; color:#0F2A1A; margin-top:2px;">{yield_lo:.2f} – {yield_hi:.2f} tons/ha</div></div>
-                            <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Change vs last harvest (<i>ani</i>)</div><div style="font-size:13px; font-weight:800; color:#1B7A3D; margin-top:2px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px; color:#1B7A3D;">{"trending_up" if (yield_delta_prev is not None and yield_delta_prev>=0) else "trending_down"}</i> {f"{yield_delta_prev:+.2f} tons/ha" if yield_delta_prev is not None else "No data yet"}</div></div>
+                            <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Change vs last harvest</div><div style="font-size:13px; font-weight:800; color:#1B7A3D; margin-top:2px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px; color:#1B7A3D;">{"trending_up" if (yield_delta_prev is not None and yield_delta_prev>=0) else "trending_down"}</i> {f"{yield_delta_prev:+.2f} tons/ha" if yield_delta_prev is not None else "No data yet"}</div></div>
                         </div>
                         """, unsafe_allow_html=True)
                         try:
@@ -906,7 +906,7 @@ def overview_page():
                             pass
             with st.container():
                 st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
-                st.markdown('<div style="background:white; border:1px solid #E8EFDE; border-radius:12px; padding:12px; display:flex; gap:10px; align-items:center; border-left:4px solid #2E7D32;"><i class="material-symbols-outlined" style="font-size:18px; color:#2E7D32;">visibility</i><div><div style="font-size:12px; font-weight:700; color:#1B4332;">What to Watch (Gabay)</div><div style="font-size:12px; color:#6B7C6E;">Simple guide for the next harvest period.</div></div></div>', unsafe_allow_html=True)
+                st.markdown('<div style="background:white; border:1px solid #E8EFDE; border-radius:12px; padding:12px; display:flex; gap:10px; align-items:center; border-left:4px solid #2E7D32;"><i class="material-symbols-outlined" style="font-size:18px; color:#2E7D32;">visibility</i><div><div style="font-size:12px; font-weight:700; color:#1B4332;">What to Watch</div><div style="font-size:12px; color:#6B7C6E;">Simple guide for the next harvest period.</div></div></div>', unsafe_allow_html=True)
 
         # ---- Harvest (Ani) — Historical Yield Trend + Benchmark Filters ----
         st.markdown("""
@@ -917,7 +917,7 @@ def overview_page():
         """, unsafe_allow_html=True)
         with st.container():
             st.markdown('<div class="farmer-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
-            st.markdown('<div class="harvest-filter-card"><div class="harvest-filter-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">tune</i> View Options — Past Harvest & Comparison (Gabay)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="harvest-filter-card"><div class="harvest-filter-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">tune</i> View Options — Past Harvest & Comparison</div>', unsafe_allow_html=True)
             st.session_state.setdefault("harvest_trend_range", "Last 10 Years")
             st.session_state.setdefault("harvest_agg", "Annual (Yearly Avg)")
             st.session_state.setdefault("harvest_benchmarks", [])
@@ -1059,7 +1059,7 @@ def overview_page():
         with ch2:
             with st.container():
                 st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
-                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825;">eco</i></span><span>Harvest Forecast vs Comparison (Gabay)</span></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825;">eco</i></span><span>Harvest Forecast vs Comparison</span></div>', unsafe_allow_html=True)
                 # Forecast bars with benchmark overlay
                 if not forecast_quarterly_yield:
                     st.info("No forecast data.")
@@ -1139,15 +1139,15 @@ def overview_page():
         st.markdown("""
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
-                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#2E7D32;">help</i> What is a price forecast? (<i> ng Presyo</i>)</div>
+                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#2E7D32;">help</i> What is a price forecast?</div>
                 <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:6px;">A price forecast (<i> ng presyo</i>) is our estimate of how much your palay may sell for in the coming months. It is based on past prices and market trends. Use it as a guide to plan when to sell for better income.</div>
             </div>
             <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
-                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#F9A825;">eco</i> What is a harvest forecast? (<i> ng Ani</i>)</div>
+                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#F9A825;">eco</i> What is a harvest forecast?</div>
                 <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:6px;">A harvest forecast (<i> ng ani</i>) estimates your yield in tons per hectare. Example: 4.02 tons/ha means about 4,020 kilos per hectare. It is based on past <i>ani</i> (harvest) and weather. Use it to plan your <i>abono</i> (fertilizer), labor, and drying needs.</div>
             </div>
             <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
-                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#1565C0;">visibility</i> How do I read the forecast? (Gabay)</div>
+                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#1565C0;">visibility</i> How do I read the forecast?</div>
                 <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:6px;">Check the current price or yield and the line on the chart. If the line goes up, prices or harvest are expected to rise. Always compare the forecast with your buyer offer, storage and drying costs, and your field condition before you decide.</div>
             </div>
             <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
