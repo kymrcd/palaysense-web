@@ -3,6 +3,7 @@ import pandas as pd  # Used for data manipulation
 import re  # Used for cleaning text using patterns
 import tempfile
 import openpyxl
+import numpy as np
 
 # -----------------------------
 # File paths
