@@ -516,19 +516,19 @@ def overview_page():
     if st.session_state.get("overview_period") not in _valid_periods: st.session_state["overview_period"] = "ANNUAL"
     st.session_state.setdefault("overview_selected_muni", "Lahat ng Bayan")
     # sidebar first to know current section for conditional filter
-    QUICK_VIEW_GROUPS = [("PANGKALAHATAN", [("Pangkalahatan", "dashboard")]), ("DETALYE", [("Tantiya sa Presyo", "payments"), ("Inaasahang Ani", "eco"), ("Pambayang Forecast", "location_on")]), ("SUPORTA", [("Gabay at Payo", "lightbulb")])]
+    QUICK_VIEW_GROUPS = [("OVERVIEW", [("Overview", "dashboard")]), ("DETAILS", [("Price Forecast", "payments"), ("Harvest Forecast (Ani)", "eco"), ("Municipal Forecast", "location_on")]), ("SUPPORT", [("Guide and Advice", "lightbulb")])]
     _SIDEBAR_KEY_BY_LABEL = {label: key for _, items in QUICK_VIEW_GROUPS for (label, key) in items}
     _SIDEBAR_LABEL_BY_KEY = {key: label for label, key in _SIDEBAR_KEY_BY_LABEL.items()}
-    _OLD_TO_NEW = {"Buong Dashboard": "Pangkalahatan", "Price Forecast": "Tantiya sa Presyo", "Yield Forecast": "Inaasahang Ani", "Municipal Forecast": "Pambayang Forecast", "Mga Payo": "Gabay at Payo", "Mga Payo (Advisories)": "Gabay at Payo"}
-    st.session_state.setdefault("overview_section", "Pangkalahatan")
+    _OLD_TO_NEW = {"Buong Dashboard": "Overview", "Pangkalahatan": "Overview", "Price Forecast": "Price Forecast", "Tantiya sa Presyo": "Price Forecast", "Yield Forecast": "Harvest Forecast (Ani)", "Inaasahang Ani": "Harvest Forecast (Ani)", "Municipal Forecast": "Municipal Forecast", "Pambayang Forecast": "Municipal Forecast", "Mga Payo": "Guide and Advice", "Gabay at Payo": "Guide and Advice", "Mga Payo (Advisories)": "Guide and Advice"}
+    st.session_state.setdefault("overview_section", "Overview")
     if st.session_state.get("overview_section") in _OLD_TO_NEW:
         st.session_state["overview_section"] = _OLD_TO_NEW[st.session_state.get("overview_section")]
-    _valid = {"Pangkalahatan","Tantiya sa Presyo","Inaasahang Ani","Pambayang Forecast","Gabay at Payo"}
+    _valid = {"Overview","Price Forecast","Harvest Forecast (Ani)","Municipal Forecast","Guide and Advice"}
     if st.session_state.get("overview_section") not in _valid:
-        st.session_state["overview_section"] = "Pangkalahatan"
-    _current_section_for_filter = st.session_state.get("overview_section", "Pangkalahatan")
-    _is_municipal_section = _current_section_for_filter == "Pambayang Forecast"
-    # top filter bar - municipality hidden on Buong Dashboard, visible on details
+        st.session_state["overview_section"] = "Overview"
+    _current_section_for_filter = st.session_state.get("overview_section", "Overview")
+    _is_municipal_section = _current_section_for_filter == "Municipal Forecast"
+    # top filter bar - municipality hidden on Overview, visible on details
     if _is_municipal_section:
         filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4, gap="small")
     else:
@@ -553,11 +553,11 @@ def overview_page():
             selected_muni = st.selectbox("Bayan", options=muni_options, key="overview_selected_muni", label_visibility="collapsed")
     else:
         selected_muni = st.session_state.get("overview_selected_muni", "Lahat ng Bayan")
-        # keep state in sync but hide dropdown on Buong Dashboard
+        # keep state in sync but hide dropdown on Overview
     selected_years = list(range(selected_start_year, selected_end_year + 1))
     selected_munis = [selected_muni] if selected_muni != "Lahat ng Bayan" else all_munis_options
     # visible tooltip for farmers - not techy, always shown
-    if _current_section_for_filter == "Buong Dashboard":
+    if _current_section_for_filter == "Overview":
         st.markdown("""
         <div style="background:#FFF8E1; border:1px solid #FFE082; border-left:6px solid #F9A825; border-radius:10px; padding:10px 14px; margin:8px 0 10px 0; display:flex; gap:10px; align-items:flex-start;">
             <i class="material-symbols-outlined" style="font-size:20px; color:#F57F17; margin-top:1px;">info</i>
@@ -574,16 +574,16 @@ def overview_page():
                 is_active = (st.session_state.get("overview_section") == label)
                 if st.button(label, icon=f":material/{icon}:" if icon else None, use_container_width=True, type="primary" if is_active else "secondary", key=f"ov_qv_{icon}"):
                     st.session_state["overview_section"] = label; st.rerun()
-        section_choice = st.session_state.get("overview_section", "Pangkalahatan")
+        section_choice = st.session_state.get("overview_section", "Overview")
     st.session_state.setdefault("ov_mobile_nav_open", False)
     st.markdown('<div class="ov-phone-marker" style="display:none;"></div>', unsafe_allow_html=True)
     _is_open = st.session_state.get("ov_mobile_nav_open", False)
-    _lbl = "Isara" if _is_open else "Menu"; _ico = "close" if _is_open else "menu"
+    _lbl = "Close" if _is_open else "Menu"; _ico = "close" if _is_open else "menu"
     if st.button(_lbl, icon=f":material/{_ico}:", key="ov_phone_toggle", type="primary"):
         st.session_state["ov_mobile_nav_open"] = not _is_open; st.rerun()
     if st.session_state.get("ov_mobile_nav_open", False):
         st.markdown("""<style>@media (max-width: 768px) { section[data-testid="stSidebar"] { display:flex !important; position:fixed !important; left:0 !important; top:0 !important; bottom:0 !important; width:78% !important; max-width:300px !important; min-width:260px !important; z-index:1000 !important; box-shadow:4px 0 24px rgba(0,0,0,0.35) !important; overflow-y:auto !important; } }</style>""", unsafe_allow_html=True)
-    show_all = section_choice == "Pangkalahatan"
+    show_all = section_choice == "Overview"
     if selected_years:
         provincial_year = df[df["year"].isin(selected_years)].copy().sort_values("date")
         muni_filtered = muni[muni["year"].isin(selected_years)]
@@ -703,9 +703,9 @@ def overview_page():
             _hero_label = forecast_months[0].strftime("%b %Y") if len(forecast_months) > 0 else "Forecast"
         except Exception:
             _hero_label = "Forecast"
-        st.markdown(f"""<div style="background: linear-gradient(90deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.82) 45%, rgba(255,255,255,0.10) 100%), url("https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2070"); background-size:cover; background-position:center; border-radius:16px; padding:22px 28px; border:1px solid #E8EFDE; margin-bottom:16px; display:flex; align-items:center; gap:12px;"><div style="width:38px; height:38px; background:#E8F5E9; border-radius:10px; display:flex; align-items:center; justify-content:center; border:1px solid #C8E6C9;"><i class="material-symbols-outlined" style="font-size:20px; color:#2E7D32;">eco</i></div><div><div style="font-family:'DM Serif Display', serif; font-size:20px; color:#1B4332; font-weight:400; margin:0;">Good day, Farmer!</div><div style="font-size:12px; color:#3A4D3D; margin-top:2px;">Here's your palay outlook for Bataan &bull; {_hero_label} forecast &bull; {len(selected_munis) if selected_munis else 0} bayan</div></div></div>""", unsafe_allow_html=True)
-    muni_badge = selected_muni if selected_muni != "Lahat ng Bayan" else "Lahat ng Bayan sa Bataan"
-    st.markdown(f"""<div style="display:inline-flex; align-items:center; gap:6px; background:#E8F5E9; border:1px solid #C8E6C9; color:#1B5E20; padding:6px 14px; border-radius:999px; font-size:0.78rem; font-weight:700; margin-bottom:14px;"><i class="material-symbols-outlined" style="font-size:16px; color:#1B5E20;">location_on</i>Tinitingnan: {muni_badge} &bull; {selected_start_year}–{selected_end_year}</div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="background: linear-gradient(90deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.82) 45%, rgba(255,255,255,0.10) 100%), url("https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2070"); background-size:cover; background-position:center; border-radius:16px; padding:22px 28px; border:1px solid #E8EFDE; margin-bottom:16px; display:flex; align-items:center; gap:12px;"><div style="width:38px; height:38px; background:#E8F5E9; border-radius:10px; display:flex; align-items:center; justify-content:center; border:1px solid #C8E6C9;"><i class="material-symbols-outlined" style="font-size:20px; color:#2E7D32;">eco</i></div><div><div style="font-family:'DM Serif Display', serif; font-size:20px; color:#1B4332; font-weight:400; margin:0;">Good day, Farmer!</div><div style="font-size:12px; color:#3A4D3D; margin-top:2px;">Here's your palay outlook for Bataan &bull; {_hero_label} forecast &bull; {len(selected_munis) if selected_munis else 0} towns</div></div></div>""", unsafe_allow_html=True)
+    muni_badge = selected_muni if selected_muni != "Lahat ng Bayan" else "All Municipalities in Bataan"
+    st.markdown(f"""<div style="display:inline-flex; align-items:center; gap:6px; background:#E8F5E9; border:1px solid #C8E6C9; color:#1B5E20; padding:6px 14px; border-radius:999px; font-size:0.78rem; font-weight:700; margin-bottom:14px;"><i class="material-symbols-outlined" style="font-size:16px; color:#1B5E20;">location_on</i>Viewing: {muni_badge} &bull; {selected_start_year}–{selected_end_year}</div>""", unsafe_allow_html=True)
     top5_municipalities = dl.get_top_5_producing_municipalities(muni_filtered, selected_years)
     total_production = dl.get_total_production(provincial_year, selected_years)
     if total_production is None: total_production = dl.get_total_production(muni_filtered, selected_years)
@@ -813,8 +813,8 @@ def overview_page():
         st.markdown("""<div style="text-align:center; padding:10px 0 5px 0; font-size:0.75rem; color:#9CA3AF; border-top:1px solid #E5E7EB; margin-top:10px;"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#9CA3AF;">agriculture</i>Bataan Rice Monitoring System &bull; v2.0</div>""", unsafe_allow_html=True)
         return
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
-    if section_choice == "Tantiya sa Presyo":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">payments</i>Tantiya sa Presyo</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast ng presyo sa lalawigan — Fancy vs Regular, kasama ang historical trend at 6-month forecast.</div></div>""", unsafe_allow_html=True)
+    if section_choice == "Price Forecast":
+        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">payments</i>Price Forecast</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Provincial price forecast — Fancy vs Regular, with historical trend and 6-month forecast.</div></div>""", unsafe_allow_html=True)
         try:
             benchmark_option = st.segmented_control("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], default="Wala", key="price_detail_benchmark")
             if benchmark_option is None: benchmark_option = "Wala"
@@ -840,8 +840,8 @@ def overview_page():
         with col_b:
             st.markdown(f"<div style='background:#FFF7ED; border:1px solid #FDBA74; border-radius:10px; padding:12px;'><div style='font-weight:700; color:#9A3412; font-size:0.85rem;'><i class='material-symbols-outlined' style='font-size:14px; vertical-align:middle; margin-right:4px;'>flag</i>Kumpara sa Presyo ng NFA</div><div style='font-size:0.85rem; color:#374151; margin-top:4px;'>Regular \u20B1{next_regular_pred:.2f} vs \u20B119.00 — {'lagpas sa presyo ng NFA, puwedeng ibenta' if next_regular_pred >= 19 else 'mababa sa presyo ng NFA, malulugi pag binenta'}</div></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-    elif section_choice == "Inaasahang Ani":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">eco</i>Inaasahang Ani</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast ng ani — historical na datos at trend kada quarter at taon.</div></div>""", unsafe_allow_html=True)
+    elif section_choice == "Harvest Forecast (Ani)":
+        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">eco</i>Harvest Forecast (Ani)</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Harvest forecast — historical data and quarterly/annual trend.</div></div>""", unsafe_allow_html=True)
         try:
             benchmark_option = st.segmented_control("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], default="Wala", key="yield_detail_benchmark")
             if benchmark_option is None: benchmark_option = "Wala"
@@ -892,8 +892,8 @@ def overview_page():
             """, unsafe_allow_html=True)
         else:
             st.info("Walang sapat na datos para sa buod ng ani.")
-    elif section_choice == "Pambayang Forecast":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">location_on</i>Pambayang Forecast</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast kada bayan — pili ng binhi at klase, comparison ng presyo at historical production.</div></div>""", unsafe_allow_html=True)
+    elif section_choice == "Municipal Forecast":
+        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">location_on</i>Municipal Forecast</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast per town — choose seed and class, compare price and historical production.</div></div>""", unsafe_allow_html=True)
         try:
             df_municipal_forecast = df_municipal_forecasts.copy()
             if df_municipal_forecast.empty:
@@ -993,7 +993,7 @@ def overview_page():
                 st.warning(f"Chart error: {str(e)}")
             st.markdown("</div>", unsafe_allow_html=True)
         # pies hidden for farmer - kept for LGU only
-    elif section_choice == "Gabay at Payo":
+    elif section_choice == "Guide and Advice":
         st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">lightbulb</i>Gabay at Payo</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Mga payong galing sa hula</div></div>""", unsafe_allow_html=True)
         st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>Payo Batay sa Forecast</div><div class="component-desc">Rekomendasyon batay sa forecast ng presyo at ani.</div>', unsafe_allow_html=True)
         if not muni_filtered.empty:
