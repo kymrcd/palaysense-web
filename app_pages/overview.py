@@ -67,7 +67,8 @@ def _pick_column(df, candidates):
         return None
     return next((c for c in candidates if c in df.columns), None)
 
-# ---- farmer helpers for Pangkalahatan hero/top cards (surgical patch - DETALYE untouched) ----
+# ---- farmer helpers (English) ----
+
 def _build_price_context(fc_fancy, fc_regular, forecast_months):
     def _interp(vals):
         if not vals or len(vals)==0:
@@ -119,287 +120,91 @@ def _harvest_interpretation(yield_vals, quarter_labels):
         sent = f"Yield is forecast to ease slightly after {quarter_labels[0] if quarter_labels else 'next quarter'}."
     return {"avg":avg, "range":(lo,hi), "delta_prev": delta, "sentence": sent, "lo":lo, "hi":hi}
 
+def _municipal_yield_estimate(selected_muni, provincial_yield_vals, provincial_labels, municipal_prod_df):
+    """Historical municipal yield (not a forecast) — for reference only."""
+    prov_forecast = float(pd.Series(provincial_yield_vals).dropna().iloc[0]) if provincial_yield_vals and len(pd.Series(provincial_yield_vals).dropna())>0 else None
+    try:
+        if municipal_prod_df is None or municipal_prod_df.empty or selected_muni in (None, "All Municipalities", ""):
+            return None, None, None
+        mdf = municipal_prod_df.copy()
+        mdf.columns = [str(c).strip() for c in mdf.columns]
+        mc = next((c for c in mdf.columns if c.lower()=="municipality"), None)
+        if mc is None:
+            return None, None, None
+        mdf[mc] = mdf[mc].astype(str)
+        sub = mdf[mdf[mc].str.lower()==str(selected_muni).lower()]
+        if sub.empty:
+            return None, None, None
+        ap_col = next((c for c in mdf.columns if c.lower() in ("ave_production","aveproduction","avg_yield")), None)
+        if ap_col is None:
+            return None, None, None
+        sub_vals = pd.to_numeric(sub[ap_col], errors="coerce").dropna()
+        sub_vals = sub_vals[(sub_vals >= 1.5) & (sub_vals <= 8.0)]
+        if sub_vals.empty:
+            return None, None, None
+        _all_vals = pd.to_numeric(mdf[ap_col], errors="coerce").dropna()
+        _all_vals = _all_vals[(_all_vals >= 1.5) & (_all_vals <= 8.0)]
+        prov_hist_avg = _all_vals.mean() if not _all_vals.empty else None
+        if prov_hist_avg is None or pd.isna(prov_hist_avg):
+            return None, None, None
+        try:
+            ycol = next((c for c in mdf.columns if c.lower()=="year"), None)
+            if ycol is not None:
+                sub_sorted = sub.sort_values(ycol)
+                sub_re_vals = pd.to_numeric(sub_sorted[ap_col], errors="coerce").dropna()
+                sub_re_vals = sub_re_vals[(sub_re_vals >= 1.5) & (sub_re_vals <= 8.0)]
+                muni_hist_avg = float(sub_re_vals.tail(5).mean()) if not sub_re_vals.empty else float(sub_vals.tail(3).mean())
+            else:
+                muni_hist_avg = float(sub_vals.tail(5).mean())
+        except Exception:
+            muni_hist_avg = float(sub_vals.tail(3).mean())
+        if pd.isna(prov_hist_avg) or pd.isna(muni_hist_avg) or prov_hist_avg==0:
+            return None, None, None
+        diff = float(muni_hist_avg - prov_hist_avg)
+        if diff > 0.05:
+            comp = f"Above the provincial historical average ({prov_hist_avg:.2f} MT/ha) by {diff:.2f}"
+            status = "above"
+        elif diff < -0.05:
+            comp = f"Below the provincial historical average ({prov_hist_avg:.2f} MT/ha) by {abs(diff):.2f}"
+            status = "below"
+        else:
+            comp = f"Around the provincial historical average ({prov_hist_avg:.2f} MT/ha)"
+            status = "around"
+        return float(muni_hist_avg), float(prov_hist_avg), (comp, status, diff, prov_forecast)
+    except Exception:
+        return None, None, None
+
 def _farmer_price_chart(forecast_months, vals, color="#1B5E20"):
     fig = go.Figure()
     if not vals or len(vals)==0:
         return fig
     labels = [m.strftime("%b %Y") if hasattr(m,'strftime') else str(m) for m in forecast_months[:len(vals)]]
-    fig.add_trace(go.Scatter(x=labels, y=vals, mode="lines+markers+text", name="Forecast", line=dict(color=color, width=2.6), marker=dict(size=7, color=color), text=[f"\u20B1{v:.2f}" if pd.notna(v) else "" for v in vals], textposition="top center", textfont=dict(size=10, color="#1B4332")))
+    fig.add_trace(go.Scatter(x=labels, y=vals, mode="lines+markers+text", name="Forecast", line=dict(color=color, width=2.6), marker=dict(size=7, color=color), text=[f"₱{v:.2f}" if pd.notna(v) else "" for v in vals], textposition="top center", textfont=dict(size=10, color="#1B4332")))
     try:
         s = pd.Series(vals, dtype=float)
         mn_idx = int(s.idxmin()); mx_idx = int(s.idxmax())
         mn_val = float(s.min()); mx_val = float(s.max())
         mn_lab = labels[mn_idx]; mx_lab = labels[mx_idx]
-        fig.add_annotation(x=mn_lab, y=mn_val, text=f"Lowest<br>{mn_lab}<br>\u20B1{mn_val:.2f}", showarrow=False, yshift=-28, bgcolor="#F1F8E9", bordercolor="#C5E1A5", borderwidth=1, font=dict(size=9, color="#33691E"), opacity=0.95)
-        fig.add_annotation(x=mx_lab, y=mx_val, text=f"Highest<br>{mx_lab}<br>\u20B1{mx_val:.2f}", showarrow=False, yshift=22, bgcolor="#E8F5E9", bordercolor="#A5D6A7", borderwidth=1, font=dict(size=9, color="#1B5E20"), opacity=0.95)
+        fig.add_annotation(x=mn_lab, y=mn_val, text=f"Lowest<br>{mn_lab}<br>₱{mn_val:.2f}", showarrow=False, yshift=-28, bgcolor="#F1F8E9", bordercolor="#C5E1A5", borderwidth=1, font=dict(size=9, color="#33691E"), opacity=0.95)
+        fig.add_annotation(x=mx_lab, y=mx_val, text=f"Highest<br>{mx_lab}<br>₱{mx_val:.2f}", showarrow=False, yshift=22, bgcolor="#E8F5E9", bordercolor="#A5D6A7", borderwidth=1, font=dict(size=9, color="#1B5E20"), opacity=0.95)
         rng = max(vals)-min(vals)
         pad = max(0.6, rng*0.35)
         fig.update_yaxes(range=[min(vals)-pad, max(vals)+pad])
     except Exception:
         pass
-    fig.update_layout(height=300, margin=dict(l=10,r=10,t=26,b=10), plot_bgcolor="white", paper_bgcolor="white", xaxis=dict(gridcolor="#F3F4F6", showgrid=True, tickfont=dict(size=11, color="#6B7280")), yaxis=dict(gridcolor="#F3F4F6", showgrid=True, tickfont=dict(size=11, color="#6B7280"), title=dict(text="\u20B1/kg", font=dict(size=11, color="#6B7280"))), showlegend=False, hovermode="x unified")
+    fig.update_layout(height=300, margin=dict(l=10,r=10,t=26,b=10), plot_bgcolor="white", paper_bgcolor="white", xaxis=dict(gridcolor="#F3F4F6", showgrid=True, tickfont=dict(size=11, color="#6B7280")), yaxis=dict(gridcolor="#F3F4F6", showgrid=True, tickfont=dict(size=11, color="#6B7280"), title=dict(text="₱/kg", font=dict(size=11, color="#6B7280"))), showlegend=False, hovermode="x unified")
     return fig
-
-# benchmark helpers
-def _add_benchmark_ref_line(fig, y_value, label, line_color="#78909C", annotation_position="top left"):
-    if fig is None or y_value is None:
-        return fig
-    try:
-        y = float(y_value)
-    except (TypeError, ValueError):
-        return fig
-    if pd.isna(y):
-        return fig
-    try:
-        fig.add_hline(y=y, line_dash="dot", line_width=1.2, line_color=line_color, opacity=0.6, annotation_text=label, annotation_position=annotation_position, annotation=dict(font=dict(size=10, color=line_color), bgcolor="rgba(255,255,255,0.85)"))
-    except Exception:
-        try:
-            fig.add_hline(y=y, line_dash="dot", line_width=1.2, line_color=line_color, opacity=0.6, annotation_text=label, annotation_position=annotation_position)
-        except Exception:
-            pass
-    return fig
-
-def _normalize_benchmarks(benchmark_option):
-    _none_vals = ("None", "Hide (None)", "Itago (None)", "Wala")
-    if benchmark_option is None:
-        return set()
-    if isinstance(benchmark_option, (list, set, tuple)):
-        return {str(o).strip() for o in benchmark_option if str(o).strip() and str(o).strip() not in _none_vals}
-    s = str(benchmark_option).strip()
-    if not s or s in _none_vals:
-        return set()
-    return {s}
-
-def _apply_benchmarks_to_fig(fig, df, chart_type, benchmark_options, provincial_df=None):
-    opts = _normalize_benchmarks(benchmark_options)
-    if not opts:
-        return fig
-    src_df = provincial_df if provincial_df is not None and chart_type in ("yield", "price") else df
-    if src_df is None:
-        src_df = df
-    for opt in opts:
-        try:
-            if chart_type == "yield":
-                if opt in ("Presyo sa Merkado", "Market Price", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
-                    _col = "quarterly_yield_mt_per_ha"
-                    _col = _col if src_df is not None and _col in src_df.columns else _pick_column(src_df, ["quarterly_yield_mt_per_ha", "yield", "yield_mt_per_ha"])
-                    hist_avg = None
-                    if _col and src_df is not None and _col in src_df.columns:
-                        hist_avg = pd.to_numeric(src_df[_col], errors="coerce").dropna().mean()
-                        if pd.isna(hist_avg):
-                            hist_avg = None
-                    if hist_avg is not None and not pd.isna(hist_avg):
-                        v = float(hist_avg)
-                        label = f"Bataan 10-Yr Avg Yield ({v:.2f} MT/ha)"
-                        pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
-                        fig = _add_benchmark_ref_line(fig, v, label, line_color="#616161", annotation_position=pos)
-                elif opt in ("Target ng Gobyerno", "Government Target", "NFA / DA Policy Baseline"):
-                    pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
-                    fig = _add_benchmark_ref_line(fig, 4.50, "DA Target Yield (4.50 MT/ha)", line_color="#2E7D32", annotation_position=pos)
-                continue
-            if chart_type == "price":
-                if opt in ("Presyo sa Merkado", "Market Price", "3-Year/Quarter Rolling Market Average", "10-Year Historical Average"):
-                    rolling_regular_avg = None; rolling_fancy_avg = None
-                    try:
-                        if src_df is not None and "other_variety_price" in src_df.columns:
-                            rolling_regular_avg = pd.to_numeric(src_df["other_variety_price"], errors="coerce").dropna().tail(12).mean()
-                            if pd.isna(rolling_regular_avg):
-                                rolling_regular_avg = None
-                        if src_df is not None and "fancy_palay_price" in src_df.columns:
-                            rolling_fancy_avg = pd.to_numeric(src_df["fancy_palay_price"], errors="coerce").dropna().tail(12).mean()
-                            if pd.isna(rolling_fancy_avg):
-                                rolling_fancy_avg = None
-                    except Exception:
-                        pass
-                    if rolling_regular_avg is not None and not pd.isna(rolling_regular_avg):
-                        v = float(rolling_regular_avg)
-                        label = f"Regular 3-Yr Rolling Avg (\u20B1{v:.2f}/kg)"
-                        pos = "top left" if fig.layout.shapes is None or len(fig.layout.shapes) == 0 else "bottom left"
-                        fig = _add_benchmark_ref_line(fig, v, label, line_color="#616161", annotation_position=pos)
-                    if rolling_fancy_avg is not None and not pd.isna(rolling_fancy_avg):
-                        v = float(rolling_fancy_avg)
-                        label = f"Fancy 3-Yr Rolling Avg (\u20B1{v:.2f}/kg)"
-                        pos = "bottom left" if fig.layout.shapes is None or len(fig.layout.shapes) == 1 else "top left"
-                        fig = _add_benchmark_ref_line(fig, v, label, line_color="#78909C", annotation_position=pos)
-                elif opt in ("Target ng Gobyerno", "Government Target", "NFA / DA Policy Baseline"):
-                    fig = _add_benchmark_ref_line(fig, 19.00, "NFA Floor Price (\u20B119.00/kg)", line_color="#EF4444", annotation_position="bottom left")
-                    fig = _add_benchmark_ref_line(fig, 23.75, "Fancy Commercial Target (\u20B123.75/kg)", line_color="#F59E0B", annotation_position="top left")
-                continue
-        except Exception:
-            continue
-    return fig
-
-# period helpers
-def _period_suffix(period: str) -> str:
-    if not period:
-        return ""
-    p = str(period).strip().upper()
-    if p == "ANNUAL":
-        return ""
-    if p in ("SEMESTER 1", "SEM 1"):
-        return " \u2022 Sem 1"
-    if p in ("SEMESTER 2", "SEM 2"):
-        return " \u2022 Sem 2"
-    if p == "QUARTER 1": return " \u2022 Q1"
-    if p == "QUARTER 2": return " \u2022 Q2"
-    if p == "QUARTER 3": return " \u2022 Q3"
-    if p == "QUARTER 4": return " \u2022 Q4"
-    return ""
-
-def _filter_df_by_period(df, period):
-    if df is None or df.empty or "date" not in df.columns:
-        return df
-    p = str(period).strip().upper() if period else "ANNUAL"
-    try:
-        d = pd.to_datetime(df["date"], errors="coerce"); months = d.dt.month; quarters = d.dt.quarter
-    except Exception:
-        return df
-    if p in ("SEMESTER 1", "SEM 1"): return df[months.between(1, 6)]
-    if p in ("SEMESTER 2", "SEM 2"): return df[months.between(7, 12)]
-    if p == "QUARTER 1": return df[quarters == 1]
-    if p == "QUARTER 2": return df[quarters == 2]
-    if p == "QUARTER 3": return df[quarters == 3]
-    if p == "QUARTER 4": return df[quarters == 4]
-    return df
-
-def _align_forecast_arrays(fancy_arr, regular_arr):
-    fancy_s = pd.Series(list(fancy_arr) if fancy_arr is not None else [], name="fancy_palay_price")
-    regular_s = pd.Series(list(regular_arr) if regular_arr is not None else [], name="other_variety_price")
-    aligned = pd.concat([fancy_s, regular_s], axis=1, join="outer").sort_index()
-    return aligned["fancy_palay_price"], aligned["other_variety_price"]
-
-def _group_by_period(df, period="ANNUAL", value_cols=None):
-    if value_cols is None: value_cols = []
-    if df is None or df.empty: return pd.DataFrame(columns=["period_label"] + value_cols)
-    temp = df.copy(); temp["date"] = pd.to_datetime(temp["date"]); temp["year"] = temp["date"].dt.year; temp["quarter"] = temp["date"].dt.quarter; temp["month"] = temp["date"].dt.month; temp["semester"] = np.where(temp["month"] <= 6, 1, 2)
-    p = str(period).strip().upper() if period else "ANNUAL"
-    if p in ("SEMESTER 1", "SEM 1"):
-        temp = temp[temp["semester"] == 1]
-        if temp.empty: return pd.DataFrame(columns=["period_label"] + value_cols)
-        grouped = temp.groupby("year").mean(numeric_only=True).reset_index(); grouped["period_label"] = grouped["year"].astype(str) + " Sem 1"; return grouped
-    if p in ("SEMESTER 2", "SEM 2"):
-        temp = temp[temp["semester"] == 2]
-        if temp.empty: return pd.DataFrame(columns=["period_label"] + value_cols)
-        grouped = temp.groupby("year").mean(numeric_only=True).reset_index(); grouped["period_label"] = grouped["year"].astype(str) + " Sem 2"; return grouped
-    if p == "QUARTER 1":
-        temp = temp[temp["quarter"] == 1]
-        if temp.empty: return pd.DataFrame(columns=["period_label"] + value_cols)
-        grouped = temp.groupby("year").mean(numeric_only=True).reset_index(); grouped["period_label"] = grouped["year"].astype(str) + "-Q1"; return grouped
-    if p == "QUARTER 2":
-        temp = temp[temp["quarter"] == 2]
-        if temp.empty: return pd.DataFrame(columns=["period_label"] + value_cols)
-        grouped = temp.groupby("year").mean(numeric_only=True).reset_index(); grouped["period_label"] = grouped["year"].astype(str) + "-Q2"; return grouped
-    if p == "QUARTER 3":
-        temp = temp[temp["quarter"] == 3]
-        if temp.empty: return pd.DataFrame(columns=["period_label"] + value_cols)
-        grouped = temp.groupby("year").mean(numeric_only=True).reset_index(); grouped["period_label"] = grouped["year"].astype(str) + "-Q3"; return grouped
-    if p == "QUARTER 4":
-        temp = temp[temp["quarter"] == 4]
-        if temp.empty: return pd.DataFrame(columns=["period_label"] + value_cols)
-        grouped = temp.groupby("year").mean(numeric_only=True).reset_index(); grouped["period_label"] = grouped["year"].astype(str) + "-Q4"; return grouped
-    grouped = temp.groupby("year").mean(numeric_only=True).reset_index(); grouped["period_label"] = grouped["year"].astype(str); return grouped
-
-# charts
-def _price_historical_chart(df, period="ANNUAL", benchmark_option="Wala"):
-    value_cols = []
-    if "fancy_palay_price" in df.columns: value_cols.append("fancy_palay_price")
-    if "other_variety_price" in df.columns: value_cols.append("other_variety_price")
-    if not value_cols: return go.Figure()
-    grouped = _group_by_period(df, period, value_cols)
-    if grouped.empty: return go.Figure()
-    fig = go.Figure()
-    if "fancy_palay_price" in grouped.columns:
-        fig.add_trace(go.Scatter(x=grouped["period_label"], y=grouped["fancy_palay_price"], mode="lines+markers", name="Fancy Palay", line=dict(color="#2E7D32", width=2.5), marker=dict(size=6)))
-        peak_idx = grouped["fancy_palay_price"].idxmax()
-        if pd.notna(peak_idx):
-            peak_row = grouped.loc[peak_idx]
-            fig.add_annotation(x=peak_row["period_label"], y=peak_row["fancy_palay_price"], text=f"\u25B2 Peak: \u20B1{peak_row['fancy_palay_price']:.2f}/kg", showarrow=True, arrowhead=2, arrowcolor="#16A34A", ax=0, ay=-45, font=dict(size=10, color="#15803D"), bgcolor="rgba(255,255,255,0.9)", bordercolor="#16A34A", borderwidth=1, borderpad=4)
-    if "other_variety_price" in grouped.columns:
-        fig.add_trace(go.Scatter(x=grouped["period_label"], y=grouped["other_variety_price"], mode="lines+markers", name="Regular Palay", line=dict(color="#D4A017", width=2.5), marker=dict(size=6)))
-        peak_idx = grouped["other_variety_price"].idxmax()
-        if pd.notna(peak_idx):
-            peak_row = grouped.loc[peak_idx]
-            fig.add_annotation(x=peak_row["period_label"], y=peak_row["other_variety_price"], text=f"\u25B2 Peak: \u20B1{peak_row['other_variety_price']:.2f}/kg", showarrow=True, arrowhead=2, arrowcolor="#6D28D9", ax=0, ay=45, font=dict(size=10, color="#6D28D9"), bgcolor="rgba(255,255,255,0.9)", bordercolor="#6D28D9", borderwidth=1, borderpad=4)
-    fig = _apply_benchmarks_to_fig(fig, df, "price", benchmark_option)
-    fig.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10), xaxis_title="Year", yaxis_title="\u20B1/kg", legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=11)), plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified", xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
-    return fig
-
-def _price_forecast_chart(provincial_df, fancy_forecast, regular_forecast, benchmark_option="Wala"):
-    fig = go.Figure()
-    try:
-        fancy_fc, regular_fc = _align_forecast_arrays(fancy_forecast, regular_forecast)
-        if fancy_fc.dropna().empty and regular_fc.dropna().empty: return fig
-        n = len(fancy_fc)
-        hist_dates = pd.to_datetime(provincial_df["date"], errors="coerce").dropna()
-        if hist_dates.empty: raise ValueError("No historical dates")
-        last_hist_date = hist_dates.max()
-        fc_months = pd.date_range(start=last_hist_date + pd.DateOffset(months=1), periods=n, freq="MS")
-        fig.add_trace(go.Scatter(x=fc_months, y=fancy_fc.values, mode="lines+markers", name="Fancy Forecast", line=dict(color="#2E7D32", width=2.5, dash="dash"), marker=dict(size=6, symbol="diamond"), connectgaps=False))
-        fig.add_trace(go.Scatter(x=fc_months, y=regular_fc.values, mode="lines+markers", name="Regular Forecast", line=dict(color="#D4A017", width=2.5, dash="dash"), marker=dict(size=6, symbol="diamond"), connectgaps=False))
-        fig = _apply_benchmarks_to_fig(fig, provincial_df, "price", benchmark_option)
-        fig.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=None, yaxis_title="\u20B1/kg", legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=11)), plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified", xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
-    except Exception:
-        return go.Figure()
-    return fig
-
-def _yield_historical_chart(df, period="ANNUAL", benchmark_option="Wala"):
-    grouped = _group_by_period(df, period, ["quarterly_yield_mt_per_ha"])
-    if grouped.empty or "quarterly_yield_mt_per_ha" not in grouped.columns: return go.Figure()
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=grouped["period_label"], y=grouped["quarterly_yield_mt_per_ha"], mode="lines+markers", name="Historical Yield", line=dict(color="#1B5E20", width=3), marker=dict(size=7)))
-    peak_idx = grouped["quarterly_yield_mt_per_ha"].idxmax()
-    if pd.notna(peak_idx):
-        peak_row = grouped.loc[peak_idx]
-        fig.add_annotation(x=peak_row["period_label"], y=peak_row["quarterly_yield_mt_per_ha"], text=f"\u25B2 Peak: {peak_row['quarterly_yield_mt_per_ha']:.2f} MT/ha", showarrow=True, arrowhead=2, arrowcolor="#F57C00", ax=0, ay=-45, font=dict(size=10, color="#C2410C"), bgcolor="rgba(255,255,255,0.9)", bordercolor="#F57C00", borderwidth=1, borderpad=4)
-    fig = _apply_benchmarks_to_fig(fig, df, "yield", benchmark_option)
-    fig.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10), xaxis_title="Year", yaxis_title="MT/ha", legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5, font=dict(size=11)), plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified", xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
-    return fig
-
-def _yield_forecast_chart(provincial_df, yield_forecast, benchmark_option="Wala"):
-    # same orange bar design as LGU yield forecast
-    fig = go.Figure()
-    try:
-        fc_yield = list(yield_forecast) if yield_forecast is not None else []
-        if not fc_yield: return fig
-        hist_dates = pd.to_datetime(provincial_df["date"], errors="coerce").dropna()
-        if hist_dates.empty: raise ValueError("No historical dates")
-        last_hist_date = hist_dates.max()
-        fc_quarters = pd.period_range(start=pd.Period(last_hist_date, freq="Q") + 1, periods=len(fc_yield), freq="Q")
-        fc_labels = [f"Q{q.quarter} {q.year}" for q in fc_quarters]
-        ydf = pd.DataFrame({"Quarter": fc_labels, "Yield": fc_yield})
-        fig = px.bar(ydf, x="Quarter", y="Yield", color="Yield", color_continuous_scale=["#8D4004", "#E67E22", "#F39C12", "#F1C40F"], text=ydf["Yield"].round(2))
-        fig.update_traces(textposition="outside", marker_line_width=0, marker_cornerradius=8, hovertemplate="%{x}<br>Hula: %{y:.2f} MT/ha<extra></extra>")
-        fig_go = go.Figure(fig)
-        try:
-            peak_val = float(pd.Series(fc_yield).max())
-            peak_idx = fc_yield.index(peak_val)
-            fig_go.add_annotation(x=fc_labels[peak_idx], y=peak_val, text=f"\u25B2 Peak: {peak_val:.2f} MT/ha", showarrow=True, arrowhead=2, arrowcolor="#F57C00", ax=0, ay=-45, font=dict(size=10, color="#C2410C"), bgcolor="rgba(255,255,255,0.9)", bordercolor="#F57C00", borderwidth=1, borderpad=4)
-        except Exception:
-            pass
-        fig_go = _apply_benchmarks_to_fig(fig_go, provincial_df, "yield", benchmark_option)
-        try:
-            _mn, _mx = float(pd.Series(fc_yield).min()), float(pd.Series(fc_yield).max())
-            import math
-            _lo = math.floor((_mn - 0.08) / 0.05) * 0.05
-            _hi = math.ceil((_mx + 0.10) / 0.05) * 0.05
-            fig_go.update_yaxes(range=[_lo, _hi], dtick=0.05, tickformat=".2f")
-        except Exception:
-            pass
-        fig_go.update_layout(height=340, margin=dict(l=10, r=10, t=35, b=10), showlegend=False, bargap=0.4, yaxis_title="MT/ha", xaxis_title=None, plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified", xaxis=dict(gridcolor="#F3F4F6", showgrid=True), yaxis=dict(gridcolor="#F3F4F6", showgrid=True))
-        return fig_go
-    except Exception:
-        return go.Figure()
 
 def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_municipalities, selected_cycle=None):
     if df is None or df.empty:
-        st.info("Wala pang hula para sa bawat bayan.")
+        st.info("No price forecast yet for each town.")
         return
     df = df.copy(); df.columns = [str(col).lower() for col in df.columns]
     if selected_municipalities:
         selected_munis_lc = [str(m).lower() for m in selected_municipalities]
         df = df[df["municipality"].str.lower().isin(selected_munis_lc)]
     if selected_cycle is None:
-        selected_cycle = st.selectbox("Piliin ang panahon ng taniman:", ["Dry Season Crop Cycle", "Wet Season Crop Cycle"], key=f"crop_cycle_{rice_type}_{classification}")
+        selected_cycle = st.selectbox("Choose planting season:", ["Dry Season Crop Cycle", "Wet Season Crop Cycle"], key=f"crop_cycle_{rice_type}_{classification}")
         st.write("---")
     base_key = f"{rice_type.lower()}{classification.lower()}".replace(" ", "")
     suffix = "_dry" if "Dry" in selected_cycle else "_wet"
@@ -407,7 +212,7 @@ def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_m
     type_col = "rice type & season"
     sub = df[df[type_col].str.lower() == target_key] if type_col in df.columns else pd.DataFrame()
     if sub.empty:
-        st.warning(f"Walang datos para sa '{target_key}' — subukan ang ibang kombinasyon.")
+        st.warning(f"No data for '{target_key}' — please try another combination.")
         return
     label_map = {}
     for key, n in (("forecast_month_1_label", 1), ("forecast_month_2_label", 2), ("forecast_month_3_label", 3)):
@@ -419,50 +224,87 @@ def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_m
     forecast_year = next((int(str(label).split()[-1]) for label in forecast_month_labels if str(label).split()[-1].isdigit()), 2026)
     if "Dry" in selected_cycle:
         st.markdown(f"<div style='font-weight:700; color:#1B5E20; margin:0.6rem 0 0.2rem 0;'><i class='material-symbols-outlined' style='font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;'>wb_sunny</i>Dry Season Forecast ({forecast_year})</div>", unsafe_allow_html=True)
-        st.caption(f"Nagtanim noong huling bahagi ng {forecast_year - 1}, anihan Enero–Marso {forecast_year}.")
+        st.caption(f"Planted late {forecast_year - 1}, harvest Jan–Mar {forecast_year}.")
     else:
         st.markdown(f"<div style='font-weight:700; color:#1B5E20; margin:0.6rem 0 0.2rem 0;'><i class='material-symbols-outlined' style='font-size:16px; vertical-align:middle; margin-right:6px; color:#2563EB;'>water_drop</i>Wet Season Forecast ({forecast_year})</div>", unsafe_allow_html=True)
-        st.caption(f"Paghahanda ng lupa Enero–Mayo {forecast_year}, anihan ng tag-ulan Hunyo–Disyembre {forecast_year}.")
+        st.caption(f"Land preparation Jan–May {forecast_year}, rainy-season harvest Jun–Dec {forecast_year}.")
     plot_df = sub.melt(id_vars=["municipality"], value_vars=["month 1", "month 2", "month 3"], var_name="month_key", value_name="price").assign(forecast_month=lambda d: d["month_key"].map(label_map)).groupby(["forecast_month", "municipality"], as_index=False)["price"].mean().dropna(subset=["price"])
     if plot_df.empty:
-        st.info("Walang datos sa pinili mo.")
+        st.info("No data for your selection.")
         return
     plot_df["price"] = pd.to_numeric(plot_df["price"], errors="coerce")
     plot_df = plot_df.dropna(subset=["price"])
     if plot_df.empty:
-        st.info("Walang presyo sa pinili mo.")
+        st.info("No price data for your selection.")
         return
     plot_df["municipality"] = plot_df["municipality"].astype(str).str.title()
-    fig = px.bar(plot_df, x="forecast_month", y="price", color="municipality", barmode="group", category_orders={"forecast_month": forecast_month_labels}, color_discrete_sequence=px.colors.qualitative.Set2, labels={"forecast_month": "Forecast Month", "price": "Price (\u20B1/kg)", "municipality": "Bayan"}, title=f"{rice_type} {classification} — {selected_cycle}")
+    fig = px.bar(plot_df, x="forecast_month", y="price", color="municipality", barmode="group", category_orders={"forecast_month": forecast_month_labels}, color_discrete_sequence=px.colors.qualitative.Set2, labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "municipality": "Town"}, title=f"{rice_type} {classification} — {selected_cycle}")
     fig.update_layout(height=340, margin=dict(t=35, b=100, l=45, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family="Plus Jakarta Sans, sans-serif", size=11), legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, font=dict(size=10), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1), yaxis=dict(gridcolor="#F3F4F6", showgrid=True), xaxis=dict(gridcolor="#F3F4F6", showgrid=False), title=dict(font=dict(size=13)), bargap=0.22, bargroupgap=0.10)
-    fig.update_traces(marker=dict(cornerradius=6, line=dict(width=0)), hovertemplate="Bayan: %{fullData.name}<br>%{x}<br>\u20B1%{y:.2f}/kg<extra></extra>", cliponaxis=False)
+    fig.update_traces(marker=dict(cornerradius=6, line=dict(width=0)), hovertemplate="Town: %{fullData.name}<br>%{x}<br>₱%{y:.2f}/kg<extra></extra>", cliponaxis=False)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
-
-# insight box
-def _farmer_insight_box(text):
-    return f'<div style="background:#F0FDF4; border-left:4px solid #1B5E20; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.82rem; color:#14532D; margin-top:0.6rem; line-height:1.5;"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>{text}</div>'
 
 def overview_page():
     dr = reload_dashboard_data()
     if not dr.has_provincial_data:
-        st.markdown("""
-            <style>
-            .farmer-empty-card { background:#FFFFFF; border:1px solid #E0E0E0; border-radius:12px; padding:40px 32px; min-height:420px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.06); margin:24px auto; max-width:640px; }
-            .farmer-empty-badge { display:inline-flex; align-items:center; gap:6px; background:#E8F5E9; color:#2E7D32; border:1px solid #C8E6C9; padding:6px 14px; border-radius:999px; font-size:0.82rem; font-weight:600; margin-top:16px; }
-            </style>
-            <div class="farmer-empty-card">
-                <h1 style="margin:0; color:#1B5E20; font-size:1.9rem; font-weight:800;">Welcome sa PalaySense Bataan!</h1>
-                <p style="margin:16px 0 0 0; color:#4B5563; font-size:1rem; line-height:1.7; max-width:520px;">Wala pang laman dito. Naghihintay lang kami ng bagong datos mula sa LGU — bumalik ka mamaya.</p>
-                <div class="farmer-empty-badge"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:4px; color:#2E7D32;">info</i>Handa na ang system — naghihintay lang ng datos.</div>
-            </div>
-        """, unsafe_allow_html=True)
-        _, btn_col, _ = st.columns([1, 1.2, 1])
-        with btn_col:
-            if st.button("Bumalik sa Home", icon=":material/home:", key="farmer_empty_to_home", type="primary", use_container_width=True):
-                st.query_params["page"] = "home"; st.rerun()
-        st.stop()
+        _is_maint = False
+        try:
+            if st.session_state.get("maintenance_mode") or st.session_state.get("demo_empty_state"):
+                _is_maint = True
+            if st.query_params.get("maintenance") == "1" or st.query_params.get("demo_empty") == "1":
+                _is_maint = True
+            from pathlib import Path as _P
+            import json as _js
+            _flag = _P(__file__).resolve().parents[1] / "data" / ".maintenance.json"
+            if not _is_maint and _flag.exists():
+                try:
+                    d = _js.loads(_flag.read_text(encoding="utf-8"))
+                    if d.get("enabled"):
+                        _is_maint = True
+                except Exception:
+                    _is_maint = True
+        except Exception:
+            pass
+        if _is_maint:
+            st.markdown("""
+                <style>
+                .farmer-maint-card { background:#FFFBEB; border:1px solid #FDE68A; border-radius:12px; padding:40px 32px; min-height:420px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.06); margin:24px auto; max-width:640px; }
+                .farmer-maint-badge { display:inline-flex; align-items:center; gap:6px; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; padding:6px 14px; border-radius:999px; font-size:0.82rem; font-weight:600; margin-top:16px; }
+                </style>
+                <div class="farmer-maint-card">
+                    <div style="width:64px; height:64px; background:#FEF3C7; border:1px solid #FDE68A; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:16px;">
+                        <i class="material-symbols-outlined" style="font-size:32px; color:#D97706;">construction</i>
+                    </div>
+                    <h1 style="margin:0; color:#92400E; font-size:1.9rem; font-weight:800; line-height:1.25;">System Under Maintenance</h1>
+                    <p style="margin:18px 0 0 0; color:#78350F; font-size:0.98rem; line-height:1.7; max-width:560px;">The <strong>PalaySense Farmer Dashboard</strong> is temporarily unavailable due to <strong>scheduled system maintenance</strong> to improve our service.</p>
+                    <p style="margin:10px 0 0 0; color:#78350F; font-size:0.95rem; line-height:1.6; max-width:560px;">Please try again later. Thank you for your patience and understanding.</p>
+                    <div class="farmer-maint-badge"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:4px; color:#D97706;">info</i>Official Advisory • Office of the Provincial Agriculturist — Bataan</div>
+                </div>
+            """, unsafe_allow_html=True)
+            _, btn_col, _ = st.columns([1, 1.2, 1])
+            with btn_col:
+                if st.button("Back to Home", icon=":material/home:", key="farmer_maint_to_home", type="primary", use_container_width=True):
+                    st.query_params["page"] = "home"; st.rerun()
+            st.stop()
+        else:
+            st.markdown("""
+                <style>
+                .farmer-empty-card { background:#FFFFFF; border:1px solid #E0E0E0; border-radius:12px; padding:40px 32px; min-height:420px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.06); margin:24px auto; max-width:640px; }
+                .farmer-empty-badge { display:inline-flex; align-items:center; gap:6px; background:#E8F5E9; color:#2E7D32; border:1px solid #C8E6C9; padding:6px 14px; border-radius:999px; font-size:0.82rem; font-weight:600; margin-top:16px; }
+                </style>
+                <div class="farmer-empty-card">
+                    <h1 style="margin:0; color:#1B5E20; font-size:1.9rem; font-weight:800;">Welcome to PalaySense Bataan!</h1>
+                    <p style="margin:16px 0 0 0; color:#4B5563; font-size:1rem; line-height:1.7; max-width:520px;">No records to show yet. We are waiting for updated data from your LGU — please check back later.</p>
+                    <div class="farmer-empty-badge"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:4px; color:#2E7D32;">info</i>System ready — waiting for new data.</div>
+                </div>
+            """, unsafe_allow_html=True)
+            _, btn_col, _ = st.columns([1, 1.2, 1])
+            with btn_col:
+                if st.button("Back to Home", icon=":material/home:", key="farmer_empty_to_home", type="primary", use_container_width=True):
+                    st.query_params["page"] = "home"; st.rerun()
+            st.stop()
     if dr.has_provincial_data and not dr.has_forecasts:
-        st.info("Ginagawa pa ang bagong hula sa presyo at ani — makikita mo pa rin ang lumang datos.")
+        st.info("New price and harvest forecasts are being prepared — you can still view past records.")
+
     provincial_df = dr.provincial_df.copy()
     _prod_muni = getattr(dr, "municipal_production_df", None)
     municipality_df = _prod_muni.copy() if _prod_muni is not None and not getattr(_prod_muni, "empty", True) else dr.municipality_df.copy()
@@ -470,112 +312,168 @@ def overview_page():
     forecast_3months_fancy = list(dr.forecast_3months_fancy)
     forecast_variety_3months = list(dr.forecast_variety_3months)
     forecast_quarterly_yield = list(dr.forecast_quarterly_yield)
-    provincial_df = provincial_df.copy()
-    if "date" not in provincial_df.columns or provincial_df.empty:
-        provincial_df = pd.DataFrame(columns=["date", "year", "quarter"])
+
+    hist_last = pd.to_datetime(provincial_df["date"], errors="coerce").max() if "date" in provincial_df.columns and not provincial_df.empty else pd.Timestamp("2026-07-01")
+    if pd.isna(hist_last):
+        hist_last = pd.Timestamp("2026-07-01")
+    fc_len = max(len(forecast_3months_fancy), len(forecast_variety_3months), 6)
+    try:
+        pf = load_provincial_forecasts()
+        fancy_labels = pf[pf["forecast_type"]=="fancy"]["period_label"].tolist() if not pf.empty else []
+        month_map = {"january":1,"february":2,"march":3,"april":4,"may":5,"june":6,"july":7,"august":8,"september":9,"october":10,"november":11,"december":12}
+        forecast_months = []
+        for lbl in fancy_labels[:fc_len]:
+            try:
+                parts = str(lbl).strip().lower().split()
+                m = month_map.get(parts[0], 1)
+                y = int(parts[1])
+                forecast_months.append(pd.Timestamp(year=y, month=m, day=1))
+            except Exception:
+                continue
+        if len(forecast_months) < fc_len:
+            start = (hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp()
+            forecast_months = list(pd.date_range(start=start, periods=fc_len, freq="MS"))
+    except Exception:
+        start = (hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp()
+        forecast_months = list(pd.date_range(start=start, periods=fc_len, freq="MS"))
+    if not forecast_months:
+        forecast_months = list(pd.date_range(start="2026-08-01", periods=6, freq="MS"))
+    try:
+        pf_y = load_provincial_forecasts()
+        y_labels = pf_y[pf_y["forecast_type"]=="yield"]["period_label"].tolist() if not pf_y.empty else []
+        if not y_labels:
+            y_labels = [f"Q4 2026", f"Q1 2027", f"Q2 2027", f"Q3 2027"]
+    except Exception:
+        y_labels = [f"Q4 2026", f"Q1 2027", f"Q2 2027", f"Q3 2027"]
+
+    fc_fancy = list(forecast_3months_fancy)[:6]
+    fc_regular = list(forecast_variety_3months)[:6]
+    while len(fc_fancy) < len(forecast_months):
+        fc_fancy.append(np.nan)
+    while len(fc_regular) < len(forecast_months):
+        fc_regular.append(np.nan)
+    price_ctx = _build_price_context(fc_fancy, fc_regular, forecast_months)
+    yield_ctx = _harvest_interpretation(forecast_quarterly_yield, y_labels)
+
+    next_yield_val = float(pd.Series(forecast_quarterly_yield).dropna().iloc[0]) if forecast_quarterly_yield and len(pd.Series(forecast_quarterly_yield).dropna())>0 else None
+    yield_lo = yield_ctx.get("lo")
+    yield_hi = yield_ctx.get("hi")
+    try:
+        if "quarterly_yield_mt_per_ha" in provincial_df.columns:
+            prev_yield = float(pd.to_numeric(provincial_df["quarterly_yield_mt_per_ha"], errors="coerce").dropna().tail(4).mean())
+        else:
+            prev_yield = None
+    except Exception:
+        prev_yield = None
+    yield_delta_prev = (next_yield_val - prev_yield) if (next_yield_val is not None and prev_yield is not None and not pd.isna(prev_yield)) else None
+
+    muni_label_col = _pick_column(municipality_df, ["municipality", "Municipality", "Mun"])
+    mprod_label_col = None
+    if _prod_muni is not None and not _prod_muni.empty:
+        mprod_label_col = _pick_column(_prod_muni, ["municipality", "Municipality"])
+        all_munis = sorted(_prod_muni[mprod_label_col].dropna().astype(str).str.title().unique().tolist()) if mprod_label_col else []
     else:
-        provincial_df["date"] = pd.to_datetime(provincial_df["date"], errors="coerce")
-        provincial_df = provincial_df.dropna(subset=["date"]).copy()
-    provincial_sorted = provincial_df.sort_values("date").copy() if not provincial_df.empty else pd.DataFrame(columns=["date", "year", "quarter"])
-    df = provincial_sorted.copy()
-    if "date" in df.columns and not df.empty:
-        df["year"] = df["date"].dt.year; df["quarter"] = df["date"].dt.quarter
-    else:
-        df["year"] = pd.Series(dtype="int64"); df["quarter"] = pd.Series(dtype="int64")
-    muni = municipality_df.copy()
-    if muni.empty:
-        muni = pd.DataFrame(columns=["date", "year"])
-    if "date" not in muni.columns:
-        if "year" in muni.columns: muni["date"] = pd.to_datetime(muni["year"].astype(str) + "-06-15")
-        else: muni["date"] = pd.Timestamp("2024-01-01")
-    else:
-        muni["date"] = pd.to_datetime(muni["date"], errors="coerce")
-    muni["year"] = muni["date"].dt.year
-    _yield_col = _pick_column(df, ["quarterly_yield_mt_per_ha", "yield", "yield_mt_per_ha"])
-    if _yield_col is not None:
-        quarterly_df = df.groupby(["year", "quarter"])[_yield_col].mean().reset_index()
-    else:
-        quarterly_df = pd.DataFrame(columns=["year", "quarter", "quarterly_yield_mt_per_ha"])
-    if not quarterly_df.empty:
-        quarterly_df["date_q"] = pd.PeriodIndex(quarterly_df["year"].astype(str) + "Q" + quarterly_df["quarter"].astype(str), freq="Q").to_timestamp()
-        quarterly_df["quarter_label"] = "Q" + quarterly_df["quarter"].astype(str) + " " + quarterly_df["year"].astype(str)
-        quarterly_df["Type"] = "Historical"
-        quarterly_df = quarterly_df.sort_values("date_q")
-    latest_q = quarterly_df.iloc[-1] if not quarterly_df.empty else None
-    _fc_quarter_start = pd.Period(latest_q["date_q"], freq="Q") + 1 if latest_q is not None else pd.Period(pd.Timestamp.today(), freq="Q") + 1
-    forecast_quarters = pd.period_range(start=_fc_quarter_start, periods=4, freq="Q")
-    # top filter bar
-    st.markdown("""<style>div[data-testid="stColumn"] { margin-top:0px !important; padding-top:0px !important; padding-bottom:0.2rem !important; } div[data-testid="stSelectbox"] { margin-top:0px !important; padding-top:0px !important; } div[data-testid="stSelectbox"] > div { border:none !important; background:transparent !important; box-shadow:none !important; } div[data-testid="stSelectbox"] div[role="combobox"] { border:1px solid #1B5E20 !important; background:#FFFFFF !important; border-radius:8px !important; box-shadow:none !important; }</style>""", unsafe_allow_html=True)
-    st.markdown('<div style="margin-top:0.55rem; margin-bottom:0.2rem;"></div>', unsafe_allow_html=True)
-    available_years = sorted(list(df["year"].dropna().unique()), reverse=False)
-    if not available_years: available_years = [2024]
-    st.session_state.setdefault("overview_start_year", available_years[0])
-    st.session_state.setdefault("overview_end_year", available_years[-1])
-    st.session_state.setdefault("overview_period", "ANNUAL")
-    _valid_periods = ["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"]
-    if st.session_state.get("overview_period") not in _valid_periods: st.session_state["overview_period"] = "ANNUAL"
-    st.session_state.setdefault("overview_selected_muni", "Lahat ng Bayan")
-    # sidebar first to know current section for conditional filter
-    QUICK_VIEW_GROUPS = [("OVERVIEW", [("Overview", "dashboard")]), ("DETAILS", [("Price Forecast", "payments"), ("Harvest Forecast (Ani)", "eco"), ("Municipal Forecast", "location_on")]), ("SUPPORT", [("Guide and Advice", "lightbulb")])]
-    _SIDEBAR_KEY_BY_LABEL = {label: key for _, items in QUICK_VIEW_GROUPS for (label, key) in items}
-    _SIDEBAR_LABEL_BY_KEY = {key: label for label, key in _SIDEBAR_KEY_BY_LABEL.items()}
-    _OLD_TO_NEW = {"Buong Dashboard": "Overview", "Pangkalahatan": "Overview", "Price Forecast": "Price Forecast", "Tantiya sa Presyo": "Price Forecast", "Yield Forecast": "Harvest Forecast (Ani)", "Inaasahang Ani": "Harvest Forecast (Ani)", "Municipal Forecast": "Municipal Forecast", "Pambayang Forecast": "Municipal Forecast", "Mga Payo": "Guide and Advice", "Gabay at Payo": "Guide and Advice", "Mga Payo (Advisories)": "Guide and Advice"}
+        all_munis = sorted(municipality_df[muni_label_col].dropna().astype(str).str.title().unique().tolist()) if muni_label_col else []
+    if not all_munis and not df_municipal_forecasts.empty:
+        mc = _pick_column(df_municipal_forecasts, ["Municipality", "municipality"])
+        if mc:
+            all_munis = sorted(df_municipal_forecasts[mc].dropna().astype(str).str.title().unique().tolist())
+    if not all_munis:
+        all_munis = ["Balanga City","Abucay","Bagac","Dinalupihan","Hermosa","Limay","Mariveles","Morong","Orani","Orion","Pilar","Samal"]
+
+    QUICK_VIEW_GROUPS = [("OVERVIEW", [("Overview", "dashboard")]), ("DETAILS", [("Price Forecast", "payments"), ("Harvest Forecast", "eco"), ("Municipal Forecast", "location_on")]), ("SUPPORT", [("Guide and Advice", "lightbulb")])]
     st.session_state.setdefault("overview_section", "Overview")
-    if st.session_state.get("overview_section") in _OLD_TO_NEW:
-        st.session_state["overview_section"] = _OLD_TO_NEW[st.session_state.get("overview_section")]
-    _valid = {"Overview","Price Forecast","Harvest Forecast (Ani)","Municipal Forecast","Guide and Advice"}
+    _valid = {"Overview","Price Forecast","Harvest Forecast","Municipal Forecast","Guide and Advice"}
+    # normalize Harvest Forecast (Ani) -> Harvest Forecast for English
+    if st.session_state.get("overview_section") == "Harvest Forecast (Ani)":
+        st.session_state["overview_section"] = "Harvest Forecast"
     if st.session_state.get("overview_section") not in _valid:
         st.session_state["overview_section"] = "Overview"
-    _current_section_for_filter = st.session_state.get("overview_section", "Overview")
-    _is_municipal_section = _current_section_for_filter == "Municipal Forecast"
-    # top filter bar - municipality hidden on Overview, visible on details
-    if _is_municipal_section:
-        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4, gap="small")
-    else:
-        filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 1], gap="small")
-        filter_col4 = None
-    with filter_col1:
-        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">TAON (MULA)</div>', unsafe_allow_html=True)
-        selected_start_year = st.selectbox("Simula Taon", options=available_years, key="overview_start_year", label_visibility="collapsed")
-    with filter_col2:
-        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">HANGGANG</div>', unsafe_allow_html=True)
-        selected_end_year = st.selectbox("Hanggang Taon", options=available_years, key="overview_end_year", label_visibility="collapsed")
-    with filter_col3:
-        st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">PANAHON</div>', unsafe_allow_html=True)
-        selected_period = st.selectbox("Panahon", options=["ANNUAL", "SEMESTER 1", "SEMESTER 2", "QUARTER 1", "QUARTER 2", "QUARTER 3", "QUARTER 4"], key="overview_period", label_visibility="collapsed")
-    _muni_label_col = _pick_column(muni, ["municipality", "Municipality", "Mun", "Area"])
-    all_munis_options = sorted(muni[_muni_label_col].dropna().unique()) if _muni_label_col is not None else []
-    muni_options = ["Lahat ng Bayan"] + all_munis_options
-    if st.session_state["overview_selected_muni"] not in muni_options: st.session_state["overview_selected_muni"] = "Lahat ng Bayan"
-    if _is_municipal_section and filter_col4 is not None:
-        with filter_col4:
-            st.markdown('<div style="font-weight:700; color:#1B5E20; margin-bottom:0.1rem; line-height:1.1;">BAYAN</div>', unsafe_allow_html=True)
-            selected_muni = st.selectbox("Bayan", options=muni_options, key="overview_selected_muni", label_visibility="collapsed")
-    else:
-        selected_muni = st.session_state.get("overview_selected_muni", "Lahat ng Bayan")
-        # keep state in sync but hide dropdown on Overview
-    selected_years = list(range(selected_start_year, selected_end_year + 1))
-    selected_munis = [selected_muni] if selected_muni != "Lahat ng Bayan" else all_munis_options
-    # visible tooltip for farmers - not techy, always shown
-    if _current_section_for_filter == "Overview":
-        st.markdown("""
-        <div style="background:#FFF8E1; border:1px solid #FFE082; border-left:6px solid #F9A825; border-radius:10px; padding:10px 14px; margin:8px 0 10px 0; display:flex; gap:10px; align-items:flex-start;">
-            <i class="material-symbols-outlined" style="font-size:20px; color:#F57F17; margin-top:1px;">info</i>
-            <div style="font-size:0.82rem; line-height:1.5; color:#5D4037;">
-                <b style="color:#E65100;">Paano gamitin?</b> Ang nasa taas (<b>Pangkalahatan</b>) ay presyo at ani ng <b>pang-buong Bataan</b>. Para makita ang <b>bawat Munisipyo </b>, pindutin sa kaliwa ang <b>Pambayang Forecast</b> at piliin ang bayan. 
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    section_choice = st.session_state.get("overview_section", "Overview")
+
+    st.session_state.setdefault("farmer_price_type", "Regular")
+    st.session_state.setdefault("farmer_selected_muni", all_munis[0] if all_munis else "Mariveles")
+    if st.session_state["farmer_selected_muni"] not in all_munis and all_munis:
+        st.session_state["farmer_selected_muni"] = all_munis[0]
+
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
+    section[data-testid="stSidebar"] {
+        background:#123524 !important;
+        border-right:1px solid rgba(255,255,255,0.08) !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding-top:0.4rem !important; }
+    section[data-testid="stSidebar"] .stButton > button {
+        background:transparent !important; border:none !important; color:rgba(255,255,255,0.85) !important;
+        font-family:'Plus Jakarta Sans', sans-serif !important; font-weight:500 !important; font-size:13px !important;
+        text-align:left !important; justify-content:flex-start !important; border-radius:10px !important; padding:9px 12px !important; min-height:38px !important; height:auto !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button p { color:rgba(255,255,255,0.85) !important; }
+    section[data-testid="stSidebar"] .stButton > button:hover { background:rgba(255,255,255,0.08) !important; color:#FFFFFF !important; }
+    section[data-testid="stSidebar"] .stButton > button:hover p { color:#FFFFFF !important; }
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] { background:#1E5C3A !important; color:#FFFFFF !important; font-weight:700 !important; border-left:3px solid #A3E4A0 !important; }
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] p { color:#FFFFFF !important; font-weight:700 !important; }
+    .farmer-sidebar-label { font-family:'Plus Jakarta Sans', sans-serif; font-size:11px; font-weight:700; color:#7FB094; letter-spacing:0.8px; margin:16px 0 6px 4px; text-transform:uppercase; opacity:0.95; }
+    .farmer-sidebar-card { background:#FFFFFF; border:1px solid #E8EFDE; border-radius:14px; padding:14px; margin-top:16px; box-shadow:0 4px 12px rgba(0,0,0,0.18); }
+    .block-container { padding-top:0 !important; margin-top:0 !important; }
+    div[data-testid="stVerticalBlock"] { gap: 0.6rem !important; }
+    div[data-testid="stVerticalBlock"] > div:has(.farmer-hero) { padding-top: 0 !important; margin-top: 0 !important; }
+    div[data-testid="stVerticalBlock"]:has(.farmer-card-anchor) {
+        background: white !important; border:1px solid #E8EFDE !important; border-radius:16px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.03) !important; padding:16px 16px 14px 16px !important; margin-bottom: 0 !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.farmer-card-anchor.harvest) { background: #FFFEF8 !important; border-color: #F2E8C8 !important; }
+    div[data-testid="stVerticalBlock"]:has(.farmer-muni-card-anchor) {
+        background: white !important; border:1px solid #E8EFDE !important; border-radius:16px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.03) !important; padding:16px !important; margin-bottom: 0 !important;
+    }
+    .farmer-card, .farmer-what-card, .farmer-muni-card { background: white !important; border:1px solid #E8EFDE !important; border-radius:16px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.03) !important; padding:16px !important; margin-bottom: 0 !important; }
+    .farmer-hero { position:relative; background: linear-gradient(90deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.82) 45%, rgba(255,255,255,0.10) 100%), url("https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2070"); background-size:cover; background-position:center; border-radius:0 0 16px 16px; padding:26px 28px; border:1px solid #E8EFDE; border-top:none; overflow:hidden; margin: -12px -16px 16px -16px; width: calc(100% + 32px); min-height: 132px; display:flex; align-items:center; }
+    .farmer-hero-title { font-family:'DM Serif Display', serif; font-size:22px; color:#1B4332; margin:0; font-weight:400; }
+    .farmer-hero-sub { font-family:'Plus Jakarta Sans', sans-serif; font-size:13px; color:#3A4D3D; margin-top:2px; }
+    .farmer-hero-meta { display:flex; gap:8px; align-items:center; margin-top:10px; }
+    .farmer-pill { display:inline-flex; align-items:center; gap:6px; background:white; border:1px solid #E0EAD6; padding:5px 10px; border-radius:999px; font-size:12px; color:#1B4332; font-weight:600; }
+    .farmer-card-title { font-family:'Plus Jakarta Sans', sans-serif; font-size:13px; font-weight:700; color:#1B4332; margin-bottom:10px; display:grid; grid-template-columns:32px 1fr; align-items:center; column-gap:10px; line-height:1; min-height:32px; }
+    .farmer-card-title > span:first-child { width:32px; height:32px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+    .farmer-card-title .material-symbols-outlined { line-height:1 !important; font-size:18px !important; display:flex; align-items:center; justify-content:center; margin:0 !important; }
+    .farmer-card-title > span:last-child { display:flex; align-items:center; height:32px; }
+    .farmer-big-price { font-family:'DM Serif Display', serif; font-size:30px; color:#0F2A1A; line-height:1; margin:6px 0 4px 0; }
+    .farmer-expected-big { font-family:'DM Serif Display', serif; font-size:28px; color:#0F2A1A; line-height:1; margin:4px 0 4px 0; }
+    .farmer-trend { font-size:12px; color:#1B7A3D; font-weight:600; display:flex; align-items:center; gap:4px; }
+    .farmer-mini-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; background:#FAFAF7; border:1px solid #F0EDE0; border-radius:10px; padding:10px; }
+    .farmer-mini-label { font-size:11px; color:#6B7C6E; font-weight:600; }
+    .farmer-mini-value { font-size:14px; color:#0F2A1A; font-weight:800; margin-top:2px; }
+    .farmer-range-bar { height:8px; background:#F0F0EA; border-radius:999px; overflow:hidden; display:flex; margin-top:8px; }
+    .farmer-low-high { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+    .farmer-lh-card { background:white; border:1px solid #E8EFDE; border-radius:10px; padding:10px 12px; }
+    .farmer-lh-label { font-size:11px; font-weight:700; color:#6B7C6E; text-transform:uppercase; letter-spacing:0.4px; }
+    .farmer-lh-month { font-size:12px; font-weight:600; color:#3A4D3D; }
+    .farmer-lh-value { font-size:15px; font-weight:800; color:#0F2A1A; margin-top:2px; }
+    @media (max-width: 900px) { .farmer-hero { padding:16px; } }
+    </style>
+    """, unsafe_allow_html=True)
+
     with st.sidebar:
-        st.markdown("""<style>.ov-qv-group { font-size:0.68rem !important; letter-spacing:0.8px !important; color:#A8C3B0 !important; margin:1.0rem 0 0.45rem 0 !important; font-weight:700 !important; text-align:left !important; } section[data-testid="stSidebar"] .stButton > button { padding:10px 12px 10px 14px !important; min-height:46px !important; line-height:1.3 !important; font-size:0.86rem !important; gap:10px !important; margin:5px 0 !important; border-radius:10px !important; justify-content:flex-start !important; text-align:left !important; align-items:center !important; } section[data-testid="stSidebar"] .stButton > button > div { justify-content:flex-start !important; text-align:left !important; } section[data-testid="stSidebar"] .stButton > button p { text-align:left !important; width:100% !important; } section[data-testid="stSidebar"] > div:first-child { padding-top:0.9rem !important; gap:8px !important; } section[data-testid="stSidebar"] hr.ps-side-divider { margin:0.35rem 0 !important; } @media (max-width: 768px) { section[data-testid="stSidebar"] { display:none !important; } } div[data-testid="stElementContainer"]:has(.ov-phone-marker) { display:none !important; } div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] { display:none !important; position:fixed !important; top:10px !important; right:12px !important; z-index:1001 !important; } div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] .stButton > button { background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%) !important; color:#FFFFFF !important; border:1px solid rgba(255,255,255,0.25) !important; border-radius:12px !important; padding:8px 14px !important; height:42px !important; min-height:42px !important; font-weight:700 !important; font-size:0.85rem !important; box-shadow:0 4px 14px rgba(27,94,32,0.35) !important; } div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] .stButton > button p { color:#FFFFFF !important; font-weight:700 !important; } @media (max-width: 768px) { div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] { display:flex !important; } } @media (min-width: 769px) { div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] { display:none !important; } }</style>""", unsafe_allow_html=True)
+        st.markdown('<div style="display:flex; align-items:center; padding:14px 6px 10px 6px;"><div style="font-family:DM Serif Display, serif; font-size:16px; color:#FFFFFF; line-height:1;">PalaySense</div></div>', unsafe_allow_html=True)
+        st.markdown('<hr style="border:none; border-top:1px solid rgba(255,255,255,0.12); margin:8px 0;">', unsafe_allow_html=True)
         for grp_label, items in QUICK_VIEW_GROUPS:
-            st.markdown(f'<p class="ov-qv-group">{grp_label}</p>', unsafe_allow_html=True)
+            st.markdown(f'<div class="farmer-sidebar-label">{grp_label}</div>', unsafe_allow_html=True)
             for label, icon in items:
                 is_active = (st.session_state.get("overview_section") == label)
-                if st.button(label, icon=f":material/{icon}:" if icon else None, use_container_width=True, type="primary" if is_active else "secondary", key=f"ov_qv_{icon}"):
-                    st.session_state["overview_section"] = label; st.rerun()
-        section_choice = st.session_state.get("overview_section", "Overview")
+                display = label
+                if st.button(display, icon=f":material/{icon}:" if icon else None, use_container_width=True, type="primary" if is_active else "secondary", key=f"farmer_side_{icon}"):
+                    st.session_state["overview_section"] = label
+                    st.rerun()
     st.session_state.setdefault("ov_mobile_nav_open", False)
+    st.markdown("""
+    <style>
+    div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] { display: none !important; }
+    @media (max-width: 768px) {
+        div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] { display: block !important; position: fixed !important; top: 10px !important; right: 12px !important; z-index: 1001 !important; }
+        div[data-testid="stElementContainer"]:has(.ov-phone-marker) + div[data-testid="stElementContainer"] .stButton > button { background: #123524 !important; color: #FFFFFF !important; border: none !important; border-radius: 8px !important; padding: 8px 14px !important; height: 38px !important; min-height: 38px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.25) !important; font-weight: 600 !important; }
+        section[data-testid="stSidebar"] { display: none !important; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
     st.markdown('<div class="ov-phone-marker" style="display:none;"></div>', unsafe_allow_html=True)
     _is_open = st.session_state.get("ov_mobile_nav_open", False)
     _lbl = "Close" if _is_open else "Menu"; _ico = "close" if _is_open else "menu"
@@ -583,431 +481,608 @@ def overview_page():
         st.session_state["ov_mobile_nav_open"] = not _is_open; st.rerun()
     if st.session_state.get("ov_mobile_nav_open", False):
         st.markdown("""<style>@media (max-width: 768px) { section[data-testid="stSidebar"] { display:flex !important; position:fixed !important; left:0 !important; top:0 !important; bottom:0 !important; width:78% !important; max-width:300px !important; min-width:260px !important; z-index:1000 !important; box-shadow:4px 0 24px rgba(0,0,0,0.35) !important; overflow-y:auto !important; } }</style>""", unsafe_allow_html=True)
-    show_all = section_choice == "Overview"
-    if selected_years:
-        provincial_year = df[df["year"].isin(selected_years)].copy().sort_values("date")
-        muni_filtered = muni[muni["year"].isin(selected_years)]
-    else:
-        provincial_year = df[df["year"] == available_years[0]].copy().sort_values("date")
-        muni_filtered = muni[muni["year"] == available_years[0]]
-    if selected_munis and _muni_label_col is not None:
-        muni_filtered = muni_filtered[muni_filtered[_muni_label_col].isin(selected_munis)]
-    else:
-        muni_filtered = muni_filtered.iloc[0:0]
-    if selected_years and not quarterly_df.empty:
-        quarterly_df = quarterly_df[quarterly_df["year"].isin(selected_years)].copy()
-    fc_fancy_s, fc_regular_s = _align_forecast_arrays(forecast_3months_fancy, forecast_variety_3months)
-    _hist_last = pd.to_datetime(provincial_df["date"], errors="coerce").max()
-    _today_month = pd.Timestamp.today().to_period("M").to_timestamp()
-    if not provincial_year.empty:
-        latest_selected = provincial_year.iloc[-1]
-        avg_fancy_price = _safe_column(provincial_year, "fancy_palay_price").mean()
-        avg_regular_price = _safe_column(provincial_year, "other_variety_price").mean()
-        _data_start = (pd.to_datetime(latest_selected["date"]) + pd.DateOffset(months=1)).to_period("M").to_timestamp()
-        if pd.isna(_data_start):
-            _data_start = (_hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp() if not pd.isna(_hist_last) else _today_month
-    else:
-        avg_fancy_price = _safe_column(df, "fancy_palay_price").mean() if not df.empty else np.nan
-        avg_regular_price = _safe_column(df, "other_variety_price").mean() if not df.empty else np.nan
-        if not pd.isna(_hist_last):
-            _data_start = (_hist_last + pd.DateOffset(months=1)).to_period("M").to_timestamp()
-        else:
-            _data_start = _today_month
-    _forecast_start = _data_start
-    _fc_len = len(fc_fancy_s) if len(fc_fancy_s) > 0 else 6
-    forecast_months = pd.date_range(start=_forecast_start, periods=_fc_len, freq="MS")
-    if len(forecast_months) > 1:
-        forecast_range_label = f"{forecast_months[0].strftime('%B %Y')} \u2013 {forecast_months[-1].strftime('%B %Y')}"
-    elif len(forecast_months) > 0:
-        forecast_range_label = forecast_months[0].strftime("%B %Y")
-    else:
-        forecast_range_label = "N/A"
-    _today_m = _today_month
-    if len(forecast_months) > 0 and _today_m in forecast_months:
-        next_month_name = _today_m.strftime("%B %Y")
-    elif len(forecast_months) > 0:
-        next_month_name = forecast_months[-1].strftime("%B %Y")
-    else:
-        next_month_name = "N/A"
-    last_avail_month = forecast_months[-1].strftime("%B %Y") if len(forecast_months) > 0 else "N/A"
-    is_awaiting_lgu = False
-    if len(forecast_months) > 0 and _today_m > forecast_months[-1]:
-        is_awaiting_lgu = True
-    if len(forecast_months) == len(fc_fancy_s) and not fc_fancy_s.empty:
-        fancy_indexed = pd.Series(fc_fancy_s.values, index=forecast_months)
-    elif len(forecast_3months_fancy):
-        fancy_indexed = pd.Series(list(forecast_3months_fancy), index=forecast_months[:len(forecast_3months_fancy)])
-    else:
-        fancy_indexed = pd.Series(dtype=float)
-    if len(forecast_months) == len(fc_regular_s) and not fc_regular_s.empty:
-        regular_indexed = pd.Series(fc_regular_s.values, index=forecast_months)
-    elif len(forecast_variety_3months):
-        regular_indexed = pd.Series(list(forecast_variety_3months), index=forecast_months[:len(forecast_variety_3months)])
-    else:
-        regular_indexed = pd.Series(dtype=float)
-    def _forecast_value_for_month(indexed, fallback_list):
-        if not indexed.empty and _today_m in indexed.index:
-            v = indexed.loc[_today_m]
-            if not pd.isna(v): return float(v)
-        s = indexed.dropna()
-        if not s.empty: return float(s.iloc[-1])
-        return _safe_index(fallback_list, 0)
-    _fancy_current = _forecast_value_for_month(fancy_indexed, forecast_3months_fancy)
-    _regular_current = _forecast_value_for_month(regular_indexed, forecast_variety_3months)
-    next_fancy_pred = _fancy_current; next_regular_pred = _regular_current
-    percent_change_fancy = _pct_change(_fancy_current, avg_fancy_price) or 0.0
-    percent_change_regular = _pct_change(_regular_current, avg_regular_price) or 0.0
-    avg_yield_forecast = _safe_mean(forecast_quarterly_yield)
+
+    price_type = st.session_state.get("farmer_price_type", "Regular")
+    ctx = price_ctx["regular"] if price_type=="Regular" else price_ctx["fancy"]
+    vals = ctx["vals"]
+    labels = ctx["labels"]
     try:
-        fc_fancy_vals = [float(x) for x in forecast_3months_fancy if pd.notna(x)]
-        fc_regular_vals = [float(x) for x in forecast_variety_3months if pd.notna(x)]
-        if fc_fancy_vals and len(forecast_months) >= len(fc_fancy_vals):
-            _fmax_idx = int(np.argmax(fc_fancy_vals)); _fmin_idx = int(np.argmin(fc_fancy_vals))
-            _fmax_month = forecast_months[_fmax_idx].strftime("%b %Y") if _fmax_idx < len(forecast_months) else "N/A"
-            _fmin_month = forecast_months[_fmin_idx].strftime("%b %Y") if _fmin_idx < len(forecast_months) else "N/A"
-            _fmax_val = fc_fancy_vals[_fmax_idx]; _fmin_val = fc_fancy_vals[_fmin_idx]
-        else:
-            _fmax_month = _fmin_month = "N/A"; _fmax_val = _fmin_val = 0
-        fc_yield_vals = [float(x) for x in forecast_quarterly_yield if pd.notna(x)]
-        if fc_yield_vals:
-            _ymax = max(fc_yield_vals); _ymin = min(fc_yield_vals)
-        else:
-            _ymax = _ymin = 0
+        today = pd.Timestamp.today()
+        p_idx = 0
+        for i,m in enumerate(forecast_months):
+            if m.to_period("M") >= today.to_period("M"):
+                p_idx = i
+                break
+        if p_idx >= len(vals):
+            p_idx = 0
     except Exception:
-        _fmax_month = _fmin_month = "N/A"; _fmax_val = _fmin_val = _ymax = _ymin = 0
-    # ---- surgical Pangkalahatan hero context (DETALYE untouched) ----
-    try:
-        _p_fancy = list(forecast_3months_fancy)[:6]
-        _p_regular = list(forecast_variety_3months)[:6]
-        while len(_p_fancy) < len(forecast_months):
-            _p_fancy.append(np.nan)
-        while len(_p_regular) < len(forecast_months):
-            _p_regular.append(np.nan)
-        _price_ctx = _build_price_context(_p_fancy, _p_regular, forecast_months)
-        try:
-            _pf_y = load_provincial_forecasts()
-            _y_labs = _pf_y[_pf_y["forecast_type"]=="yield"]["period_label"].tolist() if not _pf_y.empty else ["Q4 2026", "Q1 2027"]
-        except Exception:
-            _y_labs = ["Q4 2026", "Q1 2027"]
-        _harvest_ctx = _harvest_interpretation(forecast_quarterly_yield, _y_labs)
-        _next_yield = float(pd.Series(forecast_quarterly_yield).dropna().iloc[0]) if forecast_quarterly_yield and len(pd.Series(forecast_quarterly_yield).dropna())>0 else None
-    except Exception:
-        _price_ctx = {"fancy": {"vals": [], "labels": [], "lowest": None, "highest": None, "trend_sentence": "Forecast data is being prepared.", "recover_sentence": "No data"}, "regular": {"vals": [], "labels": [], "lowest": None, "highest": None, "trend_sentence": "", "recover_sentence": ""}}
-        _harvest_ctx = {"avg": None, "lo": None, "hi": None, "sentence": ""}
-        _next_yield = None
-    st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap'); .main-container { font-family:'Poppins', sans-serif; padding:0 1% 20px 1%; background:#F8FAF9; } .block-container { padding-left:1rem !important; padding-right:1rem !important; padding-top:2rem !important; padding-bottom:0rem !important; } .hero-banner { background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 40%, #388E3C 100%); padding:35px 40px; border-radius:20px; color:white; margin-bottom:28px; box-shadow:0 12px 35px rgba(27,94,32,0.2); position:relative; overflow:hidden; margin-top:-2.08rem; } .hero-title { font-size:clamp(1.8rem, 2.8vw, 2.5rem); font-weight:900; margin-bottom:8px; letter-spacing:-0.5px; } .hero-subtitle { font-size:1rem; opacity:0.92; line-height:1.6; font-weight:400; } .hero-badge { display:inline-block; background:rgba(255,255,255,0.15); padding:4px 16px; border-radius:20px; font-size:0.75rem; font-weight:600; margin-top:8px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); } .forecast-bar-text { color:#1B5E20 !important; font-weight:700 !important; font-size:0.85rem !important; letter-spacing:0.3px; white-space:nowrap; display:flex; align-items:center; gap:8px; } .kpi-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:16px; } .metric-card { background:#FFFFFF; padding:20px 22px; border-radius:16px; border:1px solid rgba(46,125,50,0.08); position:relative; overflow:hidden; } .metric-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, #2E7D32, #66BB6A); } .metric-title { font-size:0.8rem; font-weight:600; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; } .metric-data { font-size:1.8rem; font-weight:800; color:#1B5E20; margin:4px 0 2px 0; letter-spacing:-0.5px; } .metric-footer { font-size:0.7rem; color:#9CA3AF; font-weight:500; } .metric-change-positive { color:#16A34A; font-weight:700; } .metric-change-negative { color:#DC2626; font-weight:700; } .component-card { background:#FFFFFF; border-radius:16px; border:1px solid rgba(0,0,0,0.05); padding:22px 24px 24px 24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); } .component-header { font-size:1.05rem; font-weight:700; color:#111827; } .component-desc { font-size:0.8rem; color:#6B7280; margin-bottom:16px; font-weight:400; } .advisory-container { display:flex; flex-direction:column; gap:12px; width:100%; margin-top:4px; } .advisory-card { display:flex; align-items:flex-start; padding:16px 20px; border-radius:12px; background:#FFFFFF; border:1px solid #E5E7EB; } .card-status { border-left:4px solid #1B5E20; background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); } .card-marketing { border-left:4px solid #16A34A; background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); } .card-notice { border-left:4px solid #EA580C; background:linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 100%); } .card-optimization { border-left:4px solid #7C3AED; background:linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%); } .card-icon { font-size:1.2rem; margin-right:14px; margin-top:2px; } .card-body { flex:1; font-size:0.88rem; line-height:1.6; color:#374151; } .card-label { font-weight:700; margin-right:4px; } .label-status { color:#1B5E20; } .label-marketing { color:#15803D; } .label-notice { color:#C2410C; } .label-optimization { color:#6D28D9; } .highlight-text { font-weight:700; color:#1B5E20; background:rgba(27,94,32,0.06); padding:1px 6px; border-radius:4px; } .kailan-card { background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%); border:1px solid #C8E6C9; border-left:6px solid #1B5E20; border-radius:16px; padding:18px 20px; margin-bottom:16px; }</style>""", unsafe_allow_html=True)
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
-    if show_all:
-        # surgical farmer hero - Pangkalahatan only, DETALYE unchanged
-        try:
-            _hero_label = forecast_months[0].strftime("%b %Y") if len(forecast_months) > 0 else "Forecast"
-        except Exception:
-            _hero_label = "Forecast"
-        st.markdown(f"""<div style="background: linear-gradient(90deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.82) 45%, rgba(255,255,255,0.10) 100%), url("https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2070"); background-size:cover; background-position:center; border-radius:16px; padding:22px 28px; border:1px solid #E8EFDE; margin-bottom:16px; display:flex; align-items:center; gap:12px;"><div style="width:38px; height:38px; background:#E8F5E9; border-radius:10px; display:flex; align-items:center; justify-content:center; border:1px solid #C8E6C9;"><i class="material-symbols-outlined" style="font-size:20px; color:#2E7D32;">eco</i></div><div><div style="font-family:'DM Serif Display', serif; font-size:20px; color:#1B4332; font-weight:400; margin:0;">Good day, Farmer!</div><div style="font-size:12px; color:#3A4D3D; margin-top:2px;">Here's your palay outlook for Bataan &bull; {_hero_label} forecast &bull; {len(selected_munis) if selected_munis else 0} towns</div></div></div>""", unsafe_allow_html=True)
-    muni_badge = selected_muni if selected_muni != "Lahat ng Bayan" else "All Municipalities in Bataan"
-    st.markdown(f"""<div style="display:inline-flex; align-items:center; gap:6px; background:#E8F5E9; border:1px solid #C8E6C9; color:#1B5E20; padding:6px 14px; border-radius:999px; font-size:0.78rem; font-weight:700; margin-bottom:14px;"><i class="material-symbols-outlined" style="font-size:16px; color:#1B5E20;">location_on</i>Viewing: {muni_badge} &bull; {selected_start_year}–{selected_end_year}</div>""", unsafe_allow_html=True)
-    top5_municipalities = dl.get_top_5_producing_municipalities(muni_filtered, selected_years)
-    total_production = dl.get_total_production(provincial_year, selected_years)
-    if total_production is None: total_production = dl.get_total_production(muni_filtered, selected_years)
-    prod_val = total_production if total_production is not None else 0
-    if show_all:
-        # surgical top cards - farmer style, DETALYE untouched
-        _ctx = _price_ctx.get("regular", _price_ctx.get("fancy")) if '_price_ctx' in locals() and _price_ctx else None
-        _vals = _ctx["vals"] if _ctx else []
-        _labs = _ctx["labels"] if _ctx else []
-        try:
-            _prim_val = float(_vals[0]) if _vals and len(_vals)>0 and not __import__("pandas").isna(_vals[0]) else 0
-            _prim_lab = _labs[0] if _labs else next_month_name
-            _trend = _ctx["trend_sentence"] if _ctx else ""
-            _next_vals = _vals[1:4] if len(_vals)>=4 else (_vals[1:] if len(_vals)>1 else [])
-            _next_labs = _labs[1:4] if len(_labs)>=4 else (_labs[1:] if len(_labs)>1 else [])
-        except Exception:
-            _prim_val=0; _prim_lab=next_month_name; _trend=""; _next_vals=[]; _next_labs=[]
-        c1, c2 = st.columns([1.15, 0.85], gap="medium")
-        with c1:
-            # build inner html for price card (single markdown to avoid empty white bars)
-            if _next_vals:
-                _cols_html = "".join([f'<div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">{lab}</div><div style="font-size:13px; font-weight:800; color:#0F2A1A;">\u20B1{val:.2f}/kg</div></div>' for lab,val in zip(_next_labs,_next_vals)])
-                _cols_block = f'<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; background:#FAFAF7; border:1px solid #F0EDE0; border-radius:10px; padding:10px;">{_cols_html}</div>'
-            else:
-                _cols_block = ""
-            st.markdown(f'<div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.03);"><div style="font-size:13px; font-weight:700; color:#1B4332; display:flex; align-items:center; gap:8px;"><span style="width:32px; height:32px; background:#E8F5E9; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #C8E6C9;"><i class="material-symbols-outlined" style="font-size:18px; color:#2E7D32;">payments</i></span> Palay Price Forecast</div><div style="font-family:DM Serif Display, serif; font-size:28px; color:#0F2A1A; margin:6px 0 2px 0;">\u20B1{_prim_val:.2f}/kg</div><div style="font-size:12px; color:#6B7C6E;">regular palay \u2022 {_prim_lab} forecast</div><div style="font-size:12px; color:#1B7A3D; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px;">trending_up</i> {_trend}</div>{_cols_block}</div>', unsafe_allow_html=True)
-        with c2:
-            # merged harvest card - single markdown to avoid empty bars
-            if _next_yield is not None:
-                if _harvest_ctx.get("lo") is not None:
-                    _harvest_inner = f'<div style="font-family:DM Serif Display, serif; font-size:26px; color:#0F2A1A; margin:4px 0 2px 0;">{_next_yield:.2f} MT/ha</div><div style="font-size:12px; color:#6B7C6E;">Forecast for {_y_labs[0] if _y_labs else "next harvest"}</div><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; background:white; border:1px solid #F2E8C8; border-radius:10px; padding:10px;"><div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Forecast range</div><div style="font-size:12px; font-weight:800; color:#0F2A1A;">{_harvest_ctx["lo"]:.2f} \u2013 {_harvest_ctx["hi"]:.2f} MT/ha</div></div><div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Trend</div><div style="font-size:12px; font-weight:600; color:#1B7A3D;">{_harvest_ctx["sentence"]}</div></div></div>'
-                else:
-                    _harvest_inner = f'<div style="font-family:DM Serif Display, serif; font-size:26px; color:#0F2A1A; margin:4px 0 2px 0;">{_next_yield:.2f} MT/ha</div><div style="font-size:12px; color:#6B7C6E;">Forecast for {_y_labs[0] if _y_labs else "next harvest"}</div>'
-            else:
-                _harvest_inner = '<div style="font-size:13px; color:#6B7C6E;">No data</div>'
-            st.markdown(f'<div style="background:#FFFEF8; border:1px solid #F2E8C8; border-radius:16px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.03);"><div style="font-size:13px; font-weight:700; color:#1B4332; display:flex; align-items:center; gap:8px;"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825;">eco</i></span> Expected Harvest (Ani)</div>{_harvest_inner}</div>', unsafe_allow_html=True)
-        try:
-            _fig_preview = _farmer_price_chart(forecast_months, _vals, color="#1B5E20")
-            st.plotly_chart(_fig_preview, use_container_width=True, config={"displayModeBar": False})
-            if _ctx and _ctx.get("lowest") and _ctx.get("highest"):
-                _lo_lab,_lo_val = _ctx["lowest"]; _hi_lab,_hi_val = _ctx["highest"]
-                if _lo_val is not None and _hi_val is not None:
-                    st.markdown(f'<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;"><div style="background:white; border:1px solid #E8EFDE; border-left:3px solid #C62828; border-radius:10px; padding:10px;"><div style="font-size:11px; font-weight:700; color:#6B7C6E;">Lowest forecast</div><div style="font-size:12px; font-weight:600;">{_lo_lab}</div><div style="font-size:14px; font-weight:800;">₱{_lo_val:.2f}/kg</div></div><div style="background:white; border:1px solid #E8EFDE; border-left:3px solid #2E7D32; border-radius:10px; padding:10px;"><div style="font-size:11px; font-weight:700; color:#6B7C6E;">Highest forecast</div><div style="font-size:12px; font-weight:600;">{_hi_lab}</div><div style="font-size:14px; font-weight:800;">₱{_hi_val:.2f}/kg</div></div></div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="background:#E8F5E9; border:1px solid #C8E6C9; border-radius:8px; padding:8px 12px; margin-top:8px; font-size:12px; color:#1B5E20; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="font-size:16px;">lightbulb</i> {_ctx["recover_sentence"]}</div>', unsafe_allow_html=True)
-        except Exception:
-            pass
-        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Trend ng Presyo at Ani (Forecast)</div><div class="component-desc">Forecast trend ng presyo at ani. Piliin kung Presyo o Inaasahang Ani ang nais ipakita.</div>', unsafe_allow_html=True)
-        try:
-            trend_choice = st.segmented_control("Trend", options=["Presyo", "Ani"], default="Presyo", key="essentials_trend_toggle")
-            if trend_choice is None: trend_choice = "Presyo"
-        except Exception:
-            trend_choice = st.radio("Trend", options=["Presyo", "Ani"], horizontal=True, key="essentials_trend_toggle_radio")
-        benchmark_option = "Wala"
-        if trend_choice == "Presyo":
-            _fig = _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option=benchmark_option)
-            st.plotly_chart(_fig, use_container_width=True, key="essentials_price_trend")
-            try:
-                _f = float(forecast_3months_fancy[0]) if forecast_3months_fancy and len(forecast_3months_fancy) > 0 else None
-                _r = float(forecast_variety_3months[0]) if forecast_variety_3months and len(forecast_variety_3months) > 0 else None
-                if _f is not None and _r is not None:
-                    if _f > _r + 1: _msg = f"Fancy \u20B1{_f:.2f}/kg, Regular \u20B1{_r:.2f}/kg — mas mataas ang Fancy, mas malaki ang kita sa Fancy."
-                    else: _msg = f"Fancy \u20B1{_f:.2f}/kg, Regular \u20B1{_r:.2f}/kg — halos magkapareho ang presyo."
-                else: _msg = "Pag pataas ang guhit, tataas ang presyo. Pag pababa, bababa."
-                st.markdown(_farmer_insight_box(_msg), unsafe_allow_html=True)
-            except Exception:
-                st.markdown(_farmer_insight_box("Pag pataas ang guhit, tataas ang presyo."), unsafe_allow_html=True)
-        else:
-            _fig = _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option=benchmark_option)
-            st.plotly_chart(_fig, use_container_width=True, key="essentials_yield_trend")
-            try:
-                _hist_avg = float(provincial_df["quarterly_yield_mt_per_ha"].dropna().mean()) if "quarterly_yield_mt_per_ha" in provincial_df.columns else None
-                _next_y = float(forecast_quarterly_yield[0]) if forecast_quarterly_yield and len(forecast_quarterly_yield) > 0 else None
-                if _hist_avg is not None and _next_y is not None:
-                    _diff = _next_y - _hist_avg
-                    if _diff > 0.12: _msg = f"Tataas ng {_diff:.2f} MT/ha vs dati ({_hist_avg:.2f} → {_next_y:.2f}). Magandang magtanim."
-                    elif _diff < -0.12: _msg = f"Bababa ng {abs(_diff):.2f} MT/ha ({_hist_avg:.2f} → {_next_y:.2f}). Mag-ingat sa gastos sa abono."
-                    else: _msg = f"Halos pareho lang ang ani ({_next_y:.2f} MT/ha) vs dati ({_hist_avg:.2f}). Walang masyadong pagbabago."
-                else: _msg = "Pag pataas ang guhit, mas marami ang aanihin."
-                st.markdown(_farmer_insight_box(_msg), unsafe_allow_html=True)
-            except Exception:
-                st.markdown(_farmer_insight_box("Pag pataas ang guhit, mas marami ang aanihin."), unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:20px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>Pangunahing Payo</div><div class="component-desc">Buod ng rekomendasyon batay sa forecast ng presyo at ani.</div>', unsafe_allow_html=True)
-        if not muni_filtered.empty:
-            if percent_change_fancy > 5:
-                _trade_title = "Itago muna ang Fancy"; _trade_body = f"Tataas pa ang Fancy sa <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span> — mas kikita kung sa {_fmax_month} ibebenta."
-            elif percent_change_fancy < -5:
-                _trade_title = "Benta na ang Fancy"; _trade_body = f"Bababa ang Fancy sa <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span>. Mas maganda ibenta ngayon bago bumaba pa."
-            else:
-                _trade_title = "Magmasid muna"; _trade_body = f"Hindi gumagalaw ang presyo (Fancy <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span>, Regular <span class='highlight-text'>\u20B1{next_regular_pred:.2f}/kg</span>). Magmasid muna bago magbenta nang maramihan."
-            if _ymax > 0 and _ymin > 0:
-                if _ymax - _ymin > 0.3:
-                    _yield_title = "Maghanda — paiba-iba ang aanihin"; _yield_body = f"Pinakamataas <span class='highlight-text'>{_ymax:.2f} MT/ha</span>, pinakamababa <span class='highlight-text'>{_ymin:.2f} MT/ha</span> — magtabi ng abono at reserba para sa mga buwang mahina ang ani."
-                elif avg_yield_forecast >= 4.5:
-                    _yield_title = "Maganda ang ani — ituloy ang plano"; _yield_body = f"Avg <span class='highlight-text'>{avg_yield_forecast:.2f} MT/ha</span> lagpas sa target ng DA na 4.50. Sapat ang supply."
-                else:
-                    _yield_title = "Medyo mababa ang ani"; _yield_body = f"Avg <span class='highlight-text'>{avg_yield_forecast:.2f} MT/ha</span> — magtipid sa gastos, ayusin ang patubig."
-            else:
-                _yield_title = "Walang hula"; _yield_body = "Wala pang sapat na datos para sa payo sa ani."
-            st.markdown(f"""<div class="advisory-container"><div class="advisory-card card-marketing"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">payments</i></div><div class="card-body"><span class="card-label label-marketing">{_trade_title}:</span> {_trade_body}</div></div><div class="advisory-card card-optimization"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">eco</i></div><div class="card-body"><span class="card-label label-optimization">{_yield_title}:</span> {_yield_body}</div></div></div>""", unsafe_allow_html=True)
-        else:
-            st.warning("Walang sapat na datos para makapagbigay ng payo sa pinili mo.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("""<div style="text-align:center; padding:10px 0 5px 0; font-size:0.75rem; color:#9CA3AF; border-top:1px solid #E5E7EB; margin-top:10px;"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#9CA3AF;">agriculture</i>Bataan Rice Monitoring System &bull; v2.0</div>""", unsafe_allow_html=True)
-        return
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
-    if section_choice == "Price Forecast":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">payments</i>Price Forecast</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Provincial price forecast — Fancy vs Regular, with historical trend and 6-month forecast.</div></div>""", unsafe_allow_html=True)
-        try:
-            benchmark_option = st.segmented_control("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], default="Wala", key="price_detail_benchmark")
-            if benchmark_option is None: benchmark_option = "Wala"
-        except Exception:
-            benchmark_option = st.radio("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], horizontal=True, key="price_detail_benchmark_radio")
-        _pc1, _pc2 = st.columns(2, gap="medium")
-        with _pc1:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Historical Price Trend</div><div class="component-desc">Historical na presyo ng Fancy at Regular na palay.</div>', unsafe_allow_html=True)
-            _fig = _price_historical_chart(provincial_year, selected_period, benchmark_option)
-            st.plotly_chart(_fig, use_container_width=True, key="detail_price_hist")
-            st.markdown(_farmer_insight_box("Ito ang dating presyo. Pag pataas ang guhit, tumataas ang presyo. Ihambing sa presyo ng NFA para malaman kung lugi o panalo."), unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with _pc2:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">query_stats</i>6-Month Price Forecast (Fancy vs Regular)</div><div class="component-desc">Forecast ng presyo para sa susunod na 6 na buwan.</div>', unsafe_allow_html=True)
-            _fig2 = _price_forecast_chart(provincial_df, forecast_3months_fancy, forecast_variety_3months, benchmark_option)
-            st.plotly_chart(_fig2, use_container_width=True, key="detail_price_fc")
-            st.markdown(_farmer_insight_box(f"Fancy \u20B1{next_fancy_pred:.2f}/kg, Regular \u20B1{next_regular_pred:.2f}/kg sa {next_month_name}. NFA floor: \u20B119.00 (Regular) / \u20B123.75 (Fancy)."), unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">analytics</i>Dagdag na Impormasyon</div>', unsafe_allow_html=True)
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown(f"<div style='background:#F0FDF4; border:1px solid #C8E6C9; border-radius:10px; padding:12px;'><div style='font-weight:700; color:#1B5E20; font-size:0.85rem;'><i class='material-symbols-outlined' style='font-size:14px; vertical-align:middle; margin-right:4px;'>trending_up</i>Agwat ng Fancy at Regular</div><div style='font-size:0.85rem; color:#374151; margin-top:4px;'>Gap: \u20B1{abs(next_fancy_pred - next_regular_pred):.2f}/kg — {'Mas mataas ang Fancy' if next_fancy_pred > next_regular_pred else 'Mas mataas ang Regular o halos pareho'}</div></div>", unsafe_allow_html=True)
-        with col_b:
-            st.markdown(f"<div style='background:#FFF7ED; border:1px solid #FDBA74; border-radius:10px; padding:12px;'><div style='font-weight:700; color:#9A3412; font-size:0.85rem;'><i class='material-symbols-outlined' style='font-size:14px; vertical-align:middle; margin-right:4px;'>flag</i>Kumpara sa Presyo ng NFA</div><div style='font-size:0.85rem; color:#374151; margin-top:4px;'>Regular \u20B1{next_regular_pred:.2f} vs \u20B119.00 — {'lagpas sa presyo ng NFA, puwedeng ibenta' if next_regular_pred >= 19 else 'mababa sa presyo ng NFA, malulugi pag binenta'}</div></div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    elif section_choice == "Harvest Forecast (Ani)":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">eco</i>Harvest Forecast (Ani)</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Harvest forecast — historical data and quarterly/annual trend.</div></div>""", unsafe_allow_html=True)
-        try:
-            benchmark_option = st.segmented_control("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], default="Wala", key="yield_detail_benchmark")
-            if benchmark_option is None: benchmark_option = "Wala"
-        except Exception:
-            benchmark_option = st.radio("Batayan:", options=["Presyo sa Merkado", "Target ng Gobyerno", "Wala"], horizontal=True, key="yield_detail_benchmark_radio")
-        _yc1, _yc2 = st.columns(2, gap="medium")
-        with _yc1:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">show_chart</i>Historical Yield Trend</div><div class="component-desc">Historical na ani kada ektarya (MT/ha).</div>', unsafe_allow_html=True)
-            _fig = _yield_historical_chart(provincial_year, selected_period, benchmark_option)
-            st.plotly_chart(_fig, use_container_width=True, key="detail_yield_hist")
-            st.markdown(_farmer_insight_box("Ito ang dating ani. Pag pataas ang guhit, mas marami ang naaani kada ektarya. Target ng DA: 4.50 MT/ha."), unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with _yc2:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">query_stats</i>Yield Forecast (Next 4 Quarters)</div><div class="component-desc">Forecast ng ani para sa susunod na 4 na quarter.</div>', unsafe_allow_html=True)
-            _fig2 = _yield_forecast_chart(provincial_df, forecast_quarterly_yield, benchmark_option)
-            st.plotly_chart(_fig2, use_container_width=True, key="detail_yield_fc")
-        st.markdown("</div>", unsafe_allow_html=True)
-        # yield insight summary - same visual as LGU production summary
-        try:
-            _fyd = [float(x) for x in forecast_quarterly_yield if pd.notna(x)]
-        except Exception:
-            _fyd = []
-        if _fyd:
-            try:
-                _hd = pd.to_datetime(provincial_df["date"], errors="coerce").dropna()
-                _last = _hd.max()
-                _fqs = pd.period_range(start=pd.Period(_last, freq="Q") + 1, periods=len(_fyd), freq="Q")
-                _flabs = [f"Q{q.quarter} {q.year}" for q in _fqs]
-            except Exception:
-                _flabs = [f"Q{i+1}" for i in range(len(_fyd))]
-            _imax = int(np.argmax(_fyd)); _imin = int(np.argmin(_fyd))
-            _ytrend = "TUMATAAS" if _fyd[-1] > _fyd[0] else ("BUMABABA" if _fyd[-1] < _fyd[0] else "STABLE")
-            _vsda = "lagpas sa target" if avg_yield_forecast >= 4.5 else "kulang sa target"
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #E8F5E9, #F1F8E9); padding:1.2rem 1.4rem; border-radius:16px; border-left:6px solid #2E7D32; box-shadow:0 6px 18px rgba(0,0,0,0.08); font-size:0.92rem; line-height:1.9;">
-                <div style="font-size:1rem; font-weight:700; color:#1B5E20; margin-bottom:0.6rem;">
-                    <i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">analytics</i>Buod ng Hula sa Ani
+        p_idx = 1 if len(vals)>=2 else 0
+    primary_val = float(vals[p_idx]) if p_idx < len(vals) and vals[p_idx] is not None and not pd.isna(vals[p_idx]) else (float(pd.Series(vals).dropna().iloc[0]) if len(pd.Series(vals).dropna())>0 else 0)
+    primary_label = labels[p_idx] if p_idx < len(labels) else (labels[0] if labels else "Forecast")
+    next_vals = []
+    next_labels = []
+    for off in range(1,4):
+        idx = p_idx+off
+        if idx < len(vals) and idx < len(labels):
+            if not pd.isna(vals[idx]):
+                next_vals.append(float(vals[idx])); next_labels.append(labels[idx])
+    if len(next_vals) < 3:
+        for i,v in enumerate(vals):
+            if labels[i] not in next_labels and labels[i]!=primary_label and not pd.isna(v):
+                if len(next_vals)>=3: break
+                next_vals.append(float(v)); next_labels.append(labels[i])
+    next_vals = next_vals[:3]; next_labels = next_labels[:3]
+    yield_avg = yield_ctx.get("avg")
+    yield_lo = yield_ctx.get("lo"); yield_hi = yield_ctx.get("hi")
+    if yield_lo is None and forecast_quarterly_yield:
+        s = pd.Series(forecast_quarterly_yield, dtype=float).dropna()
+        if not s.empty:
+            yield_lo = float(s.min()); yield_hi = float(s.max())
+    price_watch = ctx["trend_sentence"]
+    if "rising" in price_watch.lower():
+        price_watch_full = f"Prices are forecast to increase toward {ctx['highest'][0] if ctx['highest'] else 'December'}."
+    elif "easing" in price_watch.lower():
+        price_watch_full = f"Prices are forecast to ease toward {ctx['lowest'][0] if ctx['lowest'] else 'the next months'}."
+    else:
+        price_watch_full = f"{price_watch}."
+    harvest_watch = yield_ctx.get("sentence", "Expected yield remains around 4 MT/ha.")
+    if not harvest_watch:
+        harvest_watch = f"Expected yield remains around {yield_avg:.2f} MT/ha." if yield_avg else "Expected yield remains around 4 MT/ha."
+    lowest = ctx["lowest"]
+    highest = ctx["highest"]
+
+    def _render_hero():
+        st.markdown(f"""
+        <div class="farmer-hero">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+                <div style="width:38px; height:38px; background:#E8F5E9; border-radius:10px; display:flex; align-items:center; justify-content:center; border:1px solid #C8E6C9; flex-shrink:0;">
+                    <i class="material-symbols-outlined" style="font-size:20px; color:#2E7D32;">eco</i>
                 </div>
-                <div><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">emoji_events</i>Pinakamataas: <b style="color:#2E7D32;">{_flabs[_imax]} — {_fyd[_imax]:.2f} MT/ha</b></div>
-                <div><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">trending_down</i>Pinakamababa: <b style="color:#C62828;">{_flabs[_imin]} — {_fyd[_imin]:.2f} MT/ha</b></div>
-                <div><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">analytics</i>Karaniwan: <b>{avg_yield_forecast:.2f} MT/ha</b> <span style="font-size:0.78rem; color:#6B7280;">(sa target ng DA na 4.50: {_vsda})</span></div>
-                <hr style="border:none; border-top:1px solid #C8E6C9; margin:0.6rem 0;">
-                <div style="font-size:0.92rem; font-weight:600; color:#1B5E20;">
-                    <i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:6px; color:#1B5E20;">trending_up</i>Kabuuang trend:
-                    <span style="color:#2E7D32; font-weight:700;">{_ytrend}</span>
+                <div>
+                    <div class="farmer-hero-title">Good day, Farmer!</div>
+                    <div class="farmer-hero-sub">Here's your palay outlook for Bataan</div>
+                    <div class="farmer-hero-meta">
+                        <span class="farmer-pill"><i class="material-symbols-outlined" style="font-size:16px; color:#2E7D32;">location_on</i> Bataan</span>
+                        <span class="farmer-pill"><i class="material-symbols-outlined" style="font-size:16px; color:#2E7D32;">calendar_month</i> {primary_label} forecast</span>
+                    </div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Walang sapat na datos para sa buod ng ani.")
-    elif section_choice == "Municipal Forecast":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">location_on</i>Municipal Forecast</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Forecast per town — choose seed and class, compare price and historical production.</div></div>""", unsafe_allow_html=True)
-        try:
-            df_municipal_forecast = df_municipal_forecasts.copy()
-            if df_municipal_forecast.empty:
-                st.info("Wala pang hula para sa bawat bayan.")
-            else:
-                muni_label_col = _pick_column(df_municipal_forecast, ["Municipality"])
-                muni_list = list(df_municipal_forecast[muni_label_col].dropna().unique()) if muni_label_col is not None else []
-                # visible help for farmers
+        </div>
+        """, unsafe_allow_html=True)
+
+    def _render_top_cards(show_harvest=True):
+        # helper to render palay price card (shared)
+        def _render_price_card():
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#E8F5E9; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #C8E6C9; flex-shrink:0;"><i class="material-symbols-outlined" style="font-size:18px; color:#2E7D32; line-height:1;">payments</i></span><span style="display:flex; align-items:center; line-height:1;">Palay Price Forecast</span></div>', unsafe_allow_html=True)
+                t1, t2, t_spacer = st.columns([1,1,2], gap="small")
+                with t1:
+                    if st.button("Regular", key="farmer_toggle_regular", type="primary" if price_type=="Regular" else "secondary", use_container_width=True):
+                        st.session_state["farmer_price_type"]="Regular"; st.rerun()
+                with t2:
+                    if st.button("Fancy", key="farmer_toggle_fancy", type="primary" if price_type=="Fancy" else "secondary", use_container_width=True):
+                        st.session_state["farmer_price_type"]="Fancy"; st.rerun()
+                st.markdown(f'<div class="farmer-big-price">₱{primary_val:.2f}/kg</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:12px; color:#6B7C6E; font-weight:500; margin-top:2px;">{price_type.lower()} palay • {primary_label} forecast</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="farmer-trend" style="margin-top:8px;"><i class="material-symbols-outlined" style="font-size:16px; color:#1B7A3D;">trending_up</i> {ctx["trend_sentence"]}</div>', unsafe_allow_html=True)
+                if next_vals and next_labels:
+                    cols_html = ""
+                    for lab,val in zip(next_labels, next_vals):
+                        short = lab
+                        cols_html += f'<div><div class="farmer-mini-label">{short}</div><div class="farmer-mini-value">₱{val:.2f}/kg</div></div>'
+                    st.markdown(f'<div class="farmer-mini-grid">{cols_html}</div>', unsafe_allow_html=True)
+
+        if not show_harvest:
+            # Price Forecast: show only Palay Price card full-width, hide Expected Harvest
+            _render_price_card()
+            return
+
+        c1, c2 = st.columns([1.15, 0.85], gap="medium")
+        with c1:
+            _render_price_card()
+        with c2:
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082; flex-shrink:0;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825; line-height:1;">eco</i></span><span style="display:flex; align-items:center; line-height:1;">Expected Harvest</span></div>', unsafe_allow_html=True)
+                if next_yield_val is not None:
+                    st.markdown(f'<div class="farmer-expected-big">{next_yield_val:.2f} MT/ha</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="font-size:12px; color:#6B7C6E; font-weight:500;">Forecast for {y_labels[0] if y_labels else "next harvest period"}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="farmer-expected-big">No data</div>', unsafe_allow_html=True)
+                if yield_lo is not None and yield_hi is not None:
+                    st.markdown(f"""
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; background:white; border:1px solid #F2E8C8; border-radius:10px; padding:10px;">
+                        <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Forecast range</div><div style="font-size:13px; font-weight:800; color:#0F2A1A; margin-top:2px;">{yield_lo:.2f} – {yield_hi:.2f} MT/ha</div></div>
+                        <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Compared with previous period</div><div style="font-size:13px; font-weight:800; color:#1B7A3D; margin-top:2px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px; color:#1B7A3D;">{"trending_up" if (yield_delta_prev is not None and yield_delta_prev>=0) else "trending_down"}</i> {f"{yield_delta_prev:+.2f} MT/ha" if yield_delta_prev is not None else "No data"}</div></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    try:
+                        span = (yield_hi - yield_lo) if yield_hi!=yield_lo else 0.2
+                        pct = ((next_yield_val - yield_lo)/span*100) if next_yield_val is not None else 50
+                        pct = max(8, min(92, pct))
+                        bar_w = pct
+                        st.markdown(f'<div class="farmer-range-bar"><div style="width:{bar_w:.0f}%; background:#2E7D32; border-radius:999px;"></div><div style="flex:1; background:#AED581; opacity:0.6;"></div></div>', unsafe_allow_html=True)
+                    except Exception:
+                        pass
+
+    def _render_chart_and_what():
+        c_chart, c_what = st.columns([1.65, 0.85], gap="medium")
+        with c_chart:
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">show_chart</i> Palay Price Forecast</div>', unsafe_allow_html=True)
+                fig = _farmer_price_chart(forecast_months, vals, color="#1B5E20")
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                if lowest and highest and lowest[1] is not None and highest[1] is not None:
+                    st.markdown(f"""
+                    <div class="farmer-low-high">
+                        <div class="farmer-lh-card" style="border-left:3px solid #C62828;">
+                            <div class="farmer-lh-label"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; color:#C62828;">trending_down</i> Lowest forecast</div>
+                            <div class="farmer-lh-month">{lowest[0]}</div>
+                            <div class="farmer-lh-value">₱{lowest[1]:.2f}/kg</div>
+                        </div>
+                        <div class="farmer-lh-card" style="border-left:3px solid #2E7D32;">
+                            <div class="farmer-lh-label"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; color:#2E7D32;">trending_up</i> Highest forecast</div>
+                            <div class="farmer-lh-month">{highest[0]}</div>
+                            <div class="farmer-lh-value">₱{highest[1]:.2f}/kg</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                st.markdown(f'<div style="background:#E8F5E9; border:1px solid #C8E6C9; border-radius:8px; padding:8px 12px; margin-top:10px; font-size:12px; color:#1B5E20; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="font-size:16px; color:#1B5E20;">lightbulb</i> {ctx["recover_sentence"]}</div>', unsafe_allow_html=True)
+        with c_what:
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">visibility</i> What to Watch</div>', unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="farmer-what-row" style="background: transparent; border: none; border-bottom: 1px solid #F3F4F6; border-radius: 0; padding: 10px 0; display:flex; gap:12px; align-items:flex-start;">
+                    <div style="width:28px; height:28px; background:#FFF8E1; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid #FFE082;"><i class="material-symbols-outlined" style="font-size:16px; color:#F9A825;">sell</i></div>
+                    <div><div style="font-size:11px; font-weight:700; color:#6B7C6E; text-transform:uppercase; letter-spacing:0.4px;">Price</div><div style="font-size:12px; color:#3A4D3D; line-height:1.5; margin-top:2px;">{price_watch_full}</div></div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="farmer-what-row" style="background: transparent; border: none; border-bottom: 1px solid #F3F4F6; border-radius: 0; padding: 10px 0; display:flex; gap:12px; align-items:flex-start;">
+                    <div style="width:28px; height:28px; background:#E8F5E9; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid #C8E6C9;"><i class="material-symbols-outlined" style="font-size:16px; color:#2E7D32;">eco</i></div>
+                    <div><div style="font-size:11px; font-weight:700; color:#6B7C6E; text-transform:uppercase;">Harvest</div><div style="font-size:12px; color:#3A4D3D; line-height:1.5; margin-top:2px;">{harvest_watch}</div></div>
+                </div>
+                """, unsafe_allow_html=True)
                 st.markdown("""
-                <div style="background:#E8F5E9; border:1px solid #A5D6A7; border-left:6px solid #1B5E20; border-radius:10px; padding:10px 14px; margin:6px 0 10px 0; display:flex; gap:10px; align-items:flex-start;">
-                    <i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20; margin-top:1px;">location_on</i>
-                    <div style="font-size:0.82rem; line-height:1.5; color:#1B5E20;">
-                        Dito makikita ang presyo ng palay sa <b>bawat munisipyo batay sa binhi</b>.
+                <div class="farmer-what-row" style="background: transparent; border: none; padding: 10px 0; display:flex; gap:12px; align-items:flex-start;">
+                    <div style="width:28px; height:28px; background:#FFEBEE; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid #FFCDD2;"><i class="material-symbols-outlined" style="font-size:16px; color:#C62828;">info</i></div>
+                    <div><div style="font-size:11px; font-weight:700; color:#6B7C6E; text-transform:uppercase;">Important</div><div style="font-size:12px; color:#3A4D3D; line-height:1.5; margin-top:2px;">Actual farm-gate prices may differ from the forecast. Consider current buyer offers, storage costs, and harvesting conditions before deciding when to sell.</div></div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    def _render_municipal_outlook():
+        with st.container():
+            st.markdown('<div class="farmer-muni-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+            st.markdown('<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">', unsafe_allow_html=True)
+            st.markdown('<div><div class="farmer-card-title" style="margin-bottom:2px;"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">location_on</i> Municipal Price Outlook</div><div style="font-size:12px; color:#6B7C6E;">Select a municipality to see its forecasted palay price (next 3 months) — actual per-municipality forecast.</div></div>', unsafe_allow_html=True)
+            sel = st.selectbox("Municipality", options=all_munis, key="farmer_muni_select", label_visibility="collapsed", index=all_munis.index(st.session_state["farmer_selected_muni"]) if st.session_state["farmer_selected_muni"] in all_munis else 0)
+            if sel != st.session_state["farmer_selected_muni"]:
+                st.session_state["farmer_selected_muni"] = sel
+            st.markdown('</div>', unsafe_allow_html=True)
+            _muni = st.session_state["farmer_selected_muni"]
+            _df = df_municipal_forecasts
+            if _df is None or _df.empty:
+                st.info("No per-municipality price forecast available yet.")
+                return
+            _df_tmp = _df.copy()
+            _df_tmp.columns = [str(c).strip() for c in _df_tmp.columns]
+            _mcol = next((c for c in _df_tmp.columns if c.lower()=="municipality"), None)
+            if _mcol is None:
+                st.info("No per-municipality price forecast available.")
+                return
+            _sub = _df_tmp[_df_tmp[_mcol].astype(str).str.lower() == str(_muni).lower()]
+            if _sub.empty:
+                st.info(f"No forecast data for {_muni}.")
+                return
+            _m1 = next((c for c in _df_tmp.columns if c.lower()=="month 1"), None)
+            _m2 = next((c for c in _df_tmp.columns if c.lower()=="month 2"), None)
+            _m3 = next((c for c in _df_tmp.columns if c.lower()=="month 3"), None)
+            _l1 = next((c for c in _df_tmp.columns if c.lower()=="forecast_month_1_label"), None)
+            _l2 = next((c for c in _df_tmp.columns if c.lower()=="forecast_month_2_label"), None)
+            _l3 = next((c for c in _df_tmp.columns if c.lower()=="forecast_month_3_label"), None)
+            # --- Classification-aware: separate Regular (ordinary) vs Premium (fancy) ---
+            _type_col = next((c for c in _df_tmp.columns if c.lower()=="rice type & season"), None)
+            try:
+                _reg_sub = _sub[_sub[_type_col].astype(str).str.contains("ordinary", case=False, na=False)] if _type_col else _sub
+                _prem_sub = _sub[_sub[_type_col].astype(str).str.contains("premium", case=False, na=False)] if _type_col else pd.DataFrame()
+                # fallback: if filter empty, use all
+                if _reg_sub.empty:
+                    _reg_sub = _sub
+                if _prem_sub.empty:
+                    _prem_sub = _sub
+                p1_reg = float(pd.to_numeric(_reg_sub[_m1], errors="coerce").dropna().mean()) if _m1 else None
+                p2_reg = float(pd.to_numeric(_reg_sub[_m2], errors="coerce").dropna().mean()) if _m2 else None
+                p3_reg = float(pd.to_numeric(_reg_sub[_m3], errors="coerce").dropna().mean()) if _m3 else None
+                p1_prem = float(pd.to_numeric(_prem_sub[_m1], errors="coerce").dropna().mean()) if _m1 else None
+                p2_prem = float(pd.to_numeric(_prem_sub[_m2], errors="coerce").dropna().mean()) if _m2 else None
+                p3_prem = float(pd.to_numeric(_prem_sub[_m3], errors="coerce").dropna().mean()) if _m3 else None
+                # for backward compat, keep overall avg as p1/p2/p3
+                p1 = float(pd.to_numeric(_sub[_m1], errors="coerce").dropna().mean()) if _m1 else None
+                p2 = float(pd.to_numeric(_sub[_m2], errors="coerce").dropna().mean()) if _m2 else None
+                p3 = float(pd.to_numeric(_sub[_m3], errors="coerce").dropna().mean()) if _m3 else None
+            except Exception:
+                p1=p2=p3=None
+                p1_reg=p2_reg=p3_reg=None
+                p1_prem=p2_prem=p3_prem=None
+            try:
+                lab1 = str(_sub[_l1].dropna().iloc[0]) if _l1 and not _sub[_l1].dropna().empty else "Month 1"
+                lab2 = str(_sub[_l2].dropna().iloc[0]) if _l2 and not _sub[_l2].dropna().empty else "Month 2"
+                lab3 = str(_sub[_l3].dropna().iloc[0]) if _l3 and not _sub[_l3].dropna().empty else "Month 3"
+            except Exception:
+                lab1, lab2, lab3 = "Month 1","Month 2","Month 3"
+            muni_vals = [v for v in [p1,p2,p3] if v is not None and not pd.isna(v)]
+            muni_avg = float(pd.Series(muni_vals).mean()) if muni_vals else None
+            muni_lo = float(pd.Series(muni_vals).min()) if muni_vals else None
+            muni_hi = float(pd.Series(muni_vals).max()) if muni_vals else None
+            if muni_vals and p1 is not None and p3 is not None and muni_hi is not None and muni_lo is not None:
+                delta = float(p3 - p1)
+                spread = float(muni_hi - muni_lo)
+                if delta > 0.30:
+                    trend_label = "Increasing"
+                    badge = "Increasing"
+                    bcol="#E8F5E9"; tcol="#1B5E20"; ico="trending_up"
+                    insight = f"Prices in <b>{_muni}</b> are forecast to <b>increase</b> from {lab1} (₱{p1:.2f}/kg) to {lab3} (₱{p3:.2f}/kg) on average across types. This outlook is based on per-municipality forecasts and <b>varies by classification</b> — see Regular vs Premium below. Farmers may compare this with current buyer offers, variety and moisture, and drying or storage costs when planning."
+                elif delta < -0.30:
+                    trend_label = "Decreasing"
+                    badge = "Decreasing"
+                    bcol="#FFEBEE"; tcol="#C62828"; ico="trending_down"
+                    insight = f"Prices in <b>{_muni}</b> are forecast to <b>ease</b> from {lab1} (₱{p1:.2f}/kg) to {lab3} (₱{p3:.2f}/kg) on average across types. This outlook is based on per-municipality forecasts and <b>varies by classification</b> — see Regular vs Premium below. Farmers may compare this with current buyer offers, variety and moisture, and drying or storage costs when planning."
+                else:
+                    if spread < 0.35:
+                        trend_label = "Stable"
+                        badge = "Stable"
+                        bcol="#F5F5F5"; tcol="#2E7D32"; ico="trending_flat"
+                        insight = f"Prices in <b>{_muni}</b> are forecast to remain <b>fairly steady</b> around <b>₱{muni_avg:.2f}/kg</b> on average across types (range ₱{muni_lo:.2f}–₱{muni_hi:.2f}/kg). This outlook <b>varies by classification</b> — see Regular vs Premium below. Farmers may compare this with current buyer offers, variety and moisture, and drying or storage costs when planning."
+                    else:
+                        trend_label = "Slightly variable"
+                        badge = "Slightly variable"
+                        bcol="#FFF8E1"; tcol="#8D6E00"; ico="swap_vert"
+                        insight = f"Prices in <b>{_muni}</b> vary modestly across the next 3 months (range ₱{muni_lo:.2f}–₱{muni_hi:.2f}/kg, avg ₱{muni_avg:.2f}/kg). The trend from {lab1} to {lab3} is <b>stable overall</b> but differs by classification — see Regular vs Premium below. Farmers may compare this with current buyer offers and harvest conditions."
+            else:
+                trend_label = "Municipal forecast"
+                badge="Municipal forecast"; bcol="#E3F2FD"; tcol="#1565C0"; ico="info"
+                insight = f"In <b>{_muni}</b>, the next 3 months are forecast around <b>₱{muni_avg:.2f}/kg</b> on average across types. This varies by classification — see Regular vs Premium below. Farmers may compare this with current buyer offers and harvest conditions."
+            if muni_vals:
+                # Classification breakdown
+                reg_vals = [v for v in [p1_reg,p2_reg,p3_reg] if v is not None and not pd.isna(v)]
+                prem_vals = [v for v in [p1_prem,p2_prem,p3_prem] if v is not None and not pd.isna(v)]
+                reg_avg = float(pd.Series(reg_vals).mean()) if reg_vals else None
+                prem_avg = float(pd.Series(prem_vals).mean()) if prem_vals else None
+                st.markdown(f"""
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+                    <div style="background:#F6FBF6; border:1px solid #C8E6C9; border-radius:12px; padding:12px;">
+                        <div style="font-size:11px; font-weight:600; color:#6B7C6E; margin-bottom:8px; display:flex; align-items:center; gap:6px;"><i class="material-symbols-outlined" style="font-size:16px; color:#2E7D32;">payments</i> Forecasted price — {_muni} <span style="font-weight:400; color:#8AA090; font-size:10px; margin-left:4px;">(avg across hybrid/inbred, dry/wet)</span></div>
+                        <div style="background:white; border:1px solid #E8EFDE; border-radius:10px; padding:10px; margin-bottom:8px;">
+                            <div style="font-size:10px; font-weight:700; color:#7FB094; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">By classification</div>
+                            <div style="display:grid; grid-template-columns: 90px 1fr 1fr 1fr; gap:6px; align-items:center; font-size:11px; color:#6B7C6E; font-weight:600; padding-bottom:4px; border-bottom:1px solid #F3F4F6;">
+                                <div></div><div style="text-align:center;">{lab1}</div><div style="text-align:center;">{lab2}</div><div style="text-align:center;">{lab3}</div>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 90px 1fr 1fr 1fr; gap:6px; align-items:center; padding:6px 0; border-bottom:1px solid #F3F4F6;">
+                                <div style="font-size:11px; font-weight:700; color:#1B4332; display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; background:#C8E6C9; border-radius:50%; display:inline-block;"></span> Regular</div>
+                                <div style="text-align:center; font-size:13px; font-weight:800; color:#0F2A1A;">₱{p1_reg:.2f}/kg</div>
+                                <div style="text-align:center; font-size:13px; font-weight:800; color:#0F2A1A;">₱{p2_reg:.2f}/kg</div>
+                                <div style="text-align:center; font-size:13px; font-weight:800; color:#0F2A1A;">₱{p3_reg:.2f}/kg</div>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 90px 1fr 1fr 1fr; gap:6px; align-items:center; padding:6px 0;">
+                                <div style="font-size:11px; font-weight:700; color:#1B4332; display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; background:#A3E4A0; border-radius:50%; display:inline-block;"></span> Premium</div>
+                                <div style="text-align:center; font-size:13px; font-weight:800; color:#0F2A1A;">₱{p1_prem:.2f}/kg</div>
+                                <div style="text-align:center; font-size:13px; font-weight:800; color:#0F2A1A;">₱{p2_prem:.2f}/kg</div>
+                                <div style="text-align:center; font-size:13px; font-weight:800; color:#0F2A1A;">₱{p3_prem:.2f}/kg</div>
+                            </div>
+                            <div style="font-size:10px; color:#8AA090; margin-top:6px; line-height:1.4;">Regular = <i>ordinary</i> types avg • Premium = <i>premium</i> types avg • Detailed breakdown by seed & season in chart below.</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                            <span style="background:{bcol}; color:{tcol}; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; display:inline-flex; align-items:center; gap:4px; border:1px solid rgba(0,0,0,0.06);"><i class="material-symbols-outlined" style="font-size:14px; color:{tcol};">{ico}</i> {badge}</span>
+                            <span style="font-size:11px; color:#6B7C6E;">Avg ₱{muni_avg:.2f}/kg • Range ₱{muni_lo:.2f}–₱{muni_hi:.2f}</span>
+                        </div>
+                    </div>
+                    <div style="background:white; border:1px solid #E8EFDE; border-radius:12px; padding:12px; display:flex; gap:12px; align-items:flex-start; border-left:4px solid {tcol};">
+                        <div style="width:38px; height:38px; background:{bcol}; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid rgba(0,0,0,0.06);"><i class="material-symbols-outlined" style="font-size:18px; color:{tcol};">{ico}</i></div>
+                        <div style="flex:1;">
+                            <div style="display:inline-flex; align-items:center; gap:4px; background:{bcol}; color:{tcol}; padding:4px 10px; border-radius:999px; font-weight:700; font-size:11px; margin-bottom:6px; border:1px solid rgba(0,0,0,0.06); text-transform:uppercase; letter-spacing:0.4px;"><i class="material-symbols-outlined" style="font-size:14px; color:{tcol};">{ico}</i> {trend_label}</div>
+                            <div style="font-size:12px; color:#3A4D3D; line-height:1.6;">{insight}</div>
+                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                # grouped green card - wrap radios in bordered container
-                st.markdown("""
-                <style>
-                div[data-testid="stVerticalBlockBorderWrapper"]:has(.muni-group-anchor) { border:1.5px solid #C8E6C9 !important; border-radius:12px !important; background:#FFFFFF !important; padding:2px !important; }
-                div[data-testid="stVerticalBlockBorderWrapper"]:has(.muni-group-anchor) div[data-testid="stRadio"] label p { color:#1B5E20 !important; font-weight:500 !important; }
-                div[data-testid="stVerticalBlockBorderWrapper"]:has(.muni-group-anchor) div[data-testid="stRadio"] input[type="radio"] { accent-color:#1B5E20 !important; }
-                </style>
-                """, unsafe_allow_html=True)
-                st.markdown('<div class="muni-group-anchor" style="display:none;"></div>', unsafe_allow_html=True)
-                with st.container(border=True):
-                    _muni_for_chart = [selected_muni] if selected_muni != "Lahat ng Bayan" else []
-                    c1, c2, c3 = st.columns(3, gap="small")
-                    with c1:
-                        ov_rice_type = st.radio("Binhi", options=["Inbred", "Hybrid"], horizontal=True, key="ov_muni_rt_detail")
-                    with c2:
-                        ov_grade_raw = st.radio("Klase", options=["Regular", "Premium"], horizontal=True, key="ov_muni_cls_detail")
-                        ov_classification = "Ordinary" if ov_grade_raw == "Regular" else "Premium"
-                    with c3:
-                        ov_cycle = st.radio("Panahon", options=["Dry Season", "Wet Season"], horizontal=True, key="ov_muni_cycle_detail")
-                # dynamic Dry vs Wet side-by-side cards - always show, works for All or single
-                try:
-                    _prefix = f"{ov_rice_type.lower()}{ov_classification.lower()}"
-                    _dry_key = f"{_prefix}_dry"
-                    _wet_key = f"{_prefix}_wet"
-                    _type_col = "rice type & season"
-                    _df_lc = df_municipal_forecast.copy()
-                    _df_lc.columns = [str(c).lower() for c in _df_lc.columns]
-                    if selected_muni != "Lahat ng Bayan":
-                        _dry_sub = _df_lc[(_df_lc["municipality"].str.lower() == selected_muni.lower()) & (_df_lc[_type_col].str.lower() == _dry_key)]
-                        _wet_sub = _df_lc[(_df_lc["municipality"].str.lower() == selected_muni.lower()) & (_df_lc[_type_col].str.lower() == _wet_key)]
-                        _label_muni = selected_muni
-                    else:
-                        _dry_sub = _df_lc[_df_lc[_type_col].str.lower() == _dry_key]
-                        _wet_sub = _df_lc[_df_lc[_type_col].str.lower() == _wet_key]
-                        _label_muni = "Buong Bataan (lahat ng bayan)"
-                    if not _dry_sub.empty and not _wet_sub.empty:
-                        _dry_vals = pd.to_numeric(_dry_sub["month 1"], errors="coerce").dropna()
-                        _wet_vals = pd.to_numeric(_wet_sub["month 1"], errors="coerce").dropna()
-                        _dry_price = float(_dry_vals.mean()) if not _dry_vals.empty else None
-                        _wet_price = float(_wet_vals.mean()) if not _wet_vals.empty else None
-                        if _dry_price is not None and _wet_price is not None:
-                            _diff = _dry_price - _wet_price
-                            _diff_col = "#1B5E20" if _diff > 0 else "#BF360C" if _diff < 0 else "#6B7280"
-                            _diff_txt = f"+\u20B1{abs(_diff):.2f} kapag pinatuyo (Dry kumpara sa Wet)" if _diff > 0 else f"-\u20B1{abs(_diff):.2f} mas mataas ang Wet" if _diff < 0 else "Pareho ang presyo"
-                            _dry_lab = _dry_sub["forecast_month_1_label"].iloc[0] if "forecast_month_1_label" in _dry_sub.columns and not _dry_sub["forecast_month_1_label"].dropna().empty else "Month 1"
-                            st.markdown(f"""
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:10px 0 12px 0;">
-                                <div style="background:#E8F5E9; border:1.5px solid #1B5E20; border-radius:10px; padding:12px; text-align:center;">
-                                    <div style="font-size:0.72rem; font-weight:600; color:#6B7280; text-transform:uppercase;">Dry</div>
-                                    <div style="font-size:1.25rem; font-weight:800; color:#1B5E20;"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:4px; color:#1B5E20;">wb_sunny</i>\u20B1{_dry_price:.2f}/kg</div>
-                                    <div style="font-size:0.70rem; color:#6B7280;">{_dry_lab} • {ov_rice_type} {ov_classification}</div>
-                                </div>
-                                <div style="background:#E3F2FD; border:1.5px solid #90CAF9; border-radius:10px; padding:12px; text-align:center;">
-                                    <div style="font-size:0.72rem; font-weight:600; color:#6B7280; text-transform:uppercase;">Wet</div>
-                                    <div style="font-size:1.25rem; font-weight:800; color:#1565C0;"><i class="material-symbols-outlined" style="font-size:16px; vertical-align:middle; margin-right:4px; color:#1565C0;">water_drop</i>\u20B1{_wet_price:.2f}/kg</div>
-                                    <div style="font-size:0.70rem; color:#6B7280;">Wet • {ov_rice_type} {ov_classification}</div>
-                                </div>
-                            </div>
-                            <div style="background:#FFF8E1; border:1px solid #FFE082; border-radius:8px; padding:8px 12px; text-align:center; font-size:0.80rem; color:{_diff_col}; font-weight:700; margin-bottom:10px;">
-                                <i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:4px; color:{_diff_col};">compare_arrows</i>{_diff_txt} • {_label_muni}
-                            </div>
-                            """, unsafe_allow_html=True)
-                except Exception:
-                    pass
-                _sel_cycle = "Dry Season Crop Cycle" if "Dry" in ov_cycle else "Wet Season Crop Cycle"
-                _render_municipal_crop_cycle_chart(df_municipal_forecast, rice_type=ov_rice_type, classification=ov_classification, selected_municipalities=_muni_for_chart, selected_cycle=_sel_cycle)
-                st.markdown(_farmer_insight_box("Hula ito ng presyo sa bawat bayan sa susunod na 3 buwan. Piliin ang binhi at bayan para makita kung saan pinakamataas — doon ka mas kikita."), unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"Unable to render municipal forecast: {str(e)}")
-        if not top5_municipalities.empty:
-            st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">emoji_events</i>Top 5 Bayan — Historical Production</div><div class="component-desc">Top 5 bayan na may pinakamataas na produksyon (historical).</div>', unsafe_allow_html=True)
+            else:
+                st.info("No price forecast data for this municipality.")
+        st.markdown('<div style="background:#FFFDF0; border:1px solid #F2E8C8; border-radius:10px; padding:8px 12px; margin-top:10px; display:flex; align-items:center; gap:8px; font-size:11px; color:#6B7C6E;"><i class="material-symbols-outlined" style="font-size:16px; color:#F9A825;">lightbulb</i> These are model forecast estimates for palay prices per municipality (next 3 months). Actual farm-gate prices may vary by variety, moisture, and buyer. <span style="margin-left:auto; color:#1B4332; font-weight:700; cursor:pointer;">Learn more →</span></div>', unsafe_allow_html=True)
+
+    if section_choice == "Overview":
+        _render_hero()
+        _render_top_cards()
+        _render_chart_and_what()
+        _render_municipal_outlook()
+    elif section_choice == "Price Forecast":
+        _render_hero()
+        st.markdown('<div style="background:linear-gradient(90deg,#F6FBF6 0%, #FFFFFF 100%); border:1px solid #E8EFDE; border-radius:14px; padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:12px;"><i class="material-symbols-outlined" style="font-size:22px; color:#1B4332;">payments</i><div><div style="font-weight:700; color:#1B4332; font-size:14px;">Palay Price</div><div style="font-size:12px; color:#6B7C6E;">Current forecast, future months, and trend interpretation.</div></div></div>', unsafe_allow_html=True)
+        _render_top_cards(show_harvest=False)
+        _render_chart_and_what()
+        st.markdown('<div style="background:#FFFDF0; border:1px solid #F2E8C8; border-radius:10px; padding:8px 12px; margin-top:10px; font-size:11px; color:#6B7C6E; text-align:center;">Farmers may compare this outlook with current buyer offers, storage costs, and harvesting conditions.</div>', unsafe_allow_html=True)
+    elif section_choice == "Harvest Forecast":
+        _render_hero()
+        c1,c2 = st.columns([1.05,0.95], gap="medium")
+        with c1:
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082; flex-shrink:0;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825; line-height:1;">eco</i></span><span style="display:flex; align-items:center; line-height:1;">Expected Harvest</span></div>', unsafe_allow_html=True)
+                if next_yield_val is not None:
+                    st.markdown(f'<div class="farmer-expected-big">{next_yield_val:.2f} MT/ha</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="font-size:12px; color:#6B7C6E;">Forecast for {y_labels[0] if y_labels else "next harvest period"}</div>', unsafe_allow_html=True)
+                    if yield_lo is not None and yield_hi is not None:
+                        st.markdown(f"""
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; background:white; border:1px solid #F2E8C8; border-radius:10px; padding:10px;">
+                            <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Forecast range</div><div style="font-size:13px; font-weight:800; color:#0F2A1A; margin-top:2px;">{yield_lo:.2f} – {yield_hi:.2f} MT/ha</div></div>
+                            <div><div style="font-size:11px; color:#6B7C6E; font-weight:600;">Compared with previous period</div><div style="font-size:13px; font-weight:800; color:#1B7A3D; margin-top:2px; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px; color:#1B7A3D;">{"trending_up" if (yield_delta_prev is not None and yield_delta_prev>=0) else "trending_down"}</i> {f"{yield_delta_prev:+.2f} MT/ha" if yield_delta_prev is not None else "No data"}</div></div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        try:
+                            span = (yield_hi - yield_lo) if yield_hi!=yield_lo else 0.2
+                            pct = ((next_yield_val - yield_lo)/span*100) if next_yield_val is not None else 50
+                            pct = max(8, min(92, pct))
+                            bar_w = pct
+                            st.markdown(f'<div class="farmer-range-bar"><div style="width:{bar_w:.0f}%; background:#2E7D32; border-radius:999px;"></div><div style="flex:1; background:#AED581; opacity:0.6;"></div></div>', unsafe_allow_html=True)
+                        except Exception:
+                            pass
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown('<div style="background:white; border:1px solid #E8EFDE; border-radius:12px; padding:12px; display:flex; gap:10px; align-items:center; border-left:4px solid #2E7D32;"><i class="material-symbols-outlined" style="font-size:18px; color:#2E7D32;">visibility</i><div><div style="font-size:12px; font-weight:700; color:#1B4332;">What to Watch</div><div style="font-size:12px; color:#6B7C6E;">Harvest outlook for next period.</div></div></div>', unsafe_allow_html=True)
+
+        # ---- Harvest (Ani) — Historical Yield Trend + Benchmark Filters ----
+        st.markdown("""
+        <style>
+        .harvest-filter-card { background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px 16px; margin-top:14px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+        .harvest-filter-title { font-size:12px; font-weight:700; color:#1B4332; display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+        </style>
+        """, unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="farmer-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="harvest-filter-card"><div class="harvest-filter-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">tune</i> Filter — Historical Yield Trend & Benchmark</div>', unsafe_allow_html=True)
+            st.session_state.setdefault("harvest_trend_range", "Last 10 Years")
+            st.session_state.setdefault("harvest_agg", "Annual (Yearly Avg)")
+            st.session_state.setdefault("harvest_benchmarks", [])
+            f1, f2, f3 = st.columns([1,1,1.2], gap="small")
+            with f1:
+                trend_range = st.selectbox("Historical Range", options=["Last 5 Years","Last 10 Years","All Years (2015–2026)"], key="harvest_trend_range", help="Filter how many years of history to show in the trend chart")
+            with f2:
+                agg = st.selectbox("Trend View", options=["Annual (Yearly Avg)","Quarterly Trend","Dry / Wet Season"], key="harvest_agg", help="Annual = yearly average yield, Quarterly = Q1–Q4 per year, Season = Dry (Q1-Q2) vs Wet (Q3-Q4)")
+            with f3:
+                benchmarks = st.multiselect("Benchmark", options=["10-Year Avg Yield","DA Target (4.50 MT/ha)"], key="harvest_benchmarks", help="Add reference lines to compare your yield trend")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Prepare historical yield data
+        try:
+            hist_df = provincial_df.copy() if provincial_df is not None and not provincial_df.empty else pd.DataFrame()
+            # Determine year window
+            _end_year = int(pd.to_datetime(hist_df["date"]).dt.year.max()) if not hist_df.empty and "date" in hist_df.columns else 2026
+            if trend_range == "Last 5 Years":
+                _start_year = _end_year - 4
+            elif trend_range == "Last 10 Years":
+                _start_year = _end_year - 9
+            else:
+                _start_year = int(pd.to_datetime(hist_df["date"]).dt.year.min()) if not hist_df.empty else 2015
+            # Filter by year window for display
+            if not hist_df.empty and "date" in hist_df.columns:
+                _y = pd.to_datetime(hist_df["date"]).dt.year
+                hist_view = hist_df[(_y >= _start_year) & (_y <= _end_year)].copy()
+            else:
+                hist_view = hist_df.copy()
+            # Keep quarterly yield series
+            _qdf = dl.get_quarterly_yield(hist_view) if not hist_view.empty else pd.DataFrame()
+            # Compute 10yr avg benchmark value (last 10 years mean)
             try:
-                fig_muni = px.bar(top5_municipalities.sort_values("palay_production"), x="palay_production", y="municipality", orientation="h", color="palay_production", color_continuous_scale=["#A5D6A7", "#1B5E20"], text="palay_production")
-                fig_muni.update_traces(texttemplate="%{text:,.0f} MT", textposition="outside", marker=dict(line=dict(width=2, color='white'), cornerradius=4), hovertemplate="<b>%{y}</b><br>Produksyon: %{x:,.0f} MT<extra></extra>")
-                fig_muni.update_layout(height=360, margin=dict(l=10, r=80, t=10, b=10), xaxis_title="Produksyon (MT)", yaxis_title="Bayan", showlegend=False, plot_bgcolor="white", paper_bgcolor="white", coloraxis_showscale=False, yaxis={"categoryorder": "total ascending"})
-                fig_muni.update_xaxes(gridcolor="#F3F4F6", showgrid=True)
-                st.plotly_chart(fig_muni, use_container_width=True, key="muni_detail_top5")
-                _top = top5_municipalities.sort_values("palay_production", ascending=False).iloc[0]
-                st.markdown(_farmer_insight_box(f"Nangunguna si {str(_top['municipality'])} na may {float(_top['palay_production']):,.0f} MT."), unsafe_allow_html=True)
-            except Exception as e:
-                st.warning(f"Chart error: {str(e)}")
-            st.markdown("</div>", unsafe_allow_html=True)
-        # pies hidden for farmer - kept for LGU only
+                _all_q = dl.get_quarterly_yield(provincial_df) if provincial_df is not None and not provincial_df.empty else pd.DataFrame()
+                if not _all_q.empty and "quarterly_yield_mt_per_ha" in _all_q.columns:
+                    _all_q["_yr"] = pd.to_numeric(_all_q["year"], errors="coerce")
+                    _last10 = _all_q[_all_q["_yr"] >= (_end_year - 9)]
+                    ten_yr_avg = float(pd.to_numeric(_last10["quarterly_yield_mt_per_ha"], errors="coerce").dropna().mean()) if not _last10.empty else float(pd.to_numeric(_all_q["quarterly_yield_mt_per_ha"], errors="coerce").dropna().mean())
+                else:
+                    ten_yr_avg = None
+            except Exception:
+                ten_yr_avg = None
+            da_target = 4.50
+            # Build historical trend chart data by aggregation
+            if not _qdf.empty:
+                if agg == "Annual (Yearly Avg)":
+                    grp = _qdf.groupby("year")["quarterly_yield_mt_per_ha"].mean().reset_index()
+                    grp["label"] = grp["year"].astype(str)
+                    x_title = "Year"
+                elif agg == "Quarterly Trend":
+                    grp = _qdf.copy()
+                    grp["label"] = "Q" + grp["quarter"].astype(str) + " " + grp["year"].astype(str)
+                    x_title = "Quarter"
+                else:  # Dry / Wet Season
+                    _qdf["season"] = np.where(_qdf["quarter"].isin([1,2]), "Dry", "Wet")
+                    grp = _qdf.groupby(["year","season"])["quarterly_yield_mt_per_ha"].mean().reset_index()
+                    grp["label"] = grp["year"].astype(str) + " " + grp["season"]
+                    grp = grp.sort_values(["year","season"], key=lambda s: s.map({"Dry":0,"Wet":1}) if s.name=="season" else s)
+                    x_title = "Year – Season"
+            else:
+                grp = pd.DataFrame()
+                x_title = "Year"
+        except Exception:
+            grp = pd.DataFrame()
+            ten_yr_avg = None
+            da_target = 4.50
+            x_title = "Year"
+            hist_view = pd.DataFrame()
+
+        # Render two charts side-by-side: Historical Trend | Forecast + Benchmark
+        ch1, ch2 = st.columns([1.35, 0.95], gap="medium")
+        with ch1:
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#5D4037;">show_chart</i> Historical Yield Trend — {trend_range} • {agg}</div>', unsafe_allow_html=True)
+                if grp.empty:
+                    st.info("No historical yield data for the selected range.")
+                else:
+                    # Line chart with markers
+                    fig_hist = go.Figure()
+                    fig_hist.add_trace(go.Scatter(x=grp["label"], y=grp["quarterly_yield_mt_per_ha"], mode="lines+markers", name="Historical Yield", line=dict(color="#2E7D32", width=2.4), marker=dict(size=6, color="#2E7D32", line=dict(width=1.5, color="white")), hovertemplate="<b>%{x}</b><br>Yield: %{y:.2f} MT/ha<extra></extra>"))
+                    # Peak annotation
+                    try:
+                        _peak_idx = grp["quarterly_yield_mt_per_ha"].idxmax()
+                        if pd.notna(_peak_idx):
+                            _pr = grp.loc[_peak_idx]
+                            fig_hist.add_annotation(x=_pr["label"], y=float(_pr["quarterly_yield_mt_per_ha"]), text=f"▲ Peak {float(_pr['quarterly_yield_mt_per_ha']):.2f}", showarrow=True, arrowhead=2, ax=0, ay=-32, font=dict(size=10, color="#1B5E20"), bgcolor="rgba(255,255,255,0.92)", bordercolor="#2E7D32", borderwidth=1, borderpad=3)
+                    except Exception:
+                        pass
+                    # Benchmark lines
+                    if "10-Year Avg Yield" in benchmarks and ten_yr_avg is not None and not pd.isna(ten_yr_avg):
+                        try:
+                            fig_hist.add_hline(y=float(ten_yr_avg), line_dash="dot", line_width=1.4, line_color="#78909C", annotation_text=f"10-Yr Avg {float(ten_yr_avg):.2f}", annotation_position="top left", annotation=dict(font=dict(size=10, color="#607D8B"), bgcolor="rgba(255,255,255,0.9)"))
+                        except Exception:
+                            pass
+                    if "DA Target (4.50 MT/ha)" in benchmarks:
+                        try:
+                            fig_hist.add_hline(y=4.50, line_dash="dot", line_width=1.4, line_color="#2E7D32", annotation_text="DA Target 4.50", annotation_position="bottom left", annotation=dict(font=dict(size=10, color="#2E7D32"), bgcolor="rgba(232,245,233,0.95)"))
+                        except Exception:
+                            pass
+                    # Y zoom with 0.05 dtick like LGU
+                    try:
+                        import math
+                        _mn = float(grp["quarterly_yield_mt_per_ha"].min()); _mx = float(grp["quarterly_yield_mt_per_ha"].max())
+                        _lo = math.floor((_mn - 0.12)/0.05)*0.05; _hi = math.ceil((_mx + 0.12)/0.05)*0.05
+                        if "DA Target (4.50 MT/ha)" in benchmarks:
+                            _hi = max(_hi, 4.62)
+                        _lo = max(3.0, _lo)
+                    except Exception:
+                        _lo, _hi = None, None
+                    fig_hist.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10), xaxis_title=x_title, yaxis_title="MT/ha", plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=-0.28, xanchor="center", x=0.5, font=dict(size=10)), xaxis=dict(gridcolor="#F3F4F6", showgrid=True, tickangle=-30 if agg=="Quarterly Trend" else 0), yaxis=dict(gridcolor="#F3F4F6", showgrid=True, range=[_lo,_hi] if _lo is not None else None, dtick=0.10 if agg!="Quarterly Trend" else 0.12))
+                    st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
+                    # Compact stats under chart
+                    try:
+                        _avg = float(grp["quarterly_yield_mt_per_ha"].mean()); _mnv = float(grp["quarterly_yield_mt_per_ha"].min()); _mxv = float(grp["quarterly_yield_mt_per_ha"].max())
+                        _delta = float(grp["quarterly_yield_mt_per_ha"].iloc[-1] - grp["quarterly_yield_mt_per_ha"].iloc[0]) if len(grp)>1 else 0.0
+                        _trend_icon = "trending_up" if _delta>=0 else "trending_down"
+                        _trend_col = "#1B7A3D" if _delta>=0 else "#C62828"
+                        st.markdown(f"""
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
+                            <div style="background:#FAFAF7; border:1px solid #F0EDE0; border-radius:10px; padding:8px; text-align:center;"><div style="font-size:10px; color:#6B7C6E; font-weight:600;">Average</div><div style="font-size:13px; font-weight:800; color:#0F2A1A;">{_avg:.2f} MT/ha</div></div>
+                            <div style="background:white; border:1px solid #E8EFDE; border-radius:10px; padding:8px; text-align:center;"><div style="font-size:10px; color:#6B7C6E; font-weight:600;">Range</div><div style="font-size:12px; font-weight:700; color:#0F2A1A;">{_mnv:.2f} – {_mxv:.2f}</div></div>
+                            <div style="background:white; border:1px solid #E8EFDE; border-radius:10px; padding:8px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center;"><div style="font-size:10px; color:#6B7C6E; font-weight:600;">Trend</div><div style="font-size:12px; font-weight:700; color:{_trend_col}; display:flex; align-items:center; gap:4px;"><i class="material-symbols-outlined" style="font-size:14px; color:{_trend_col};">{_trend_icon}</i> { _delta:+.2f}</div></div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        # Benchmark comparison caption
+                        if benchmarks:
+                            _caps = []
+                            if "10-Year Avg Yield" in benchmarks and ten_yr_avg is not None:
+                                _diff = float(_avg - ten_yr_avg)
+                                _caps.append(f"Avg vs 10-Yr Avg ({ten_yr_avg:.2f}): <b style='color:{'#1B7A3D' if _diff>=0 else '#C62828'};'>{_diff:+.2f} MT/ha</b>")
+                            if "DA Target (4.50 MT/ha)" in benchmarks:
+                                _diff2 = float(_avg - 4.50)
+                                _caps.append(f"Avg vs DA Target (4.50): <b style='color:{'#1B7A3D' if _diff2>=0 else '#C62828'};'>{_diff2:+.2f} MT/ha</b>")
+                            if _caps:
+                                st.markdown(f"<div style='font-size:11px; color:#3A4D3D; background:#F6FBF6; border:1px solid #E8EFDE; border-radius:8px; padding:8px 10px; margin-top:8px; text-align:center;'>{' &nbsp;•&nbsp; '.join(_caps)}</div>", unsafe_allow_html=True)
+                    except Exception:
+                        pass
+        with ch2:
+            with st.container():
+                st.markdown('<div class="farmer-card-anchor harvest" style="display:none;"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="farmer-card-title"><span style="width:32px; height:32px; background:#FFF8E1; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; border:1px solid #FFE082;"><i class="material-symbols-outlined" style="font-size:18px; color:#F9A825;">eco</i></span><span>Yield Forecast vs Benchmark</span></div>', unsafe_allow_html=True)
+                # Forecast bars with benchmark overlay
+                if not forecast_quarterly_yield:
+                    st.info("No forecast data.")
+                else:
+                    _fc_vals = list(forecast_quarterly_yield)[:4]
+                    _fc_labels = y_labels[:len(_fc_vals)] if y_labels else [f"Q{i+1}" for i in range(len(_fc_vals))]
+                    # Bar chart amber gradient like LGU
+                    _gold = ["#B45309","#D97706","#F59E0B","#FBBF24"]
+                    _cols = [_gold[i % len(_gold)] for i in range(len(_fc_vals))]
+                    fig_fc = go.Figure()
+                    fig_fc.add_trace(go.Bar(x=_fc_labels, y=_fc_vals, name="Forecast", marker=dict(color=_cols, line=dict(width=0), cornerradius=8, opacity=0.95), text=[f"{v:.2f}" for v in _fc_vals], textposition="outside", textfont=dict(size=10, color="#78350F"), hovertemplate="<b>%{x}</b><br>Forecast: %{y:.2f} MT/ha<extra></extra>"))
+                    if "10-Year Avg Yield" in benchmarks and ten_yr_avg is not None and not pd.isna(ten_yr_avg):
+                        try:
+                            fig_fc.add_hline(y=float(ten_yr_avg), line_dash="dot", line_width=1.4, line_color="#78909C", annotation_text=f"10-Yr Avg {float(ten_yr_avg):.2f}", annotation_position="top left", annotation=dict(font=dict(size=9, color="#607D8B"), bgcolor="rgba(255,255,255,0.9)"))
+                        except Exception:
+                            pass
+                    if "DA Target (4.50 MT/ha)" in benchmarks:
+                        try:
+                            fig_fc.add_hline(y=4.50, line_dash="dot", line_width=1.4, line_color="#2E7D32", annotation_text="DA Target 4.50", annotation_position="bottom left", annotation=dict(font=dict(size=9, color="#2E7D32"), bgcolor="rgba(232,245,233,0.95)"))
+                        except Exception:
+                            pass
+                    # Peak annotation
+                    try:
+                        _pv = float(pd.Series(_fc_vals).max()); _pi = _fc_vals.index(_pv)
+                        fig_fc.add_annotation(x=_fc_labels[_pi], y=_pv, text=f"▲ Peak {_pv:.2f}", showarrow=True, arrowhead=2, ax=0, ay=-28, font=dict(size=10, color="#C2410C"), bgcolor="rgba(255,255,255,0.92)", bordercolor="#F59E0B", borderwidth=1, borderpad=3)
+                    except Exception:
+                        pass
+                    try:
+                        import math
+                        _mn = float(pd.Series(_fc_vals).min()); _mx = float(pd.Series(_fc_vals).max())
+                        _lo = math.floor((_mn - 0.10)/0.05)*0.05; _hi = math.ceil((_mx + 0.12)/0.05)*0.05
+                        if "DA Target (4.50 MT/ha)" in benchmarks:
+                            _hi = max(_hi, 4.62)
+                    except Exception:
+                        _lo,_hi = None,None
+                    fig_fc.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10), xaxis_title=None, yaxis_title="MT/ha", plot_bgcolor="white", paper_bgcolor="white", hovermode="closest", bargap=0.35, xaxis=dict(gridcolor="#F3F4F6", showgrid=False), yaxis=dict(gridcolor="#F3F4F6", showgrid=True, range=[_lo,_hi] if _lo is not None else None, dtick=0.05))
+                    st.plotly_chart(fig_fc, use_container_width=True, config={"displayModeBar": False})
+                    # Insight vs benchmark
+                    try:
+                        _fav = float(pd.Series(_fc_vals).mean())
+                        _msgs = []
+                        if "10-Year Avg Yield" in benchmarks and ten_yr_avg is not None:
+                            _d = _fav - float(ten_yr_avg)
+                            _msgs.append(f"Forecast avg <b>{_fav:.2f}</b> is <b style='color:{'#1B7A3D' if _d>=0 else '#C62828'};'>{_d:+.2f} MT/ha</b> vs 10-Yr Avg ({float(ten_yr_avg):.2f})")
+                        if "DA Target (4.50 MT/ha)" in benchmarks:
+                            _d2 = _fav - 4.50
+                            _msgs.append(f"Forecast avg <b>{_fav:.2f}</b> is <b style='color:{'#1B7A3D' if _d2>=0 else '#C62828'};'>{_d2:+.2f} MT/ha</b> vs DA Target (4.50)")
+                        if _msgs:
+                            st.markdown(f"<div style='font-size:11px; color:#3A4D3D; background:#FFFEF8; border:1px solid #F2E8C8; border-radius:8px; padding:8px 10px; line-height:1.5;'>{'<br>'.join(_msgs)}</div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<div style='font-size:11px; color:#6B7C6E; background:#FFFEF8; border:1px solid #F2E8C8; border-radius:8px; padding:8px 10px;'>Tip: Select a benchmark above to compare the forecast.</div>", unsafe_allow_html=True)
+                    except Exception:
+                        pass
+        st.markdown('<div style="background:#F6FBF6; border:1px solid #E8EFDE; border-radius:10px; padding:10px 12px; margin-top:10px; font-size:11px; color:#3A4D3D; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="font-size:16px; color:#2E7D32;">lightbulb</i> <div><b>How to use:</b> Use <b>Historical Range</b> to zoom the trend, <b>Trend View</b> to switch aggregation, and <b>Benchmark</b> to add reference lines (10-Yr Avg = provincial average, DA Target = 4.50 MT/ha). Dashed lines help you see if yield is above or below target.</div></div>', unsafe_allow_html=True)
+    elif section_choice == "Municipal Forecast":
+        _render_hero()
+        st.markdown('<div style="background:linear-gradient(90deg,#F6FBF6 0%, #FFFFFF 100%); border:1px solid #E8EFDE; border-radius:14px; padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:12px;"><i class="material-symbols-outlined" style="font-size:22px; color:#1B4332;">location_on</i><div><div style="font-weight:700; color:#1B4332; font-size:14px;">Municipalities</div><div style="font-size:12px; color:#6B7C6E;">Compare price outlook by town.</div></div></div>', unsafe_allow_html=True)
+        _render_municipal_outlook()
+        st.markdown('<div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:12px; margin-top:12px;">', unsafe_allow_html=True)
+        st.markdown('<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">payments</i> Municipal Price Comparison (next 3 months)</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:12px; color:#6B7C6E; margin-bottom:8px;">Select seed type and season to compare towns.</div>', unsafe_allow_html=True)
+        c1,c2,c3 = st.columns(3, gap="small")
+        with c1:
+            rt = st.radio("Seed", options=["Inbred", "Hybrid"], horizontal=True, key="muni_rt2")
+        with c2:
+            grade_raw = st.radio("Type", options=["Regular","Premium"], horizontal=True, key="muni_grade2")
+            cls = "Ordinary" if grade_raw=="Regular" else "Premium"
+        with c3:
+            cyc = st.radio("Season", options=["Dry","Wet"], horizontal=True, key="muni_cyc2")
+        sel_cycle = "Dry Season Crop Cycle" if cyc=="Dry" else "Wet Season Crop Cycle"
+        selected_for_chart = [st.session_state["farmer_selected_muni"]] if st.session_state["farmer_selected_muni"] in all_munis else []
+        _render_municipal_crop_cycle_chart(df_municipal_forecasts, rice_type=rt, classification=cls, selected_municipalities=selected_for_chart, selected_cycle=sel_cycle)
+        st.markdown('</div>', unsafe_allow_html=True)
     elif section_choice == "Guide and Advice":
-        st.markdown("""<div style="background:linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); padding:22px 28px; border-radius:16px; color:white; margin-bottom:18px;"><div style="font-size:1.5rem; font-weight:800;"><i class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:8px; color:white;">lightbulb</i>Gabay at Payo</div><div style="font-size:0.9rem; opacity:0.92; margin-top:6px;">Mga payong galing sa hula</div></div>""", unsafe_allow_html=True)
-        st.markdown('<div class="component-card"><div class="component-header"><i class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:6px; color:#1B5E20;">lightbulb</i>Payo Batay sa Forecast</div><div class="component-desc">Rekomendasyon batay sa forecast ng presyo at ani.</div>', unsafe_allow_html=True)
-        if not muni_filtered.empty:
-            if percent_change_fancy > 5: _p_title, _p_body, _p_icon, _p_accent = "Itago muna ang Fancy", f"Fancy tataas sa <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span> sa {next_month_name}. Mas kikita kung sa {_fmax_month} ibebenta. Regular nasa \u20B1{next_regular_pred:.2f}/kg.", "trending_up", "card-marketing"
-            elif percent_change_fancy < -5: _p_title, _p_body, _p_icon, _p_accent = "Ibenta na ang Fancy", f"Bababa ang Fancy sa <span class='highlight-text'>\u20B1{next_fancy_pred:.2f}/kg</span>. Mas maganda ibenta ngayon bago bumaba pa sa {_fmin_month}.", "trending_down", "card-notice"
-            else: _p_title, _p_body, _p_icon, _p_accent = "Magmasid muna", f"Hindi gumagalaw ang presyo (Fancy \u20B1{next_fancy_pred:.2f}, Regular \u20B1{next_regular_pred:.2f}). Magmasid muna bago magbenta nang maramihan.", "monitoring", "card-status"
-            if avg_yield_forecast >= 4.5 and (_ymax - _ymin) < 0.4: _y_title, _y_body, _y_icon, _y_accent = "Maganda ang ani — ituloy ang plano", f"Avg <span class='highlight-text'>{avg_yield_forecast:.2f} MT/ha</span> lagpas sa target ng DA na 4.50. Sapat ang supply, ituloy ang pagtatanim.", "eco", "card-marketing"
-            elif avg_yield_forecast < 4.0: _y_title, _y_body, _y_icon, _y_accent = "Magtipid at ayusin ang patubig", f"Avg <span class='highlight-text'>{avg_yield_forecast:.2f} MT/ha</span> kulang sa target. Magtipid sa abono, ayusin ang patubig.", "water_drop", "card-notice"
-            else: _y_title, _y_body, _y_icon, _y_accent = "Magtabi ng reserba", f"Pinakamataas <span class='highlight-text'>{_ymax:.2f} MT/ha</span>, pinakamababa <span class='highlight-text'>{_ymin:.2f} MT/ha</span> — magtabi ng reserba para sa mga buwang mahina ang ani.", "inventory_2", "card-optimization"
-            st.markdown(f"""<div class="advisory-container"><div class="advisory-card {_p_accent}"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">{_p_icon}</i></div><div class="card-body"><span class="card-label label-marketing">{_p_title}:</span> {_p_body}</div></div><div class="advisory-card {_y_accent}"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">{_y_icon}</i></div><div class="card-body"><span class="card-label label-optimization">{_y_title}:</span> {_y_body}</div></div><div class="advisory-card card-status"><div class="card-icon"><i class="material-symbols-outlined" style="font-size:20px; color:#1B5E20;">location_on</i></div><div class="card-body"><span class="card-label label-status">Para sa {muni_badge}:</span> Kabuuang ani <span class="highlight-text">{prod_val:,.0f} MT</span> sa {selected_start_year}–{selected_end_year}. Kung mataas ang presyo sa {_fmax_month}, mas mainam magbenta noon.</div></div></div>""", unsafe_allow_html=True)
-        else:
-            st.warning("Walang sapat na datos para makapagbigay ng payo sa pinili mo.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        with st.expander("Gabay sa Pagbasa ng Forecast", expanded=False):
-            st.markdown("- **Presyo ng Palay:** Pag pataas ang linya, tumataas ang presyo.\n- **Inaasahang Ani:** MT/ha — toneladang aanihin kada ektarya.\n- **Batayan:** Putol-putol na linya — NFA floor price (₱19.00) at 3-year average.\n- **Pambayang Forecast:** Piliin ang bayan para sa comparison ng presyo.")
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("""<div style="text-align:center; padding:10px 0 5px 0; font-size:0.75rem; color:#9CA3AF; border-top:1px solid #E5E7EB; margin-top:10px;"><i class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:6px; color:#9CA3AF;">agriculture</i>Bataan Rice Monitoring System &bull; v2.0</div>""", unsafe_allow_html=True)
+        _render_hero()
+        st.markdown("""
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+            <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
+                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#2E7D32;">help</i> What is a price forecast?</div>
+                <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:6px;">A price forecast is the system's estimate of how much palay may sell for in the coming months. It is based on past prices and market trends. It helps you plan when to sell.</div>
+            </div>
+            <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
+                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#F9A825;">eco</i> What is a harvest / yield forecast?</div>
+                <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:6px;">A harvest forecast estimates how many metric tons per hectare (MT/ha) you may harvest. Example: 4.02 MT/ha = ~4,020 kg per hectare. It uses past harvest records and weather trends.</div>
+            </div>
+            <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
+                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#1565C0;">visibility</i> How should I read the forecast?</div>
+                <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:6px;">Look at the current price and the trend line. If the line goes up, prices are forecast to rise. Compare with current buyer offers and storage costs. The forecast guides you — you decide when to sell.</div>
+            </div>
+            <div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:14px;">
+                <div style="font-weight:700; color:#1B4332; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="material-symbols-outlined" style="color:#6B7C6E;">info</i> Why can actual prices differ?</div>
+                <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:6px;">Actual farm-gate prices depend on buyer, moisture content, variety, and local conditions. The forecast is a province-level estimate. Always check your local buyer offer before deciding.</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background:#F6FBF6; border:1px solid #E8EFDE; border-radius:12px; padding:12px; border-left:4px solid #2E7D32;">
+            <div style="font-weight:700; color:#1B4332; font-size:13px;">Important reminder</div>
+            <div style="font-size:12px; color:#3A4D3D; line-height:1.6; margin-top:4px;">PalaySense forecasts price and harvest — it does not tell you to "SELL NOW" or "WAIT". Prices are currently forecast to show a gentle trend. Farmers may compare this outlook with current buyer offers, storage costs, and harvesting conditions.</div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; padding:12px 0 6px 0; font-size:11px; color:#A8B5A0; border-top:1px solid #E8EFDE; margin-top:18px;">PalaySense — a simple farmer-facing palay price and harvest forecasting tool • Bataan • Forecast estimates, actual results may vary</div>', unsafe_allow_html=True)
