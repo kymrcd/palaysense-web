@@ -1232,7 +1232,13 @@ def _da_report_pdf_bytes(df, dr, start_year, end_year, period, selected_muni="Al
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
-  except Exception:
+  except Exception as _e:
+    # reportlab not installed — caller will show disabled button instead of corrupted file
+    try:
+      import streamlit as _st
+      _st.warning(f"PDF export requires 'reportlab'. Install with: pip install reportlab (error: {_e})")
+    except Exception:
+      pass
     return b""
   try:
     buf = _io.BytesIO()
@@ -1469,8 +1475,32 @@ def _da_report_pdf_bytes(df, dr, start_year, end_year, period, selected_muni="Al
     doc.build(story)
     data = buf.getvalue()
     buf.close()
+    # sanity: ensure valid PDF header, otherwise treat as error
+    if not data or data[:4] != b"%PDF":
+      raise ValueError("Generated PDF missing %PDF header")
     return data
-  except Exception:
+  except Exception as _e:
+    # Instead of returning empty bytes that become a corrupted download (b"No data" with pdf mime),
+    # try to return a minimal valid PDF with the error message so the file still opens.
+    try:
+      from reportlab.lib.pagesizes import A4 as _A4e
+      from reportlab.platypus import SimpleDocTemplate as _SDTe, Paragraph as _Pe
+      from reportlab.lib.styles import getSampleStyleSheet as _GSSe, ParagraphStyle as _PSe
+      from reportlab.lib.enums import TA_CENTER as _TACe
+      _buf2 = _io.BytesIO()
+      _doc2 = _SDTe(_buf2, pagesize=_A4e, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36,
+                    title="PalaySense Report - Error", author="PalaySense")
+      _styles2 = _GSSe()
+      _s_err = _PSe('Err', parent=_styles2['Normal'], fontName='Helvetica', fontSize=10, leading=13, alignment=_TACe, textColor=black)
+      _s_det = _PSe('Det', parent=_styles2['Normal'], fontName='Helvetica', fontSize=7, leading=9, alignment=_TACe, textColor=black)
+      _story2 = [_Pe("PalaySense - PDF Generation Failed", _s_err), _Pe(f"Period {start_year}-{end_year} | {period} | {selected_muni}", _s_det), _Pe(f"Error: {str(_e)[:400]}", _s_det), _Pe("Please check that reportlab is installed (pip install reportlab) and historical data exists.", _s_det)]
+      _doc2.build(_story2)
+      _data2 = _buf2.getvalue()
+      _buf2.close()
+      if _data2 and _data2[:4] == b"%PDF":
+        return _data2
+    except Exception:
+      pass
     return b""
 
 def _render_top_filter_bar(df, dr=None):
@@ -1626,30 +1656,76 @@ def _render_top_filter_bar(df, dr=None):
       st.markdown('<div class="ps-export-label">EXPORT</div>', unsafe_allow_html=True)
       try:
         _excel_bytes = _da_report_excel_bytes(df, dr, start_year, end_year, period, selected_muni="All Municipalities")
-      except Exception:
+      except Exception as _e:
         _excel_bytes = b""
-      st.download_button(
-        label="📄 Export Excel",
-        data=_excel_bytes if _excel_bytes else b"No data",
-        file_name=f"PalaySense_Bataan_DA_Report_{start_year}-{end_year}_{period}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="overview_export_excel",
-        use_container_width=True,
-      )
+        # log for debugging — do not return corrupted file
+        try:
+          import traceback
+          print(f"[Excel export failed] {_e}\n{traceback.format_exc()}")
+        except Exception:
+          pass
+      # Validate Excel header (PK) before exposing as xlsx; otherwise show disabled to avoid "corrupted" download
+      _is_valid_xlsx = isinstance(_excel_bytes, (bytes, bytearray)) and len(_excel_bytes) > 100 and _excel_bytes[:2] == b"PK"
+      if _is_valid_xlsx:
+        st.download_button(
+          label="📄 Export Excel",
+          data=_excel_bytes,
+          file_name=f"PalaySense_Bataan_DA_Report_{start_year}-{end_year}_{period}.xlsx",
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          key="overview_export_excel",
+          use_container_width=True,
+        )
+      else:
+        # No corrupted file — show disabled button with tooltip; user sees why it is unavailable
+        st.button(
+          label="📄 Export Excel",
+          key="overview_export_excel_disabled",
+          use_container_width=True,
+          disabled=True,
+          help="Excel generation failed or returned empty data. Check that historical data exists and openpyxl is installed (pip install openpyxl).",
+        )
+        if _excel_bytes == b"" or not _is_valid_xlsx:
+          st.caption("⚠️ Excel not ready — try again after data loads.")
     with exp_col2:
       st.markdown('<div class="ps-export-label" style="color:#FFFFFF;">.</div>', unsafe_allow_html=True)
       try:
         _pdf_bytes = _da_report_pdf_bytes(df, dr, start_year, end_year, period, selected_muni="All Municipalities")
-      except Exception:
+      except Exception as _e:
         _pdf_bytes = b""
-      st.download_button(
-        label="📑 Export PDF",
-        data=_pdf_bytes if _pdf_bytes else b"No data",
-        file_name=f"PalaySense_Bataan_DA_Report_{start_year}-{end_year}_{period}.pdf",
-        mime="application/pdf",
-        key="overview_export_pdf",
-        use_container_width=True,
-      )
+        try:
+          import traceback
+          print(f"[PDF export failed] {_e}\n{traceback.format_exc()}")
+        except Exception:
+          pass
+      _is_valid_pdf = isinstance(_pdf_bytes, (bytes, bytearray)) and len(_pdf_bytes) > 100 and _pdf_bytes[:4] == b"%PDF"
+      if _is_valid_pdf:
+        st.download_button(
+          label="📑 Export PDF",
+          data=_pdf_bytes,
+          file_name=f"PalaySense_Bataan_DA_Report_{start_year}-{end_year}_{period}.pdf",
+          mime="application/pdf",
+          key="overview_export_pdf",
+          use_container_width=True,
+        )
+      else:
+        # Avoid corrupted download: b"No data" with mime application/pdf opens as "Failed to load PDF"
+        # Show disabled button so user never downloads a fake PDF
+        st.button(
+          label="📑 Export PDF",
+          key="overview_export_pdf_disabled",
+          use_container_width=True,
+          disabled=True,
+          help="PDF generation failed or returned empty data. Install reportlab (pip install reportlab==5.0.1) and ensure historical data exists.",
+        )
+        if _pdf_bytes == b"" or not _is_valid_pdf:
+          st.caption("⚠️ PDF not ready — need reportlab & data. See requirements.txt.")
+          # Debug hint when reportlab missing
+          try:
+            import importlib.util as _ilu
+            if _ilu.find_spec("reportlab") is None:
+              st.caption("Missing dependency: reportlab not installed.")
+          except Exception:
+            pass
     with filter_col4:
       st.markdown('<div style="height:19px;"></div>', unsafe_allow_html=True)
       def _do_reset():
