@@ -221,13 +221,33 @@ def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_m
         else:
             label_map[f"month {n}"] = f"Month {n}"
     forecast_month_labels = [label_map[f"month {n}"] for n in range(1, 4)]
-    forecast_year = next((int(str(label).split()[-1]) for label in forecast_month_labels if str(label).split()[-1].isdigit()), 2026)
-    if "Dry" in selected_cycle:
-        st.markdown(f"<div style='font-weight:700; color:#1B5E20; margin:0.6rem 0 0.2rem 0;'><i class='material-symbols-outlined' style='font-size:16px; vertical-align:middle; margin-right:6px; color:#B45309;'>wb_sunny</i>Dry Palay — Tuyo ({forecast_year})</div>", unsafe_allow_html=True)
-        st.caption("Moisture ~14% — tuyo / dry, mas mataas presyo. Hindi ito planting season.")
-    else:
-        st.markdown(f"<div style='font-weight:700; color:#1B5E20; margin:0.6rem 0 0.2rem 0;'><i class='material-symbols-outlined' style='font-size:16px; vertical-align:middle; margin-right:6px; color:#2563EB;'>water_drop</i>Wet Palay — Basa / Sariwa ({forecast_year})</div>", unsafe_allow_html=True)
-        st.caption("Moisture mataas — basa / sariwa, mas mababa presyo. Hindi ito planting season.")
+    # --- Dynamic title: akma sa pinili (Binhi + Palay Type + Moisture + forecast months) ---
+    try:
+        _parsed = [pd.to_datetime(lbl, errors="coerce") for lbl in forecast_month_labels]
+        if all(pd.notna(p) for p in _parsed):
+            if _parsed[0].year == _parsed[-1].year:
+                period_str = f"{_parsed[0].strftime('%b')} – {_parsed[-1].strftime('%b %Y')}"
+            else:
+                period_str = f"{_parsed[0].strftime('%b %Y')} – {_parsed[-1].strftime('%b %Y')}"
+        else:
+            period_str = f"{forecast_month_labels[0]} – {forecast_month_labels[-1]}"
+    except Exception:
+        period_str = f"{forecast_month_labels[0]} – {forecast_month_labels[-1]}"
+    grade_display = "Premium" if str(classification).strip().lower() == "premium" else "Regular"
+    is_dry = "Dry" in str(selected_cycle)
+    moisture_full = "Dry Palay (Tuyo)" if is_dry else "Wet Palay (Basa/Sariwa)"
+    moisture_icon = "wb_sunny" if is_dry else "water_drop"
+    moisture_color = "#B45309" if is_dry else "#2563EB"
+    n_towns = len(selected_municipalities) if selected_municipalities else 12
+    st.markdown(
+        f"<div style='font-weight:800; color:#1B4332; margin:0.6rem 0 2px 0; display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px;'>"
+        f"<i class='material-symbols-outlined' style='font-size:16px; color:{moisture_color};'> {moisture_icon}</i> "
+        f"{rice_type} {grade_display} — {moisture_full}"
+        f"<span style='font-weight:600; color:#6B7280; font-size:12px;'>| {period_str}</span>"
+        f"</div>"
+        f"<div style='font-size:11px; color:#6B7280; margin-bottom:6px;'>{n_towns} towns • Forecast ng presyo (₱/kg) — grouped per month</div>",
+        unsafe_allow_html=True,
+    )
     plot_df = sub.melt(id_vars=["municipality"], value_vars=["month 1", "month 2", "month 3"], var_name="month_key", value_name="price").assign(forecast_month=lambda d: d["month_key"].map(label_map)).groupby(["forecast_month", "municipality"], as_index=False)["price"].mean().dropna(subset=["price"])
     if plot_df.empty:
         st.info("No data for your selection. Please try another combination.")
@@ -238,9 +258,9 @@ def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_m
         st.info("No price data for your selection.")
         return
     plot_df["municipality"] = plot_df["municipality"].astype(str).str.title()
-    _title_suffix = "Dry Palay (Tuyo)" if "Dry" in selected_cycle else "Wet Palay (Basa)"
-    fig = px.bar(plot_df, x="forecast_month", y="price", color="municipality", barmode="group", category_orders={"forecast_month": forecast_month_labels}, color_discrete_sequence=px.colors.qualitative.Set3, labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "municipality": "Town"}, title=f"{rice_type} {classification} — {_title_suffix}")
-    fig.update_layout(height=380, margin=dict(t=35, b=120, l=45, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family="Plus Jakarta Sans, sans-serif", size=11), legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="center", x=0.5, font=dict(size=9.5), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1), yaxis=dict(gridcolor="#F3F4F6", showgrid=True), xaxis=dict(gridcolor="#F3F4F6", showgrid=False), title=dict(font=dict(size=13)), bargap=0.22, bargroupgap=0.10)
+    # Title is now rendered as markdown above (dynamic), so keep Plotly title empty to avoid double title
+    fig = px.bar(plot_df, x="forecast_month", y="price", color="municipality", barmode="group", category_orders={"forecast_month": forecast_month_labels}, color_discrete_sequence=px.colors.qualitative.Set3, labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "municipality": "Town"}, title="")
+    fig.update_layout(height=380, margin=dict(t=10, b=120, l=45, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family="Plus Jakarta Sans, sans-serif", size=11), legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="center", x=0.5, font=dict(size=9.5), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1), yaxis=dict(gridcolor="#F3F4F6", showgrid=True), xaxis=dict(gridcolor="#F3F4F6", showgrid=False), bargap=0.22, bargroupgap=0.10)
     fig.update_traces(marker=dict(cornerradius=6, line=dict(width=0)), hovertemplate="Town: %{fullData.name}<br>%{x}<br>₱%{y:.2f}/kg<extra></extra>", cliponaxis=False)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
 
@@ -1108,7 +1128,7 @@ def overview_page():
             grade_raw = st.radio("Palay Type", options=["Regular","Premium"], horizontal=True, key="muni_grade2")
             cls = "Ordinary" if grade_raw=="Regular" else "Premium"
         with c3:
-            cyc = st.radio("Moisture (Tuyo/Basa)", options=["Dry","Wet"], horizontal=True, key="muni_cyc2", help="Dry = tuyo (~14% moisture), Wet = basa/sariwa — moisture ng palay, hindi planting season")
+            cyc = st.radio("Moisture (Tuyo/Basa)", options=["Dry","Wet"], horizontal=True, key="muni_cyc2")
         sel_cycle = "Dry Palay" if cyc=="Dry" else "Wet Palay"
         # Full view: show all municipalities instead of one-by-one (isa-isa)
         selected_for_chart = all_munis
