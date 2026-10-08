@@ -364,10 +364,14 @@ def load_css():
         font-family: var(--font-sans) !important;
         font-weight: 400 !important;
         font-size: 0.78rem !important;
-        padding: 0.2rem 0.5rem !important;
+        padding: 0.2rem 0.5rem 0.2rem 0.7rem !important;
         border-radius: 6px !important;
         color: rgba(255, 255, 255, 0.88) !important;
         text-align: left !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        display: flex !important;
+        gap: 8px !important;
         margin: 0 !important;
         box-shadow: none !important;
         transition: var(--transition) !important;
@@ -381,6 +385,14 @@ def load_css():
         font-size: 0.78rem !important;
         margin: 0 !important;
         line-height: 1 !important;
+        text-align: left !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button div[data-testid="stMarkdownContainer"] {
+        text-align: left !important;
+        justify-content: flex-start !important;
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
     }
     section[data-testid="stSidebar"] .stButton > button:hover {
         background: var(--sidebar-hover) !important;

@@ -196,6 +196,7 @@ def _farmer_price_chart(forecast_months, vals, color="#1B5E20"):
     return fig
 
 def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_municipalities, selected_cycle=None):
+    """Town-specific price bar — follows the municipality dropdown (single town). Falls back to provincial average only when multiple towns are passed."""
     if df is None or df.empty:
         st.info("No price forecast is available yet for each town. Please check again later.")
         return
@@ -203,6 +204,9 @@ def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_m
     if selected_municipalities:
         selected_munis_lc = [str(m).lower() for m in selected_municipalities]
         df = df[df["municipality"].str.lower().isin(selected_munis_lc)]
+    # Single-town mode: chart follows the municipality dropdown
+    _is_single = bool(selected_municipalities) and len(selected_municipalities) == 1
+    _town_label = str(selected_municipalities[0]).strip() if _is_single else None
     if selected_cycle is None:
         selected_cycle = st.selectbox("Choose palay moisture:", ["Dry Palay", "Wet Palay"], key=f"crop_cycle_{rice_type}_{classification}")
         st.write("---")
@@ -239,29 +243,29 @@ def _render_municipal_crop_cycle_chart(df, rice_type, classification, selected_m
     moisture_icon = "wb_sunny" if is_dry else "water_drop"
     moisture_color = "#B45309" if is_dry else "#2563EB"
     n_towns = len(selected_municipalities) if selected_municipalities else 12
+    _scope_sub = f"{_town_label} forecast • Forecast ng presyo (₱/kg)" if _is_single else "Bataan provincial average • Forecast ng presyo (₱/kg)"
     st.markdown(
         f"<div style='font-weight:800; color:#1B4332; margin:0.6rem 0 2px 0; display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px;'>"
         f"<i class='material-symbols-outlined' style='font-size:16px; color:{moisture_color};'> {moisture_icon}</i> "
         f"{rice_type} {grade_display} — {moisture_full}"
         f"<span style='font-weight:600; color:#6B7280; font-size:12px;'>| {period_str}</span>"
         f"</div>"
-        f"<div style='font-size:11px; color:#6B7280; margin-bottom:6px;'>{n_towns} towns • Forecast ng presyo (₱/kg) — grouped per month</div>",
+        f"<div style='font-size:11px; color:#6B7280; margin-bottom:6px;'>{_scope_sub}</div>",
         unsafe_allow_html=True,
     )
-    plot_df = sub.melt(id_vars=["municipality"], value_vars=["month 1", "month 2", "month 3"], var_name="month_key", value_name="price").assign(forecast_month=lambda d: d["month_key"].map(label_map)).groupby(["forecast_month", "municipality"], as_index=False)["price"].mean().dropna(subset=["price"])
+    # Town-specific value: mean for the selected town per forecast month (equals town forecast when single town).
+    # Multi-town: mean across those towns per forecast month.
+    for _c in ["month 1", "month 2", "month 3"]:
+        sub[_c] = pd.to_numeric(sub[_c], errors="coerce")
+    _prov_vals = [float(sub[_c].dropna().mean()) if _c in sub.columns and not sub[_c].dropna().empty else float("nan") for _c in ["month 1", "month 2", "month 3"]]
+    plot_df = pd.DataFrame({"forecast_month": forecast_month_labels, "price": _prov_vals}).dropna(subset=["price"])
     if plot_df.empty:
         st.info("No data for your selection. Please try another combination.")
         return
-    plot_df["price"] = pd.to_numeric(plot_df["price"], errors="coerce")
-    plot_df = plot_df.dropna(subset=["price"])
-    if plot_df.empty:
-        st.info("No price data for your selection.")
-        return
-    plot_df["municipality"] = plot_df["municipality"].astype(str).str.title()
     # Title is now rendered as markdown above (dynamic), so keep Plotly title empty to avoid double title
-    fig = px.bar(plot_df, x="forecast_month", y="price", color="municipality", barmode="group", category_orders={"forecast_month": forecast_month_labels}, color_discrete_sequence=px.colors.qualitative.Set3, labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "municipality": "Town"}, title="")
-    fig.update_layout(height=380, margin=dict(t=10, b=120, l=45, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family="Plus Jakarta Sans, sans-serif", size=11), legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="center", x=0.5, font=dict(size=9.5), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1), yaxis=dict(gridcolor="#F3F4F6", showgrid=True), xaxis=dict(gridcolor="#F3F4F6", showgrid=False), bargap=0.22, bargroupgap=0.10)
-    fig.update_traces(marker=dict(cornerradius=6, line=dict(width=0)), hovertemplate="Town: %{fullData.name}<br>%{x}<br>₱%{y:.2f}/kg<extra></extra>", cliponaxis=False)
+    fig = px.bar(plot_df, x="forecast_month", y="price", text=plot_df["price"].round(2), category_orders={"forecast_month": forecast_month_labels}, color_discrete_sequence=["#1B5E20"], labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)"}, title="")
+    fig.update_layout(height=380, margin=dict(t=10, b=60, l=45, r=10), plot_bgcolor="white", paper_bgcolor="white", font=dict(family="Plus Jakarta Sans, sans-serif", size=11), showlegend=False, yaxis=dict(gridcolor="#F3F4F6", showgrid=True), xaxis=dict(gridcolor="#F3F4F6", showgrid=False), bargap=0.35)
+    fig.update_traces(texttemplate="₱%{text:.2f}", textposition="outside", marker=dict(cornerradius=6, line=dict(width=0)), hovertemplate=f"{(_town_label + '<br>' if _is_single else 'Bataan avg<br>')}%{{x}}<br>₱%{{y:.2f}}/kg<extra></extra>", cliponaxis=False)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
 
 def overview_page():
@@ -1118,9 +1122,10 @@ def overview_page():
         _render_hero()
         st.markdown('<div style="background:linear-gradient(90deg,#F6FBF6 0%, #FFFFFF 100%); border:1px solid #E8EFDE; border-radius:14px; padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:12px;"><i class="material-symbols-outlined" style="font-size:22px; color:#1B4332;">location_on</i><div><div style="font-weight:700; color:#1B4332; font-size:14px;">Prices per Town (Presyo per Bayan)</div><div style="font-size:12px; color:#6B7C6E;">Compare the palay price outlook for each town in Bataan — full view of all municipalities.</div></div></div>', unsafe_allow_html=True)
         _render_municipal_outlook()
+        _chart_muni = st.session_state.get("farmer_selected_muni", all_munis[0] if all_munis else "")
         st.markdown('<div style="background:white; border:1px solid #E8EFDE; border-radius:16px; padding:12px; margin-top:12px;">', unsafe_allow_html=True)
-        st.markdown('<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">payments</i> Town Price Comparison — Next 3 Months (All Municipalities)</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:12px; color:#6B7C6E; margin-bottom:8px;">Choose your <i>binhi</i> (seed type) and palay moisture (<b>Dry = Tuyo</b> / <b>Wet = Basa</b>) to compare prices across <b>all 12 towns</b> in Bataan at once.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="farmer-card-title"><i class="material-symbols-outlined" style="font-size:18px; color:#1B4332;">payments</i> {_chart_muni} Price Outlook — Next 3 Months</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:12px; color:#6B7C6E; margin-bottom:8px;">Choose your <i>binhi</i> (seed type) and palay moisture (<b>Dry = Tuyo</b> / <b>Wet = Basa</b>) to view the <b>{_chart_muni}</b> price outlook. This chart follows the town you chose above.</div>', unsafe_allow_html=True)
         c1,c2,c3 = st.columns(3, gap="small")
         with c1:
             rt = st.radio("Binhi (Seed)", options=["Inbred", "Hybrid"], horizontal=True, key="muni_rt2")
@@ -1130,8 +1135,8 @@ def overview_page():
         with c3:
             cyc = st.radio("Moisture (Tuyo/Basa)", options=["Dry","Wet"], horizontal=True, key="muni_cyc2")
         sel_cycle = "Dry Palay" if cyc=="Dry" else "Wet Palay"
-        # Full view: show all municipalities instead of one-by-one (isa-isa)
-        selected_for_chart = all_munis
+        # Town-specific view: chart follows the municipality dropdown above (not the Bataan average)
+        selected_for_chart = [_chart_muni] if _chart_muni else all_munis
         _render_municipal_crop_cycle_chart(df_municipal_forecasts, rice_type=rt, classification=cls, selected_municipalities=selected_for_chart, selected_cycle=sel_cycle)
         st.markdown('</div>', unsafe_allow_html=True)
     elif section_choice == "Guide and Advice":

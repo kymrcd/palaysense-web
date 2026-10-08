@@ -40,7 +40,6 @@ NAV_GROUPS = [
     "items": [
       ("provincial", "Provincial", "location_city"),
       ("municipal", "Municipal", "location_on"),
-      ("historical", "Comparison", "compare_arrows"),
     ],
   },
   {
@@ -233,7 +232,9 @@ def lgu_dashboard():
   elif active_page == "forecasting":
     forecasting.render(df, dr)
   elif active_page == "historical":
-    historical_comparison.render(df, dr)
+    # Comparison page removed per panel requirement — redirect stale sessions to Provincial
+    st.session_state["lgu_page"] = "provincial"
+    st.rerun()
   elif active_page == "model_info":
     model_info.render(df, dr)
   elif active_page == "settings":

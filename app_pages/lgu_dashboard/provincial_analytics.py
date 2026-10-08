@@ -350,7 +350,13 @@ def _provincial_quarterly_production(df, year):
 
 
 def _provincial_top_municipalities(dr, year):
-    """Moved from Overview — compact Top5 + seasonal pies, single-year (was year-range)."""
+    """Moved from Overview — compact Top5 + seasonal pies, single-year (was year-range).
+
+    Omitted per panel requirement: no per-municipality comparison/ranking charts.
+    Stub kept so imports/calls do not break.
+    """
+    st.info("This view shows provincial data only.")
+    return
     with theme.section_card(title="Top Municipalities & Seasonal Distribution",
                             desc="Municipal production ranking and dry/wet season split.",
                             icon_name="leaderboard"):

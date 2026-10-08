@@ -213,127 +213,8 @@ def _seasonal_info_tooltip():
 def _render_municipal_crop_cycle_chart(df: pd.DataFrame, rice_type: str,
                     classification: str,
                     selected_municipalities: list):
-  """
-  Renders the actual 3-month municipal price forecast (Altair).
-
-  Plots the real forecast values (Month 1-3 from ``df_municipal_forecasts``)
-  for the user's Rice Type / Classification / Crop Cycle selection as a
-  clustered bar chart: bars are grouped by forecast month on the X-axis,
-  with each municipality offset side-by-side via the ``xOffset`` channel.
-  The Y-axis uses ``alt.Scale(zero=False)`` with a tight domain (clamped
-  around the min/max prices in the current selection) so small price
-  changes in cents are visibly distinct. The X-axis is ordered by the
-  actual forecast month labels contained in the uploaded dataset.
-  """
-  if df is None or df.empty:
-    st.error(" Municipal forecast dataset is empty or unreadable.")
-    return
-
-  df = df.copy()
-  # Standardize column headers to lowercase for safety
-  df.columns = [str(col).lower() for col in df.columns]
-
-  # 1. Municipality multi-select filter (empty selection = all municipalities)
-  if selected_municipalities:
-    selected_munis_lc = [str(m).lower() for m in selected_municipalities]
-    df = df[df["municipality"].str.lower().isin(selected_munis_lc)]
-
-  # 2. Interactive Crop Cycle Selector Dropdown — plain text (selectbox does not render :material: icons)
-  selected_cycle = st.selectbox(
-    "Select Crop Cycle to View:",
-    ["☀️ Dry Season Crop Cycle", "🌧️ Wet Season Crop Cycle"],
-    key=f"crop_cycle_picker_{rice_type}_{classification}",
-  )
-
-  st.write("---")
-
-  # 3. Match the user's filters to the forecast row (e.g. hybridpremium_dry)
-  base_key = f"{rice_type.lower()}{classification.lower()}".replace(" ", "")
-  suffix = "_dry" if "Dry" in selected_cycle else "_wet"
-  target_key = f"{base_key}{suffix}"
-
-  type_col = "rice type & season"
-  sub = df[df[type_col].str.lower() == target_key] if type_col in df.columns else pd.DataFrame()
-  if sub.empty:
-    st.warning(f"No forecast rows for '{target_key}' in the uploaded file.")
-    return
-
-  # 4. Dynamic forecast month labels + forecast year (from the uploaded file)
-  label_map = {}
-  for key, n in (("forecast_month_1_label", 1),
-          ("forecast_month_2_label", 2),
-          ("forecast_month_3_label", 3)):
-    if key in sub.columns and sub[key].notna().any():
-      label_map[f"month {n}"] = str(sub[key].iloc[0])
-    else:
-      label_map[f"month {n}"] = f"Month {n}"
-
-  forecast_month_labels = [label_map[f"month {n}"] for n in range(1, 4)]
-  forecast_year = next((int(str(label).split()[-1])
-             for label in forecast_month_labels
-             if str(label).split()[-1].isdigit()), 2026)
-
-  # 5. Narrative per crop cycle — plain text to avoid :material: flash
-  if "Dry" in selected_cycle:
-    st.subheader(f"🌱 Dry Season Forecast: Mid to Late Harvesting Phase ({forecast_year})")
-    st.caption(
-      f" This tracks the price trend for palay planted late {forecast_year - 1}. "
-      f"Peak harvesting happens from January to March {forecast_year}, "
-      f"winding down completely by May {forecast_year}."
-    )
-  else:
-    st.subheader(f"🌱 Wet Season Forecast: Overlapping Planting & Early Monsoon Harvest ({forecast_year})")
-    st.caption(
-      f" This tracks fields undergoing land preparation or planting from January to May {forecast_year}, "
-      f"transitioning into wet season crop growth and heavy monsoon harvests "
-      f"from June to December {forecast_year}."
-    )
-
-  # 6. Long-form data: one point per (forecast month, municipality)
-  plot_df = (
-    sub.melt(
-      id_vars=["municipality"],
-      value_vars=["month 1", "month 2", "month 3"],
-      var_name="month_key",
-      value_name="price",
-    )
-    .assign(forecast_month=lambda d: d["month_key"].map(label_map))
-    .groupby(["forecast_month", "municipality"], as_index=False)["price"]
-    .mean()
-    .dropna(subset=["price"])
-  )
-  if plot_df.empty:
-    st.info("No data available for the selected filters.")
-    return
-
-  # 7. Plotly grouped bar — compact, fits without scrolling
-  plot_df["price"] = pd.to_numeric(plot_df["price"], errors="coerce")
-  plot_df = plot_df.dropna(subset=["price"])
-  if plot_df.empty:
-    st.info("No price available for the selected filters.")
-    return
-  plot_df["municipality"] = plot_df["municipality"].astype(str).str.title()
-  fig = px.bar(
-    plot_df, x="forecast_month", y="price", color="municipality",
-    barmode="group", text=plot_df["price"].round(2),
-    category_orders={"forecast_month": forecast_month_labels},
-    color_discrete_sequence=px.colors.qualitative.Set3,
-    labels={"forecast_month": "Forecast Month", "price": "Price (₱/kg)", "municipality": "Municipality"},
-    title=f"{rice_type} {classification} — {selected_cycle}",
-  )
-  fig.update_layout(
-    height=340, margin=dict(t=35, b=120, l=45, r=10),
-    plot_bgcolor="white", paper_bgcolor="white",
-    font=dict(family="Inter, sans-serif", size=11),
-    legend=dict(orientation="h", yanchor="top", y=-0.28, xanchor="center", x=0.5, font=dict(size=10), bgcolor="rgba(255,255,255,0.95)", bordercolor="#E5E7EB", borderwidth=1),
-    yaxis=dict(gridcolor="#F3F4F6", showgrid=True),
-    xaxis=dict(gridcolor="#F3F4F6", showgrid=False, automargin=True),
-    title=dict(font=dict(size=13)),
-    bargap=0.22, bargroupgap=0.10,
-    uniformtext_minsize=8, uniformtext_mode="hide",
-  )
-  fig.update_traces(texttemplate=None, hovertemplate="Bayan: %{fullData.name}<br>%{x}<br>₱%{y:.2f}/kg<extra></extra>", cliponaxis=False)
-  st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
+  """Municipal crop cycle chart omitted per revised requirements — no per-municipality comparison."""
+  st.info("This view shows provincial data only.")
 
 
 # ------------------------------------------------------------------
@@ -346,15 +227,11 @@ _HIST_SEASON_SUFFIX = {"Dry": "dry", "Wet": "wet"}
 
 
 def _municipal_price_tab(dr):
-  """Historical municipal PRICE trends — yearly bar / monthly drill-down.
+  """Historical municipal PRICE trends — single-municipality monthly trend.
 
-  Data-science rule:
-  * Multi-year selected (2+ years) -> grouped BAR chart of yearly mean price
-    (fixes spaghetti/overplotting when 12 munis x 60 months are shown).
-  * Single year selected -> clean monthly LINE chart (12 points per muni) if ≤2 munis, else BAR.
-
-  Moved from historical_comparison.py Tab 3 so Analytics > Municipal >
-  Municipal Prices shows HISTORY, while Forecast page shows forecasts.
+  Single-select only (no cross-municipality comparison per panel requirement):
+  * Single year selected -> clean monthly LINE chart for the chosen municipality.
+  * Multi-year selected -> yearly BAR chart for the chosen municipality.
   """
   with theme.section_card(title="Municipal Price Trends",
               desc="Historical municipal price trends by rice type, classification, and municipality.",
@@ -391,8 +268,10 @@ def _municipal_price_tab(dr):
       _bal = next((m for m in muni_list if str(m).strip().lower() == "balanga city"), None)
       if _bal is None:
         _bal = next((m for m in muni_list if "balanga" in str(m).lower()), None)
-      _default_munis = [_bal] if _bal else []
-      selected_munis = st.multiselect("Municipality Selection", options=muni_list, default=_default_munis, key="muni_hist_munis")
+      _default_idx = muni_list.index(_bal) if _bal in muni_list else 0
+      # Single-select only — one municipality at a time (no cross-municipality comparison)
+      selected_muni = st.selectbox("Municipality Selection", options=muni_list, index=_default_idx, key="muni_hist_muni_single")
+      selected_munis = [selected_muni] if selected_muni else []
 
     if not selected_years:
       st.info("Please select at least one year.")
@@ -734,7 +613,13 @@ def _municipal_price_tab(dr):
 
 
 def _seasonal_distribution_pies(dr):
-  """Dry vs Wet seasonal production distribution (pie charts)."""
+  """Dry vs Wet seasonal production distribution (pie charts).
+
+  Omitted per panel requirement: no per-municipality comparison charts.
+  Stub kept so imports/calls do not break.
+  """
+  st.info("This view shows provincial data only.")
+  return
   with theme.section_card(title="Seasonal Production Distribution",
               desc="Dry vs Wet season production split across municipalities.",
               icon_name="pie_chart"):
@@ -892,11 +777,11 @@ def _seasonal_distribution_pies(dr):
 def _municipal_yield_tab(dr):
   """Municipal-level yield analytics with seasonal comparison.
 
-  Renders a compact DA/PhilRice seasonal context tooltip, a compact Year
-  filter, and three season sub-tabs (Both Seasons / Dry Season / Wet Season)
-  with grouped/single Plotly bar charts per municipality — all inside one
-  section card. No raw data table is rendered.
+  Omitted per panel requirement: no per-municipality comparison charts.
+  Stub kept so imports/calls do not break.
   """
+  st.info("This view shows provincial data only.")
+  return
   with theme.section_card(title="Municipal Yield Analytics",
               desc="Yield & production comparison across Bataan municipalities by season",
               icon_name="eco"):
@@ -1230,24 +1115,11 @@ def _municipal_yield_tab(dr):
         st.info("Wet Season data not available.")
 
 def render(df, dr):
-  """Main Municipal Analytics page with tabbed sub-views."""
+  """Main Municipal Analytics page — single view (tabs removed)."""
   if dr is None or not getattr(dr, "has_provincial_data", False):
       st.info("No municipal data — municipal analytics hidden (0 values). Provincial data required. Upload via Import Data.")
       return
   theme.page_title("Municipal Analytics",
            "Municipality-level price and yield analytics.")
 
-  tab1, tab2, tab3 = st.tabs([
-    ":material/payments: Municipal Prices",
-    ":material/eco: Municipal Yield",
-    ":material/eco: Seasonal Distribution",
-  ])
-
-  with tab1:
-    _municipal_price_tab(dr)
-
-  with tab2:
-    _municipal_yield_tab(dr)
-
-  with tab3:
-    _seasonal_distribution_pies(dr)
+  _municipal_price_tab(dr)

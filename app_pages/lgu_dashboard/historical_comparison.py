@@ -50,6 +50,9 @@ def _year_multiselect(df, key, label="Select Years"):
 # Tab 1: Municipal Production Comparison
 # ------------------------------------------------------------------
 def _production_comparison_tab(dr):
+    """Omitted per panel requirement: no per-municipality comparison charts."""
+    st.info("This view shows provincial data only.")
+    return
     with theme.section_card(title="Municipal Production Comparison",
                             desc="Historical production comparison across municipalities.",
                             icon_name="compare_arrows"):
@@ -247,7 +250,12 @@ def _year_only_filter(dr, key="hist_year_simple"):
 # Tab 2: Top Municipalities by Production (moved from Municipal Analytics)
 # ------------------------------------------------------------------
 def _top_municipalities_bar(dr):
-  """Top municipalities by production (horizontal bar) — now in Comparison."""
+  """Top municipalities by production (horizontal bar) — now in Comparison.
+
+  Omitted per panel requirement: no per-municipality comparison/ranking charts.
+  """
+  st.info("This view shows provincial data only.")
+  return
   with theme.section_card(title="Top Municipalities by Production",
               desc="Ranking of municipalities by palay production.",
               icon_name="leaderboard"):
@@ -409,7 +417,7 @@ def render(df, dr):
         st.info("No historical data — comparison hidden (0 values). Upload data via Import Data.")
         return
     theme.page_title("Historical Comparison",
-                     "Compare municipalities and historical trends across the selected range.")
+                     "Provincial historical trends.")
 
     tab_prod, tab_top = st.tabs([
         ":material/bar_chart: Municipal Production Comparison",
